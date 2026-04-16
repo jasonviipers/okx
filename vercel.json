@@ -1,8 +1,0 @@
-{
-  "crons": [
-    {
-      "path": "/api/ai/system/autonomy/worker",
-      "schedule": "5 * * * *"
-    }
-  ]
-}

@@ -1,0 +1,1 @@
+* * * * * . /etc/environment && curl -s -X POST $WORKER_URL -H "Authorization: Bearer $CRON_SECRET" >> /var/log/worker.log 2>&1
