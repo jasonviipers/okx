@@ -7,6 +7,7 @@ import {
   startAutonomyLoop,
   stopAutonomyLoop,
 } from "@/lib/autonomy/service";
+import type { AutonomySelectionMode } from "@/lib/persistence/autonomy-state";
 import type { Timeframe } from "@/types/market";
 
 export const dynamic = "force-dynamic";
@@ -29,6 +30,8 @@ export async function POST(req: NextRequest) {
   const body = (await req.json().catch(() => ({}))) as {
     action?: "start" | "stop";
     symbol?: string;
+    selectionMode?: AutonomySelectionMode;
+    candidateSymbols?: string[];
     timeframe?: Timeframe;
     intervalMs?: number;
   };
@@ -38,6 +41,8 @@ export async function POST(req: NextRequest) {
   } else {
     await startAutonomyLoop({
       symbol: body.symbol,
+      selectionMode: body.selectionMode,
+      candidateSymbols: body.candidateSymbols,
       timeframe: body.timeframe,
       intervalMs: body.intervalMs,
     });

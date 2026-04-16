@@ -4,6 +4,8 @@ import {
   getMarketSnapshot,
   getRealtimeMarketContext,
 } from "@/lib/market-data/service";
+import { getAutonomousSymbolUniverse } from "@/lib/okx/instruments";
+import type { AutonomySelectionMode } from "@/lib/persistence/autonomy-state";
 import {
   readAutonomyState,
   updateAutonomyState,
@@ -14,7 +16,7 @@ import { autoExecuteConsensus } from "@/lib/swarm/autoExecute";
 import { runSwarm } from "@/lib/swarm/orchestrator";
 import type { AutonomyStatus } from "@/types/api";
 import type { Timeframe } from "@/types/market";
-import type { ExecutionResult } from "@/types/swarm";
+import type { ExecutionResult, SwarmRunResult } from "@/types/swarm";
 
 const WORKER_LEASE_TIMEOUT_MS = 5 * 60_000;
 
@@ -56,16 +58,21 @@ function toAutonomyStatus(
   state: Awaited<ReturnType<typeof readAutonomyState>>,
   budgetRemainingUsd: number,
 ): AutonomyStatus {
+  const selectionModeLabel =
+    state.selectionMode === "auto" ? "symbol selection is automatic." : "symbol is fixed.";
+
   return {
     enabled: true,
     configured: autoStartEnabledByEnv(),
     running: state.running,
     detail: state.running
-      ? "Autonomous worker is armed and awaiting schedule triggers."
+      ? `Autonomous worker is armed and awaiting schedule triggers; ${selectionModeLabel}`
       : autoStartEnabledByEnv()
         ? "Autonomy is configured for durable startup but currently stopped."
         : "Autonomy is available and requires an explicit start.",
     symbol: state.symbol,
+    selectionMode: state.selectionMode,
+    candidateSymbols: state.candidateSymbols,
     timeframe: state.timeframe,
     intervalMs: state.intervalMs,
     cooldownMs: state.cooldownMs,
@@ -121,12 +128,19 @@ export async function getAutonomyStatus(): Promise<AutonomyStatus> {
 
 export async function startAutonomyLoop(config?: {
   symbol?: string;
+  selectionMode?: AutonomySelectionMode;
+  candidateSymbols?: string[];
   timeframe?: Timeframe;
   intervalMs?: number;
 }) {
   await updateAutonomyState((state) => ({
     ...state,
     running: true,
+    selectionMode: config?.selectionMode ?? state.selectionMode,
+    candidateSymbols:
+      config?.candidateSymbols && config.candidateSymbols.length > 0
+        ? config.candidateSymbols
+        : state.candidateSymbols,
     symbol: config?.symbol || state.symbol,
     timeframe: config?.timeframe || state.timeframe,
     intervalMs: config?.intervalMs || state.intervalMs,
@@ -135,6 +149,101 @@ export async function startAutonomyLoop(config?: {
   }));
 
   return getAutonomyStatus();
+}
+
+function parseSymbolList(value: string[] | undefined): string[] | undefined {
+  if (!value || value.length === 0) {
+    return undefined;
+  }
+
+  return [...new Set(value.map((symbol) => symbol.trim().toUpperCase()).filter(Boolean))];
+}
+
+type AutonomySymbolEvaluation = {
+  symbol: string;
+  snapshot: Awaited<ReturnType<typeof getMarketSnapshot>>;
+  result: SwarmRunResult;
+  score: number;
+};
+
+function scoreAutonomyCandidate(
+  evaluation: Omit<AutonomySymbolEvaluation, "score">,
+): number {
+  const { snapshot, result } = evaluation;
+  const consensus = result.consensus;
+  const confidence = consensus.confidence <= 1
+    ? consensus.confidence
+    : consensus.confidence / 100;
+  const agreement = consensus.agreement <= 1
+    ? consensus.agreement
+    : consensus.agreement / 100;
+
+  if (!snapshot.status.tradeable || consensus.blocked || consensus.signal === "HOLD") {
+    return 0;
+  }
+
+  return Number((confidence * 0.7 + agreement * 0.3).toFixed(6));
+}
+
+async function resolveAutonomySymbols(
+  state: Awaited<ReturnType<typeof readAutonomyState>>,
+): Promise<string[]> {
+  if (state.selectionMode === "fixed") {
+    return [state.symbol];
+  }
+
+  const configured = parseSymbolList(state.candidateSymbols);
+  if (configured && configured.length > 0) {
+    return configured;
+  }
+
+  return getAutonomousSymbolUniverse();
+}
+
+async function evaluateAutonomyCandidate(
+  symbol: string,
+  timeframe: Timeframe,
+): Promise<AutonomySymbolEvaluation> {
+  const snapshot = await getMarketSnapshot(symbol, timeframe);
+  const ctx = await getRealtimeMarketContext(symbol, timeframe);
+  const result = await runSwarm(ctx);
+  return {
+    symbol,
+    snapshot,
+    result,
+    score: scoreAutonomyCandidate({ symbol, snapshot, result }),
+  };
+}
+
+async function selectAutonomyRun(
+  state: Awaited<ReturnType<typeof readAutonomyState>>,
+) {
+  const symbols = await resolveAutonomySymbols(state);
+  let best: AutonomySymbolEvaluation | undefined;
+  const errors: string[] = [];
+
+  for (const symbol of symbols) {
+    try {
+      const evaluation = await evaluateAutonomyCandidate(symbol, state.timeframe);
+      if (!best || evaluation.score > best.score) {
+        best = evaluation;
+      }
+    } catch (error) {
+      errors.push(
+        `${symbol}: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
+  }
+
+  if (!best) {
+    throw new Error(
+      errors.length > 0
+        ? `Autonomy could not evaluate any symbols. ${errors.join("; ")}`
+        : "Autonomy could not evaluate any symbols.",
+    );
+  }
+
+  return { best, symbols, errors };
 }
 
 export async function stopAutonomyLoop() {
@@ -197,9 +306,9 @@ export async function dispatchAutonomyWorker(options?: {
   let execution: ExecutionResult | undefined;
 
   try {
-    const snapshot = await getMarketSnapshot(leased.symbol, leased.timeframe);
-    const ctx = await getRealtimeMarketContext(leased.symbol, leased.timeframe);
-    const result = await runSwarm(ctx);
+    const { best, symbols, errors } = await selectAutonomyRun(leased);
+    const snapshot = best.snapshot;
+    const result = best.result;
 
     const inCooldown =
       leased.lastTradeAt !== undefined &&
@@ -241,6 +350,9 @@ export async function dispatchAutonomyWorker(options?: {
       inFlight: false,
       leaseId: undefined,
       leaseAcquiredAt: undefined,
+      symbol: result.consensus.symbol,
+      candidateSymbols:
+        leased.selectionMode === "auto" ? symbols : current.candidateSymbols,
       lastRunAt: startedAt,
       nextRunAt: current.running
         ? new Date(Date.now() + current.intervalMs).toISOString()
@@ -248,7 +360,10 @@ export async function dispatchAutonomyWorker(options?: {
       lastDecision: result.consensus.signal,
       lastExecutionStatus: execution?.status,
       lastError: execution?.status === "error" ? execution.error : undefined,
-      lastReason: execution?.reason ?? execution?.error,
+      lastReason:
+        execution?.reason ??
+        execution?.error ??
+        (errors.length > 0 ? `Partial scan issues: ${errors.join("; ")}` : undefined),
       iterationCount: current.iterationCount + 1,
       lastTradeAt:
         execution?.status === "success" ? Date.now() : current.lastTradeAt,

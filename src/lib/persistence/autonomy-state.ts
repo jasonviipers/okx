@@ -4,9 +4,13 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import type { Timeframe } from "@/types/market";
 
+export type AutonomySelectionMode = "fixed" | "auto";
+
 export interface StoredAutonomyState {
   running: boolean;
   symbol: string;
+  selectionMode: AutonomySelectionMode;
+  candidateSymbols?: string[];
   timeframe: Timeframe;
   intervalMs: number;
   cooldownMs: number;
@@ -32,10 +36,27 @@ function parseNumber(value: string | undefined, fallback: number): number {
   return Number.isFinite(parsed) ? parsed : fallback;
 }
 
+function parseSelectionMode(
+  value: string | undefined,
+): AutonomySelectionMode {
+  return value?.toLowerCase() === "fixed" ? "fixed" : "auto";
+}
+
+function parseSymbolList(value: string | undefined): string[] | undefined {
+  const symbols = (value ?? "")
+    .split(",")
+    .map((symbol) => symbol.trim().toUpperCase())
+    .filter(Boolean);
+
+  return symbols.length > 0 ? symbols : undefined;
+}
+
 export function getDefaultAutonomyState(): StoredAutonomyState {
   return {
     running: false,
     symbol: process.env.AUTONOMOUS_SYMBOL || "BTC-USDT",
+    selectionMode: parseSelectionMode(process.env.AUTONOMOUS_SYMBOL_SELECTION),
+    candidateSymbols: parseSymbolList(process.env.AUTONOMOUS_SYMBOLS),
     timeframe: (process.env.AUTONOMOUS_TIMEFRAME as Timeframe) || "1H",
     intervalMs: parseNumber(process.env.AUTONOMOUS_INTERVAL_MS, 60_000),
     cooldownMs: parseNumber(process.env.AUTONOMOUS_COOLDOWN_MS, 120_000),

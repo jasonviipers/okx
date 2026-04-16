@@ -1,7 +1,9 @@
 import "server-only";
 
-import { getMemoryDb } from "@/lib/memory/sqlite";
-import type { MarketContext } from "@/types/market";
+import { and, desc, eq, sql } from "drizzle-orm";
+import db, { dbFilePath } from "@/db";
+import { swarmMemory } from "@/db/schema";
+import type { MarketContext, Timeframe } from "@/types/market";
 import type { MemoryRecall, MemoryRecord, MemorySummary } from "@/types/memory";
 import type { SwarmRunResult, TradeSignal } from "@/types/swarm";
 
@@ -10,21 +12,57 @@ const MAX_RECALL_CANDIDATES = 120;
 
 type RawMemoryRow = {
   id: number;
-  created_at: string;
+  createdAt: string;
   symbol: string;
   timeframe: string;
   signal: TradeSignal;
   confidence: number;
   agreement: number;
-  blocked: number;
-  block_reason: string | null;
+  blocked: boolean;
+  blockReason: string | null;
   price: number;
   change24h: number;
-  spread_bps: number;
-  volatility_pct: number;
+  spreadBps: number;
+  volatilityPct: number;
   imbalance: number;
   summary: string;
 };
+
+declare global {
+  var __swarmMemoryReady: Promise<void> | undefined;
+}
+
+function ensureMemoryTable(): Promise<void> {
+  if (!globalThis.__swarmMemoryReady) {
+    globalThis.__swarmMemoryReady = (async () => {
+      await db.run(sql.raw(`
+        CREATE TABLE IF NOT EXISTS swarm_memory (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          created_at TEXT NOT NULL,
+          symbol TEXT NOT NULL,
+          timeframe TEXT NOT NULL,
+          signal TEXT NOT NULL,
+          confidence REAL NOT NULL,
+          agreement REAL NOT NULL,
+          blocked INTEGER NOT NULL,
+          block_reason TEXT,
+          price REAL NOT NULL,
+          change24h REAL NOT NULL,
+          spread_bps REAL NOT NULL,
+          volatility_pct REAL NOT NULL,
+          imbalance REAL NOT NULL,
+          summary TEXT NOT NULL
+        )
+      `));
+      await db.run(sql.raw(`
+        CREATE INDEX IF NOT EXISTS idx_swarm_memory_symbol_tf_created
+        ON swarm_memory(symbol, timeframe, created_at DESC)
+      `));
+    })();
+  }
+
+  return globalThis.__swarmMemoryReady;
+}
 
 function clamp(value: number, min = 0, max = 1): number {
   return Math.min(max, Math.max(min, value));
@@ -72,18 +110,18 @@ function buildMemorySummaryLine(result: SwarmRunResult): string {
 function mapRow(row: RawMemoryRow): MemoryRecord {
   return {
     id: row.id,
-    createdAt: row.created_at,
+    createdAt: row.createdAt,
     symbol: row.symbol,
     timeframe: row.timeframe as MemoryRecord["timeframe"],
     signal: row.signal,
     confidence: row.confidence,
     agreement: row.agreement,
-    blocked: row.blocked === 1,
-    blockReason: row.block_reason ?? undefined,
+    blocked: row.blocked,
+    blockReason: row.blockReason ?? undefined,
     price: row.price,
     change24h: row.change24h,
-    spreadBps: row.spread_bps,
-    volatilityPct: row.volatility_pct,
+    spreadBps: row.spreadBps,
+    volatilityPct: row.volatilityPct,
     imbalance: row.imbalance,
     summary: row.summary,
   };
@@ -119,86 +157,69 @@ function computeSimilarity(record: MemoryRecord, ctx: MarketContext): number {
 }
 
 export async function storeSwarmMemory(result: SwarmRunResult): Promise<void> {
-  const db = getMemoryDb();
+  await ensureMemoryTable();
   const { marketContext, consensus } = result;
 
-  db.prepare(
-    `
-      INSERT INTO swarm_memory (
-        created_at, symbol, timeframe, signal, confidence, agreement, blocked,
-        block_reason, price, change24h, spread_bps, volatility_pct, imbalance, summary
-      ) VALUES (
-        ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
-      )
-    `,
-  ).run(
-    new Date().toISOString(),
-    marketContext.symbol,
-    marketContext.timeframe,
-    consensus.signal,
-    consensus.confidence,
-    consensus.agreement,
-    consensus.blocked ? 1 : 0,
-    consensus.blockReason ?? null,
-    marketContext.ticker.last,
-    marketContext.ticker.change24h,
-    spreadBps(marketContext),
-    volatilityPct(marketContext),
-    orderbookImbalance(marketContext),
-    buildMemorySummaryLine(result),
-  );
+  await db.insert(swarmMemory).values({
+    createdAt: new Date().toISOString(),
+    symbol: marketContext.symbol,
+    timeframe: marketContext.timeframe,
+    signal: consensus.signal,
+    confidence: consensus.confidence,
+    agreement: consensus.agreement,
+    blocked: consensus.blocked,
+    blockReason: consensus.blockReason ?? null,
+    price: marketContext.ticker.last,
+    change24h: marketContext.ticker.change24h,
+    spreadBps: spreadBps(marketContext),
+    volatilityPct: volatilityPct(marketContext),
+    imbalance: orderbookImbalance(marketContext),
+    summary: buildMemorySummaryLine(result),
+  });
 }
 
 export async function getRecentMemories(
   symbol?: string,
-  timeframe?: string,
+  timeframe?: Timeframe,
   limit = 50,
 ): Promise<MemoryRecord[]> {
-  const db = getMemoryDb();
+  await ensureMemoryTable();
 
   if (symbol && timeframe) {
-    const rows = db
-      .prepare(
-        `
-          SELECT *
-          FROM swarm_memory
-          WHERE symbol = ? AND timeframe = ?
-          ORDER BY created_at DESC
-          LIMIT ?
-        `,
+    const rows = (await db
+      .select()
+      .from(swarmMemory)
+      .where(
+        and(eq(swarmMemory.symbol, symbol), eq(swarmMemory.timeframe, timeframe)),
       )
-      .all(symbol, timeframe, limit) as RawMemoryRow[];
+      .orderBy(desc(swarmMemory.createdAt))
+      .limit(limit)) as RawMemoryRow[];
     return rows.map(mapRow);
   }
 
-  const rows = db
-    .prepare(
-      `
-        SELECT *
-        FROM swarm_memory
-        ORDER BY created_at DESC
-        LIMIT ?
-      `,
-    )
-    .all(limit) as RawMemoryRow[];
+  const rows = (await db
+    .select()
+    .from(swarmMemory)
+    .orderBy(desc(swarmMemory.createdAt))
+    .limit(limit)) as RawMemoryRow[];
   return rows.map(mapRow);
 }
 
 export async function getMemorySummary(
   ctx: MarketContext,
 ): Promise<MemorySummary> {
-  const db = getMemoryDb();
-  const rows = db
-    .prepare(
-      `
-        SELECT *
-        FROM swarm_memory
-        WHERE symbol = ? AND timeframe = ?
-        ORDER BY created_at DESC
-        LIMIT ?
-      `,
+  await ensureMemoryTable();
+  const rows = (await db
+    .select()
+    .from(swarmMemory)
+    .where(
+      and(
+        eq(swarmMemory.symbol, ctx.symbol),
+        eq(swarmMemory.timeframe, ctx.timeframe),
+      ),
     )
-    .all(ctx.symbol, ctx.timeframe, MAX_RECALL_CANDIDATES) as RawMemoryRow[];
+    .orderBy(desc(swarmMemory.createdAt))
+    .limit(MAX_RECALL_CANDIDATES)) as RawMemoryRow[];
 
   const records = rows.map(mapRow);
   const recalls: MemoryRecall[] = records.map((record) => {
@@ -298,4 +319,8 @@ export function buildMemoryPrompt(summary: MemorySummary): string {
     recalls,
     "Use this memory as advisory context only. Prefer live market data if memory conflicts with the current tape.",
   ].join("\n");
+}
+
+export function getMemoryDbPath(): string {
+  return dbFilePath;
 }

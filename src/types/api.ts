@@ -49,6 +49,8 @@ export interface AutonomyStatus {
   running: boolean;
   detail: string;
   symbol: string;
+  selectionMode?: "fixed" | "auto";
+  candidateSymbols?: string[];
   timeframe: string;
   intervalMs: number;
   cooldownMs: number;
