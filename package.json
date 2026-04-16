@@ -6,7 +6,6 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "autonomy:tick": "node scripts/autonomy-worker.mjs",
     "lint": "biome check",
     "format": "biome format --write"
   },
