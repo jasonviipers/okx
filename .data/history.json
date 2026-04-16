@@ -1,0 +1,1873 @@
+[
+  {
+    "id": "swarm_1776369208717_z8bpc5",
+    "type": "swarm_run",
+    "timestamp": "2026-04-16T19:53:28.717Z",
+    "symbol": "BTC-USDT",
+    "timeframe": "1H",
+    "cached": false,
+    "totalElapsedMs": 74835,
+    "consensus": {
+      "symbol": "BTC-USDT",
+      "timeframe": "1H",
+      "signal": "HOLD",
+      "confidence": 0.436,
+      "agreement": 0.8,
+      "votes": [
+        {
+          "model": "deepseek-v3.2:cloud",
+          "role": "trend_follower",
+          "modelRole": "strategy",
+          "signal": "BUY",
+          "confidence": 0.527,
+          "reasoning": "Uptrend confirmed across latest bars with closing prices supporting direction.",
+          "elapsedMs": 69042,
+          "voteWeight": 1,
+          "isVetoLayer": false,
+          "researchTrace": {
+            "status": "completed",
+            "searched": true,
+            "focus": "recent news, sentiment, macro catalysts, and exchange-specific developments",
+            "rationale": "Heuristic fallback requested research due to uncertainty or elevated market conditions."
+          }
+        },
+        {
+          "model": "gemma4:31b-cloud",
+          "role": "momentum_analyst",
+          "modelRole": "signal_worker",
+          "signal": "HOLD",
+          "confidence": 0.4,
+          "reasoning": "Momentum is fading or under-confirmed by recent volume.",
+          "elapsedMs": 74796,
+          "voteWeight": 0.9,
+          "isVetoLayer": false,
+          "researchTrace": {
+            "status": "completed",
+            "searched": true,
+            "focus": "recent news, sentiment, macro catalysts, and exchange-specific developments",
+            "rationale": "The signal is a low-confidence HOLD with minimal 24h price movement and no volatility spikes; current market data is sufficient for this neutral stance."
+          }
+        },
+        {
+          "model": "kimi-k2.5:cloud",
+          "role": "sentiment_reader",
+          "modelRole": "signal_worker",
+          "signal": "BUY",
+          "confidence": 0.95,
+          "reasoning": "Bid depth dominates and aligns with the session bias.",
+          "elapsedMs": 24622,
+          "voteWeight": 0.85,
+          "isVetoLayer": false,
+          "researchTrace": {
+            "status": "skipped",
+            "searched": false,
+            "focus": null,
+            "rationale": "Heuristic fallback found local market data sufficient."
+          }
+        },
+        {
+          "model": "glm-5.1:cloud",
+          "role": "execution_tactician",
+          "modelRole": "validator",
+          "signal": "BUY",
+          "confidence": 0.601,
+          "reasoning": "Execution conditions are clean; buy signal is executable.",
+          "elapsedMs": 7915,
+          "voteWeight": 0.8,
+          "isVetoLayer": true,
+          "researchTrace": {
+            "status": "not_allowed",
+            "searched": false,
+            "rationale": "This agent role is restricted to local market data and cannot perform external web research."
+          }
+        },
+        {
+          "model": "ministral-3:cloud",
+          "role": "macro_filter",
+          "modelRole": "risk",
+          "signal": "BUY",
+          "confidence": 0.555,
+          "reasoning": "Regime appears bullish with acceptable market quality. [Model call failed; heuristic used] Memory: 6 samples | dominant HOLD | blocked 100%",
+          "elapsedMs": 358,
+          "voteWeight": 0.8,
+          "isVetoLayer": true,
+          "researchTrace": {
+            "status": "not_allowed",
+            "searched": false,
+            "rationale": "This agent role is restricted to local market data and cannot perform external web research."
+          }
+        }
+      ],
+      "weightedScores": {
+        "BUY": 2.2593,
+        "SELL": 0,
+        "HOLD": 0.36000000000000004
+      },
+      "validatedAt": "2026-04-16T19:53:28.683Z",
+      "blocked": true,
+      "researchSummary": {
+        "searchedAgents": 2,
+        "totalAgents": 5,
+        "completedAgents": 2,
+        "skippedAgents": 1,
+        "failedAgents": 0,
+        "topFocuses": [
+          "recent news, sentiment, macro catalysts, and exchange-specific developments"
+        ],
+        "topRationales": [
+          "This agent role is restricted to local market data and cannot perform external web research.",
+          "Heuristic fallback requested research due to uncertainty or elevated market conditions."
+        ]
+      },
+      "regime": {
+        "regime": "trend",
+        "confidence": 0.767,
+        "trendScore": 0.767,
+        "breakoutScore": 0.411,
+        "meanReversionScore": 0.211,
+        "volatilityScore": 0.634,
+        "liquidityScore": 1,
+        "notes": [
+          "Directional move and order book alignment favor trend continuation."
+        ],
+        "generatedAt": "2026-04-16T19:53:28.679Z"
+      },
+      "engineReports": [
+        {
+          "engine": "trend_continuation",
+          "signal": "BUY",
+          "confidence": 1,
+          "supportScore": 0.527,
+          "reasons": [
+            "Uptrend confirmed across latest bars with closing prices supporting direction."
+          ],
+          "supportingRoles": [
+            "trend_follower"
+          ]
+        },
+        {
+          "engine": "breakout",
+          "signal": "HOLD",
+          "confidence": 1,
+          "supportScore": 0.36,
+          "reasons": [
+            "Momentum is fading or under-confirmed by recent volume."
+          ],
+          "supportingRoles": [
+            "momentum_analyst"
+          ]
+        },
+        {
+          "engine": "mean_reversion",
+          "signal": "SELL",
+          "confidence": 0.472,
+          "supportScore": 0.425,
+          "reasons": [
+            "Price is above recent average and may mean revert if liquidity remains stable."
+          ],
+          "supportingRoles": []
+        },
+        {
+          "engine": "microstructure",
+          "signal": "BUY",
+          "confidence": 1,
+          "supportScore": 0.807,
+          "reasons": [
+            "Bid depth dominates and aligns with the session bias."
+          ],
+          "supportingRoles": [
+            "sentiment_reader"
+          ]
+        }
+      ],
+      "decision": "HOLD",
+      "blockReason": "Meta-selector found weak alignment between the active regime and engine support.",
+      "metaSelection": {
+        "selectedEngine": "trend_continuation",
+        "suitability": 0.403,
+        "actionBias": "HOLD",
+        "engineScores": {
+          "trend_continuation": 0.527,
+          "breakout": 0.252,
+          "mean_reversion": 0.085,
+          "microstructure": 0.444,
+          "none": 0
+        },
+        "notes": [
+          "No strategy engine has strong enough regime fit to justify a trade."
+        ],
+        "generatedAt": "2026-04-16T19:53:28.679Z"
+      },
+      "expectedValue": {
+        "grossEdgeBps": 0,
+        "estimatedFeeBps": 10,
+        "estimatedSlippageBps": 2,
+        "netEdgeBps": -12,
+        "rewardRiskRatio": 0,
+        "tradeAllowed": false,
+        "notes": [
+          "No trade expected value calculated because the signal is HOLD."
+        ],
+        "generatedAt": "2026-04-16T19:53:28.679Z"
+      },
+      "reliability": {
+        "regime": "trend",
+        "selectedEngine": "trend_continuation",
+        "sampleSize": 6,
+        "reliabilityScore": 0,
+        "blockedRate": 1,
+        "notes": [
+          "Reliability estimated from historical swarm runs with the same regime and selected engine."
+        ],
+        "generatedAt": "2026-04-16T19:53:28.683Z"
+      },
+      "memory": {
+        "symbol": "BTC-USDT",
+        "timeframe": "1H",
+        "totalMemories": 6,
+        "effectiveSampleSize": 1.407,
+        "blockedRatio": 1,
+        "averageConfidence": 0.386,
+        "directionalWeights": {
+          "BUY": 0,
+          "SELL": 0,
+          "HOLD": 1.407
+        },
+        "dominantSignal": "HOLD",
+        "topRecalls": [
+          {
+            "id": 2,
+            "createdAt": "2026-04-16T19:50:40.281Z",
+            "signal": "HOLD",
+            "confidence": 0.386,
+            "agreement": 1,
+            "blocked": true,
+            "summary": "HOLD 39% | agree 100% | blocked: Meta-selector found weak alignment between the active regime and engine support. | lead sentiment_reader",
+            "ageHours": 0.03,
+            "decayWeight": 1,
+            "similarity": 0.979,
+            "weightedInfluence": 0.264
+          },
+          {
+            "id": 1,
+            "createdAt": "2026-04-16T19:46:34.968Z",
+            "signal": "HOLD",
+            "confidence": 0.386,
+            "agreement": 0.8,
+            "blocked": true,
+            "summary": "HOLD 39% | agree 80% | blocked: Meta-selector found weak alignment between the active regime and engine support. | lead sentiment_reader",
+            "ageHours": 0.09,
+            "decayWeight": 0.999,
+            "similarity": 0.932,
+            "weightedInfluence": 0.252
+          },
+          {
+            "id": 5,
+            "createdAt": "2026-04-16T19:51:23.435Z",
+            "signal": "HOLD",
+            "confidence": 0.386,
+            "agreement": 0.8,
+            "blocked": true,
+            "summary": "HOLD 39% | agree 80% | blocked: Meta-selector found weak alignment between the active regime and engine support. | lead sentiment_reader",
+            "ageHours": 0.01,
+            "decayWeight": 1,
+            "similarity": 0.903,
+            "weightedInfluence": 0.244
+          },
+          {
+            "id": 6,
+            "createdAt": "2026-04-16T19:51:38.583Z",
+            "signal": "HOLD",
+            "confidence": 0.386,
+            "agreement": 0.6,
+            "blocked": true,
+            "summary": "HOLD 39% | agree 60% | blocked: Meta-selector found weak alignment between the active regime and engine support. | lead sentiment_reader",
+            "ageHours": 0.01,
+            "decayWeight": 1,
+            "similarity": 0.799,
+            "weightedInfluence": 0.216
+          },
+          {
+            "id": 3,
+            "createdAt": "2026-04-16T19:50:42.799Z",
+            "signal": "HOLD",
+            "confidence": 0.386,
+            "agreement": 0.6,
+            "blocked": true,
+            "summary": "HOLD 39% | agree 60% | blocked: Meta-selector found weak alignment between the active regime and engine support. | lead sentiment_reader",
+            "ageHours": 0.03,
+            "decayWeight": 1,
+            "similarity": 0.8,
+            "weightedInfluence": 0.216
+          }
+        ],
+        "generatedAt": "2026-04-16T19:52:13.882Z"
+      },
+      "harness": {
+        "generatedAt": "2026-04-16T19:53:28.683Z",
+        "marketQualityScore": 0.993,
+        "liquidityScore": 1,
+        "volatilityPenalty": 0.014,
+        "memoryAlignmentScore": 1,
+        "confidenceAdjustment": 0.036,
+        "blockedByHarness": false,
+        "notes": [
+          "Aging memory aligns with the current consensus."
+        ]
+      }
+    }
+  },
+  {
+    "id": "swarm_1776369098580_osjgqr",
+    "type": "swarm_run",
+    "timestamp": "2026-04-16T19:51:38.580Z",
+    "symbol": "BTC-USDT",
+    "timeframe": "1H",
+    "cached": false,
+    "totalElapsedMs": 130099,
+    "consensus": {
+      "symbol": "BTC-USDT",
+      "timeframe": "1H",
+      "signal": "HOLD",
+      "confidence": 0.386,
+      "agreement": 0.6,
+      "votes": [
+        {
+          "model": "deepseek-v3.2:cloud",
+          "role": "trend_follower",
+          "modelRole": "strategy",
+          "signal": "BUY",
+          "confidence": 0.537,
+          "reasoning": "Uptrend confirmed across latest bars with closing prices supporting direction.",
+          "elapsedMs": 130066,
+          "voteWeight": 1,
+          "isVetoLayer": false,
+          "researchTrace": {
+            "status": "completed",
+            "searched": true,
+            "focus": "recent news, sentiment, macro catalysts, and exchange-specific developments",
+            "rationale": "Heuristic fallback requested research due to uncertainty or elevated market conditions."
+          }
+        },
+        {
+          "model": "gemma4:31b-cloud",
+          "role": "momentum_analyst",
+          "modelRole": "signal_worker",
+          "signal": "HOLD",
+          "confidence": 0.45,
+          "reasoning": "Price shows bullish candle momentum, but severe order book imbalance (92.8% ask-heavy) indicates significant overhead supply. Negative funding rates suggest a bottom, but current 1H momentum lacks volume confirmation to clear the ask-wall.",
+          "elapsedMs": 107904,
+          "voteWeight": 0.9,
+          "isVetoLayer": false,
+          "researchTrace": {
+            "status": "completed",
+            "searched": true,
+            "focus": "recent news, sentiment, macro catalysts, and exchange-specific developments",
+            "rationale": "The signal is a low-confidence HOLD with minimal 24h price movement and no volatile indicators that would necessitate external context."
+          }
+        },
+        {
+          "model": "kimi-k2.5:cloud",
+          "role": "sentiment_reader",
+          "modelRole": "signal_worker",
+          "signal": "SELL",
+          "confidence": 0.95,
+          "reasoning": "Ask depth dominates and aligns with the session bias.",
+          "elapsedMs": 107637,
+          "voteWeight": 0.85,
+          "isVetoLayer": false,
+          "researchTrace": {
+            "status": "skipped",
+            "searched": false,
+            "focus": null,
+            "rationale": "Heuristic fallback found local market data sufficient."
+          }
+        },
+        {
+          "model": "glm-5.1:cloud",
+          "role": "execution_tactician",
+          "modelRole": "validator",
+          "signal": "BUY",
+          "confidence": 0.61,
+          "reasoning": "Execution conditions are clean; buy signal is executable.",
+          "elapsedMs": 82921,
+          "voteWeight": 0.8,
+          "isVetoLayer": true,
+          "researchTrace": {
+            "status": "not_allowed",
+            "searched": false,
+            "rationale": "This agent role is restricted to local market data and cannot perform external web research."
+          }
+        },
+        {
+          "model": "ministral-3:cloud",
+          "role": "macro_filter",
+          "modelRole": "risk",
+          "signal": "BUY",
+          "confidence": 0.563,
+          "reasoning": "Regime appears bullish with acceptable market quality. [Model call failed; heuristic used] Memory: 1 samples | dominant HOLD | blocked 100%",
+          "elapsedMs": 88145,
+          "voteWeight": 0.8,
+          "isVetoLayer": true,
+          "researchTrace": {
+            "status": "not_allowed",
+            "searched": false,
+            "rationale": "This agent role is restricted to local market data and cannot perform external web research."
+          }
+        }
+      ],
+      "weightedScores": {
+        "BUY": 1.4753999999999998,
+        "SELL": 0.8075,
+        "HOLD": 0.405
+      },
+      "validatedAt": "2026-04-16T19:51:38.550Z",
+      "blocked": true,
+      "researchSummary": {
+        "searchedAgents": 2,
+        "totalAgents": 5,
+        "completedAgents": 2,
+        "skippedAgents": 1,
+        "failedAgents": 0,
+        "topFocuses": [
+          "recent news, sentiment, macro catalysts, and exchange-specific developments"
+        ],
+        "topRationales": [
+          "This agent role is restricted to local market data and cannot perform external web research.",
+          "Heuristic fallback requested research due to uncertainty or elevated market conditions."
+        ]
+      },
+      "regime": {
+        "regime": "trend",
+        "confidence": 0.807,
+        "trendScore": 0.807,
+        "breakoutScore": 0.444,
+        "meanReversionScore": 0.161,
+        "volatilityScore": 0.634,
+        "liquidityScore": 1,
+        "notes": [
+          "Directional move and order book alignment favor trend continuation."
+        ],
+        "generatedAt": "2026-04-16T19:51:38.546Z"
+      },
+      "engineReports": [
+        {
+          "engine": "trend_continuation",
+          "signal": "BUY",
+          "confidence": 1,
+          "supportScore": 0.537,
+          "reasons": [
+            "Uptrend confirmed across latest bars with closing prices supporting direction."
+          ],
+          "supportingRoles": [
+            "trend_follower"
+          ]
+        },
+        {
+          "engine": "breakout",
+          "signal": "HOLD",
+          "confidence": 1,
+          "supportScore": 0.405,
+          "reasons": [
+            "Price shows bullish candle momentum, but severe order book imbalance (92.8% ask-heavy) indicates significant overhead supply. Negative funding rates suggest a bottom, but current 1H momentum lacks volume confirmation to clear the ask-wall."
+          ],
+          "supportingRoles": [
+            "momentum_analyst"
+          ]
+        },
+        {
+          "engine": "mean_reversion",
+          "signal": "SELL",
+          "confidence": 0.486,
+          "supportScore": 0.437,
+          "reasons": [
+            "Price is above recent average and may mean revert if liquidity remains stable."
+          ],
+          "supportingRoles": []
+        },
+        {
+          "engine": "microstructure",
+          "signal": "SELL",
+          "confidence": 1,
+          "supportScore": 0.807,
+          "reasons": [
+            "Ask depth dominates and aligns with the session bias."
+          ],
+          "supportingRoles": [
+            "sentiment_reader"
+          ]
+        }
+      ],
+      "decision": "HOLD",
+      "blockReason": "Meta-selector found weak alignment between the active regime and engine support.",
+      "metaSelection": {
+        "selectedEngine": "trend_continuation",
+        "suitability": 0.397,
+        "actionBias": "HOLD",
+        "engineScores": {
+          "trend_continuation": 0.537,
+          "breakout": 0.283,
+          "mean_reversion": 0.087,
+          "microstructure": 0.444,
+          "none": 0
+        },
+        "notes": [
+          "No strategy engine has strong enough regime fit to justify a trade."
+        ],
+        "generatedAt": "2026-04-16T19:51:38.546Z"
+      },
+      "expectedValue": {
+        "grossEdgeBps": 0,
+        "estimatedFeeBps": 10,
+        "estimatedSlippageBps": 2,
+        "netEdgeBps": -12,
+        "rewardRiskRatio": 0,
+        "tradeAllowed": false,
+        "notes": [
+          "No trade expected value calculated because the signal is HOLD."
+        ],
+        "generatedAt": "2026-04-16T19:51:38.546Z"
+      },
+      "reliability": {
+        "regime": "trend",
+        "selectedEngine": "trend_continuation",
+        "sampleSize": 5,
+        "reliabilityScore": 0,
+        "blockedRate": 1,
+        "notes": [
+          "Reliability estimated from historical swarm runs with the same regime and selected engine."
+        ],
+        "generatedAt": "2026-04-16T19:51:38.550Z"
+      },
+      "memory": {
+        "symbol": "BTC-USDT",
+        "timeframe": "1H",
+        "totalMemories": 1,
+        "effectiveSampleSize": 0.216,
+        "blockedRatio": 1,
+        "averageConfidence": 0.386,
+        "directionalWeights": {
+          "BUY": 0,
+          "SELL": 0,
+          "HOLD": 0.216
+        },
+        "dominantSignal": "HOLD",
+        "topRecalls": [
+          {
+            "id": 1,
+            "createdAt": "2026-04-16T19:46:34.968Z",
+            "signal": "HOLD",
+            "confidence": 0.386,
+            "agreement": 0.8,
+            "blocked": true,
+            "summary": "HOLD 39% | agree 80% | blocked: Meta-selector found weak alignment between the active regime and engine support. | lead sentiment_reader",
+            "ageHours": 0.05,
+            "decayWeight": 1,
+            "similarity": 0.799,
+            "weightedInfluence": 0.216
+          }
+        ],
+        "generatedAt": "2026-04-16T19:49:28.480Z"
+      },
+      "harness": {
+        "generatedAt": "2026-04-16T19:51:38.550Z",
+        "marketQualityScore": 0.993,
+        "liquidityScore": 1,
+        "volatilityPenalty": 0.014,
+        "memoryAlignmentScore": 1,
+        "confidenceAdjustment": -0.014,
+        "blockedByHarness": false,
+        "notes": [
+          "Harness found no material reason to adjust the raw consensus."
+        ]
+      }
+    }
+  },
+  {
+    "id": "swarm_1776369083431_s4od8h",
+    "type": "swarm_run",
+    "timestamp": "2026-04-16T19:51:23.431Z",
+    "symbol": "BTC-USDT",
+    "timeframe": "1H",
+    "cached": false,
+    "totalElapsedMs": 109607,
+    "consensus": {
+      "symbol": "BTC-USDT",
+      "timeframe": "1H",
+      "signal": "HOLD",
+      "confidence": 0.386,
+      "agreement": 0.8,
+      "votes": [
+        {
+          "model": "deepseek-v3.2:cloud",
+          "role": "trend_follower",
+          "modelRole": "strategy",
+          "signal": "BUY",
+          "confidence": 0.537,
+          "reasoning": "Uptrend confirmed across latest bars with closing prices supporting direction. [Model call failed; heuristic used] Memory: 1 samples | dominant HOLD | blocked 100%",
+          "elapsedMs": 1978,
+          "voteWeight": 1,
+          "isVetoLayer": false,
+          "researchTrace": {
+            "status": "completed",
+            "searched": true,
+            "focus": "recent news, sentiment, macro catalysts, and exchange-specific developments",
+            "rationale": "Heuristic fallback requested research due to uncertainty or elevated market conditions."
+          }
+        },
+        {
+          "model": "gemma4:31b-cloud",
+          "role": "momentum_analyst",
+          "modelRole": "signal_worker",
+          "signal": "HOLD",
+          "confidence": 0.411,
+          "reasoning": "Momentum is fading or under-confirmed by recent volume.",
+          "elapsedMs": 109570,
+          "voteWeight": 0.9,
+          "isVetoLayer": false,
+          "researchTrace": {
+            "status": "completed",
+            "searched": true,
+            "focus": "recent news, sentiment, macro catalysts, and exchange-specific developments",
+            "rationale": "The signal is a low-confidence HOLD with minimal price movement (0.60% 24h change). No specific catalysts are indicated that would override the current neutral momentum state."
+          }
+        },
+        {
+          "model": "kimi-k2.5:cloud",
+          "role": "sentiment_reader",
+          "modelRole": "signal_worker",
+          "signal": "BUY",
+          "confidence": 0.95,
+          "reasoning": "Bid depth dominates and aligns with the session bias. [Model call failed; heuristic used] Memory: 1 samples | dominant HOLD | blocked 100%",
+          "elapsedMs": 510,
+          "voteWeight": 0.85,
+          "isVetoLayer": false,
+          "researchTrace": {
+            "status": "skipped",
+            "searched": false,
+            "focus": null,
+            "rationale": "Heuristic fallback found local market data sufficient."
+          }
+        },
+        {
+          "model": "glm-5.1:cloud",
+          "role": "execution_tactician",
+          "modelRole": "validator",
+          "signal": "BUY",
+          "confidence": 0.61,
+          "reasoning": "Execution conditions are clean; buy signal is executable. [Model call failed; heuristic used] Memory: 1 samples | dominant HOLD | blocked 100%",
+          "elapsedMs": 295,
+          "voteWeight": 0.8,
+          "isVetoLayer": true,
+          "researchTrace": {
+            "status": "not_allowed",
+            "searched": false,
+            "rationale": "This agent role is restricted to local market data and cannot perform external web research."
+          }
+        },
+        {
+          "model": "ministral-3:cloud",
+          "role": "macro_filter",
+          "modelRole": "risk",
+          "signal": "BUY",
+          "confidence": 0.563,
+          "reasoning": "Regime appears bullish with acceptable market quality. [Model call failed; heuristic used] Memory: 1 samples | dominant HOLD | blocked 100%",
+          "elapsedMs": 83221,
+          "voteWeight": 0.8,
+          "isVetoLayer": true,
+          "researchTrace": {
+            "status": "not_allowed",
+            "searched": false,
+            "rationale": "This agent role is restricted to local market data and cannot perform external web research."
+          }
+        }
+      ],
+      "weightedScores": {
+        "BUY": 2.2829,
+        "SELL": 0,
+        "HOLD": 0.3699
+      },
+      "validatedAt": "2026-04-16T19:51:23.395Z",
+      "blocked": true,
+      "researchSummary": {
+        "searchedAgents": 2,
+        "totalAgents": 5,
+        "completedAgents": 2,
+        "skippedAgents": 1,
+        "failedAgents": 0,
+        "topFocuses": [
+          "recent news, sentiment, macro catalysts, and exchange-specific developments"
+        ],
+        "topRationales": [
+          "This agent role is restricted to local market data and cannot perform external web research.",
+          "Heuristic fallback requested research due to uncertainty or elevated market conditions."
+        ]
+      },
+      "regime": {
+        "regime": "trend",
+        "confidence": 0.667,
+        "trendScore": 0.667,
+        "breakoutScore": 0.444,
+        "meanReversionScore": 0.244,
+        "volatilityScore": 0.634,
+        "liquidityScore": 1,
+        "notes": [
+          "Directional move and order book alignment favor trend continuation."
+        ],
+        "generatedAt": "2026-04-16T19:51:23.391Z"
+      },
+      "engineReports": [
+        {
+          "engine": "trend_continuation",
+          "signal": "BUY",
+          "confidence": 1,
+          "supportScore": 0.537,
+          "reasons": [
+            "Uptrend confirmed across latest bars with closing prices supporting direction. [Model call failed; heuristic used] Memory: 1 samples | dominant HOLD | blocked 100%"
+          ],
+          "supportingRoles": [
+            "trend_follower"
+          ]
+        },
+        {
+          "engine": "breakout",
+          "signal": "HOLD",
+          "confidence": 1,
+          "supportScore": 0.37,
+          "reasons": [
+            "Momentum is fading or under-confirmed by recent volume."
+          ],
+          "supportingRoles": [
+            "momentum_analyst"
+          ]
+        },
+        {
+          "engine": "mean_reversion",
+          "signal": "SELL",
+          "confidence": 0.486,
+          "supportScore": 0.437,
+          "reasons": [
+            "Price is above recent average and may mean revert if liquidity remains stable."
+          ],
+          "supportingRoles": []
+        },
+        {
+          "engine": "microstructure",
+          "signal": "BUY",
+          "confidence": 1,
+          "supportScore": 0.807,
+          "reasons": [
+            "Bid depth dominates and aligns with the session bias. [Model call failed; heuristic used] Memory: 1 samples | dominant HOLD | blocked 100%"
+          ],
+          "supportingRoles": [
+            "sentiment_reader"
+          ]
+        }
+      ],
+      "decision": "HOLD",
+      "blockReason": "Meta-selector found weak alignment between the active regime and engine support.",
+      "metaSelection": {
+        "selectedEngine": "trend_continuation",
+        "suitability": 0.405,
+        "actionBias": "HOLD",
+        "engineScores": {
+          "trend_continuation": 0.537,
+          "breakout": 0.259,
+          "mean_reversion": 0.087,
+          "microstructure": 0.444,
+          "none": 0
+        },
+        "notes": [
+          "No strategy engine has strong enough regime fit to justify a trade."
+        ],
+        "generatedAt": "2026-04-16T19:51:23.391Z"
+      },
+      "expectedValue": {
+        "grossEdgeBps": 0,
+        "estimatedFeeBps": 10,
+        "estimatedSlippageBps": 2,
+        "netEdgeBps": -12,
+        "rewardRiskRatio": 0,
+        "tradeAllowed": false,
+        "notes": [
+          "No trade expected value calculated because the signal is HOLD."
+        ],
+        "generatedAt": "2026-04-16T19:51:23.391Z"
+      },
+      "reliability": {
+        "regime": "trend",
+        "selectedEngine": "trend_continuation",
+        "sampleSize": 4,
+        "reliabilityScore": 0,
+        "blockedRate": 1,
+        "notes": [
+          "Reliability estimated from historical swarm runs with the same regime and selected engine."
+        ],
+        "generatedAt": "2026-04-16T19:51:23.395Z"
+      },
+      "memory": {
+        "symbol": "BTC-USDT",
+        "timeframe": "1H",
+        "totalMemories": 1,
+        "effectiveSampleSize": 0.262,
+        "blockedRatio": 1,
+        "averageConfidence": 0.386,
+        "directionalWeights": {
+          "BUY": 0,
+          "SELL": 0,
+          "HOLD": 0.262
+        },
+        "dominantSignal": "HOLD",
+        "topRecalls": [
+          {
+            "id": 1,
+            "createdAt": "2026-04-16T19:46:34.968Z",
+            "signal": "HOLD",
+            "confidence": 0.386,
+            "agreement": 0.8,
+            "blocked": true,
+            "summary": "HOLD 39% | agree 80% | blocked: Meta-selector found weak alignment between the active regime and engine support. | lead sentiment_reader",
+            "ageHours": 0.05,
+            "decayWeight": 1,
+            "similarity": 0.968,
+            "weightedInfluence": 0.262
+          }
+        ],
+        "generatedAt": "2026-04-16T19:49:33.821Z"
+      },
+      "harness": {
+        "generatedAt": "2026-04-16T19:51:23.395Z",
+        "marketQualityScore": 0.993,
+        "liquidityScore": 1,
+        "volatilityPenalty": 0.014,
+        "memoryAlignmentScore": 1,
+        "confidenceAdjustment": -0.014,
+        "blockedByHarness": false,
+        "notes": [
+          "Harness found no material reason to adjust the raw consensus."
+        ]
+      }
+    }
+  },
+  {
+    "id": "swarm_1776369061734_hshifs",
+    "type": "swarm_run",
+    "timestamp": "2026-04-16T19:51:01.734Z",
+    "symbol": "BTC-USDT",
+    "timeframe": "1H",
+    "cached": false,
+    "totalElapsedMs": 192307,
+    "consensus": {
+      "symbol": "BTC-USDT",
+      "timeframe": "1H",
+      "signal": "HOLD",
+      "confidence": 0.386,
+      "agreement": 0.6,
+      "votes": [
+        {
+          "model": "deepseek-v3.2:cloud",
+          "role": "trend_follower",
+          "modelRole": "strategy",
+          "signal": "BUY",
+          "confidence": 0.53,
+          "reasoning": "Uptrend confirmed across latest bars with closing prices supporting direction. [Model call failed; heuristic used] Memory: 1 samples | dominant HOLD | blocked 100%",
+          "elapsedMs": 2064,
+          "voteWeight": 1,
+          "isVetoLayer": false,
+          "researchTrace": {
+            "status": "completed",
+            "searched": true,
+            "focus": "recent news, sentiment, macro catalysts, and exchange-specific developments",
+            "rationale": "Heuristic fallback requested research due to uncertainty or elevated market conditions."
+          }
+        },
+        {
+          "model": "gemma4:31b-cloud",
+          "role": "momentum_analyst",
+          "modelRole": "signal_worker",
+          "signal": "HOLD",
+          "confidence": 0.45,
+          "reasoning": "Bullish candle momentum is countered by a severe ask-heavy order book imbalance (91.8% ask depth), suggesting strong overhead resistance. Negative funding rates indicate a potential bottom, but current price action lacks the volume-backed acceleration needed for a high-conviction BUY.",
+          "elapsedMs": 192268,
+          "voteWeight": 0.9,
+          "isVetoLayer": false,
+          "researchTrace": {
+            "status": "completed",
+            "searched": true,
+            "focus": "recent news, sentiment, macro catalysts, and exchange-specific developments",
+            "rationale": "The signal is a low-confidence HOLD with minimal price action (0.67% 24h change). No specific catalysts are indicated that would override the current neutral momentum."
+          }
+        },
+        {
+          "model": "kimi-k2.5:cloud",
+          "role": "sentiment_reader",
+          "modelRole": "signal_worker",
+          "signal": "SELL",
+          "confidence": 0.95,
+          "reasoning": "Ask depth dominates and aligns with the session bias. [Model call failed; heuristic used] Memory: 1 samples | dominant HOLD | blocked 100%",
+          "elapsedMs": 541,
+          "voteWeight": 0.85,
+          "isVetoLayer": false,
+          "researchTrace": {
+            "status": "skipped",
+            "searched": false,
+            "focus": null,
+            "rationale": "Heuristic fallback found local market data sufficient."
+          }
+        },
+        {
+          "model": "glm-5.1:cloud",
+          "role": "execution_tactician",
+          "modelRole": "validator",
+          "signal": "BUY",
+          "confidence": 0.604,
+          "reasoning": "Execution conditions are clean; buy signal is executable. [Model call failed; heuristic used] Memory: 1 samples | dominant HOLD | blocked 100%",
+          "elapsedMs": 317,
+          "voteWeight": 0.8,
+          "isVetoLayer": true,
+          "researchTrace": {
+            "status": "not_allowed",
+            "searched": false,
+            "rationale": "This agent role is restricted to local market data and cannot perform external web research."
+          }
+        },
+        {
+          "model": "ministral-3:cloud",
+          "role": "macro_filter",
+          "modelRole": "risk",
+          "signal": "BUY",
+          "confidence": 0.557,
+          "reasoning": "Regime appears bullish with acceptable market quality. [Model call failed; heuristic used] Memory: 1 samples | dominant HOLD | blocked 100%",
+          "elapsedMs": 169158,
+          "voteWeight": 0.8,
+          "isVetoLayer": true,
+          "researchTrace": {
+            "status": "not_allowed",
+            "searched": false,
+            "rationale": "This agent role is restricted to local market data and cannot perform external web research."
+          }
+        }
+      ],
+      "weightedScores": {
+        "BUY": 1.4588,
+        "SELL": 0.8075,
+        "HOLD": 0.405
+      },
+      "validatedAt": "2026-04-16T19:51:01.697Z",
+      "blocked": true,
+      "researchSummary": {
+        "searchedAgents": 2,
+        "totalAgents": 5,
+        "completedAgents": 2,
+        "skippedAgents": 1,
+        "failedAgents": 0,
+        "topFocuses": [
+          "recent news, sentiment, macro catalysts, and exchange-specific developments"
+        ],
+        "topRationales": [
+          "This agent role is restricted to local market data and cannot perform external web research.",
+          "Heuristic fallback requested research due to uncertainty or elevated market conditions."
+        ]
+      },
+      "regime": {
+        "regime": "trend",
+        "confidence": 0.771,
+        "trendScore": 0.771,
+        "breakoutScore": 0.421,
+        "meanReversionScore": 0.2,
+        "volatilityScore": 0.634,
+        "liquidityScore": 1,
+        "notes": [
+          "Directional move and order book alignment favor trend continuation."
+        ],
+        "generatedAt": "2026-04-16T19:51:01.693Z"
+      },
+      "engineReports": [
+        {
+          "engine": "trend_continuation",
+          "signal": "BUY",
+          "confidence": 1,
+          "supportScore": 0.53,
+          "reasons": [
+            "Uptrend confirmed across latest bars with closing prices supporting direction. [Model call failed; heuristic used] Memory: 1 samples | dominant HOLD | blocked 100%"
+          ],
+          "supportingRoles": [
+            "trend_follower"
+          ]
+        },
+        {
+          "engine": "breakout",
+          "signal": "HOLD",
+          "confidence": 1,
+          "supportScore": 0.405,
+          "reasons": [
+            "Bullish candle momentum is countered by a severe ask-heavy order book imbalance (91.8% ask depth), suggesting strong overhead resistance. Negative funding rates indicate a potential bottom, but current price action lacks the volume-backed acceleration needed for a high-conviction BUY."
+          ],
+          "supportingRoles": [
+            "momentum_analyst"
+          ]
+        },
+        {
+          "engine": "mean_reversion",
+          "signal": "SELL",
+          "confidence": 0.476,
+          "supportScore": 0.429,
+          "reasons": [
+            "Price is above recent average and may mean revert if liquidity remains stable."
+          ],
+          "supportingRoles": []
+        },
+        {
+          "engine": "microstructure",
+          "signal": "SELL",
+          "confidence": 1,
+          "supportScore": 0.807,
+          "reasons": [
+            "Ask depth dominates and aligns with the session bias. [Model call failed; heuristic used] Memory: 1 samples | dominant HOLD | blocked 100%"
+          ],
+          "supportingRoles": [
+            "sentiment_reader"
+          ]
+        }
+      ],
+      "decision": "HOLD",
+      "blockReason": "Meta-selector found weak alignment between the active regime and engine support.",
+      "metaSelection": {
+        "selectedEngine": "trend_continuation",
+        "suitability": 0.395,
+        "actionBias": "HOLD",
+        "engineScores": {
+          "trend_continuation": 0.53,
+          "breakout": 0.283,
+          "mean_reversion": 0.086,
+          "microstructure": 0.444,
+          "none": 0
+        },
+        "notes": [
+          "No strategy engine has strong enough regime fit to justify a trade."
+        ],
+        "generatedAt": "2026-04-16T19:51:01.694Z"
+      },
+      "expectedValue": {
+        "grossEdgeBps": 0,
+        "estimatedFeeBps": 10,
+        "estimatedSlippageBps": 2,
+        "netEdgeBps": -12,
+        "rewardRiskRatio": 0,
+        "tradeAllowed": false,
+        "notes": [
+          "No trade expected value calculated because the signal is HOLD."
+        ],
+        "generatedAt": "2026-04-16T19:51:01.694Z"
+      },
+      "reliability": {
+        "regime": "trend",
+        "selectedEngine": "trend_continuation",
+        "sampleSize": 3,
+        "reliabilityScore": 0,
+        "blockedRate": 1,
+        "notes": [
+          "Reliability estimated from historical swarm runs with the same regime and selected engine."
+        ],
+        "generatedAt": "2026-04-16T19:51:01.697Z"
+      },
+      "memory": {
+        "symbol": "BTC-USDT",
+        "timeframe": "1H",
+        "totalMemories": 1,
+        "effectiveSampleSize": 0.216,
+        "blockedRatio": 1,
+        "averageConfidence": 0.386,
+        "directionalWeights": {
+          "BUY": 0,
+          "SELL": 0,
+          "HOLD": 0.216
+        },
+        "dominantSignal": "HOLD",
+        "topRecalls": [
+          {
+            "id": 1,
+            "createdAt": "2026-04-16T19:46:34.968Z",
+            "signal": "HOLD",
+            "confidence": 0.386,
+            "agreement": 0.8,
+            "blocked": true,
+            "summary": "HOLD 39% | agree 80% | blocked: Meta-selector found weak alignment between the active regime and engine support. | lead sentiment_reader",
+            "ageHours": 0.02,
+            "decayWeight": 1,
+            "similarity": 0.798,
+            "weightedInfluence": 0.216
+          }
+        ],
+        "generatedAt": "2026-04-16T19:47:49.423Z"
+      },
+      "harness": {
+        "generatedAt": "2026-04-16T19:51:01.697Z",
+        "marketQualityScore": 0.993,
+        "liquidityScore": 1,
+        "volatilityPenalty": 0.014,
+        "memoryAlignmentScore": 1,
+        "confidenceAdjustment": -0.014,
+        "blockedByHarness": false,
+        "notes": [
+          "Harness found no material reason to adjust the raw consensus."
+        ]
+      }
+    }
+  },
+  {
+    "id": "swarm_1776369042796_zg6rab",
+    "type": "swarm_run",
+    "timestamp": "2026-04-16T19:50:42.796Z",
+    "symbol": "BTC-USDT",
+    "timeframe": "1H",
+    "cached": false,
+    "totalElapsedMs": 294258,
+    "consensus": {
+      "symbol": "BTC-USDT",
+      "timeframe": "1H",
+      "signal": "HOLD",
+      "confidence": 0.386,
+      "agreement": 0.6,
+      "votes": [
+        {
+          "model": "deepseek-v3.2:cloud",
+          "role": "trend_follower",
+          "modelRole": "strategy",
+          "signal": "BUY",
+          "confidence": 0.477,
+          "reasoning": "Uptrend confirmed across latest bars with closing prices supporting direction. [Rate-limited: heuristic used]",
+          "elapsedMs": 30,
+          "voteWeight": 1,
+          "isVetoLayer": false,
+          "researchTrace": {
+            "status": "skipped",
+            "searched": false,
+            "rationale": "Agent rate-limited; heuristic vote returned without external research."
+          }
+        },
+        {
+          "model": "gemma4:31b-cloud",
+          "role": "momentum_analyst",
+          "modelRole": "signal_worker",
+          "signal": "HOLD",
+          "confidence": 0.35,
+          "reasoning": "Price shows slight bullish momentum (20-bar move +0.58%), but the current candle has a low body-to-range ratio (34.5%) and significant wicks, indicating indecision. Order book is heavily ask-heavy (76% sell pressure), contradicting the bullish candle. Negative funding rates suggest a macro bottom, but 1H momentum lacks the volume and acceleration required for a high-conviction entry.",
+          "elapsedMs": 294221,
+          "voteWeight": 0.9,
+          "isVetoLayer": false,
+          "researchTrace": {
+            "status": "completed",
+            "searched": true,
+            "focus": "recent news, sentiment, macro catalysts, and exchange-specific developments",
+            "rationale": "The signal is a low-confidence HOLD with negligible 24h price movement and tight spreads; no immediate catalyst is indicated that would override the current technical state."
+          }
+        },
+        {
+          "model": "kimi-k2.5:cloud",
+          "role": "sentiment_reader",
+          "modelRole": "signal_worker",
+          "signal": "SELL",
+          "confidence": 0.95,
+          "reasoning": "Ask depth dominates and aligns with the session bias.",
+          "elapsedMs": 147327,
+          "voteWeight": 0.85,
+          "isVetoLayer": false,
+          "researchTrace": {
+            "status": "skipped",
+            "searched": false,
+            "focus": null,
+            "rationale": "Heuristic fallback found local market data sufficient."
+          }
+        },
+        {
+          "model": "glm-5.1:cloud",
+          "role": "execution_tactician",
+          "modelRole": "validator",
+          "signal": "BUY",
+          "confidence": 0.601,
+          "reasoning": "Execution conditions are clean; buy signal is executable.",
+          "elapsedMs": 32319,
+          "voteWeight": 0.8,
+          "isVetoLayer": true,
+          "researchTrace": {
+            "status": "not_allowed",
+            "searched": false,
+            "rationale": "This agent role is restricted to local market data and cannot perform external web research."
+          }
+        },
+        {
+          "model": "ministral-3:cloud",
+          "role": "macro_filter",
+          "modelRole": "risk",
+          "signal": "BUY",
+          "confidence": 0.555,
+          "reasoning": "Regime appears bullish with acceptable market quality. [Model call failed; heuristic used]",
+          "elapsedMs": 20203,
+          "voteWeight": 0.8,
+          "isVetoLayer": true,
+          "researchTrace": {
+            "status": "not_allowed",
+            "searched": false,
+            "rationale": "This agent role is restricted to local market data and cannot perform external web research."
+          }
+        }
+      ],
+      "weightedScores": {
+        "BUY": 1.4018000000000002,
+        "SELL": 0.8075,
+        "HOLD": 0.315
+      },
+      "validatedAt": "2026-04-16T19:50:42.762Z",
+      "blocked": true,
+      "researchSummary": {
+        "searchedAgents": 1,
+        "totalAgents": 5,
+        "completedAgents": 1,
+        "skippedAgents": 2,
+        "failedAgents": 0,
+        "topFocuses": [
+          "recent news, sentiment, macro catalysts, and exchange-specific developments"
+        ],
+        "topRationales": [
+          "This agent role is restricted to local market data and cannot perform external web research.",
+          "Agent rate-limited; heuristic vote returned without external research."
+        ]
+      },
+      "regime": {
+        "regime": "trend",
+        "confidence": 0.679,
+        "trendScore": 0.679,
+        "breakoutScore": 0.411,
+        "meanReversionScore": 0.264,
+        "volatilityScore": 0.634,
+        "liquidityScore": 1,
+        "notes": [
+          "Directional move and order book alignment favor trend continuation."
+        ],
+        "generatedAt": "2026-04-16T19:50:42.758Z"
+      },
+      "engineReports": [
+        {
+          "engine": "trend_continuation",
+          "signal": "BUY",
+          "confidence": 1,
+          "supportScore": 0.477,
+          "reasons": [
+            "Uptrend confirmed across latest bars with closing prices supporting direction. [Rate-limited: heuristic used]"
+          ],
+          "supportingRoles": [
+            "trend_follower"
+          ]
+        },
+        {
+          "engine": "breakout",
+          "signal": "HOLD",
+          "confidence": 1,
+          "supportScore": 0.315,
+          "reasons": [
+            "Price shows slight bullish momentum (20-bar move +0.58%), but the current candle has a low body-to-range ratio (34.5%) and significant wicks, indicating indecision. Order book is heavily ask-heavy (76% sell pressure), contradicting the bullish candle. Negative funding rates suggest a macro bottom, but 1H momentum lacks the volume and acceleration required for a high-conviction entry."
+          ],
+          "supportingRoles": [
+            "momentum_analyst"
+          ]
+        },
+        {
+          "engine": "mean_reversion",
+          "signal": "SELL",
+          "confidence": 0.472,
+          "supportScore": 0.425,
+          "reasons": [
+            "Price is above recent average and may mean revert if liquidity remains stable."
+          ],
+          "supportingRoles": []
+        },
+        {
+          "engine": "microstructure",
+          "signal": "SELL",
+          "confidence": 1,
+          "supportScore": 0.807,
+          "reasons": [
+            "Ask depth dominates and aligns with the session bias."
+          ],
+          "supportingRoles": [
+            "sentiment_reader"
+          ]
+        }
+      ],
+      "decision": "HOLD",
+      "blockReason": "Meta-selector found weak alignment between the active regime and engine support.",
+      "metaSelection": {
+        "selectedEngine": "trend_continuation",
+        "suitability": 0.389,
+        "actionBias": "HOLD",
+        "engineScores": {
+          "trend_continuation": 0.477,
+          "breakout": 0.22,
+          "mean_reversion": 0.085,
+          "microstructure": 0.444,
+          "none": 0
+        },
+        "notes": [
+          "No strategy engine has strong enough regime fit to justify a trade."
+        ],
+        "generatedAt": "2026-04-16T19:50:42.759Z"
+      },
+      "expectedValue": {
+        "grossEdgeBps": 0,
+        "estimatedFeeBps": 10,
+        "estimatedSlippageBps": 2,
+        "netEdgeBps": -12,
+        "rewardRiskRatio": 0,
+        "tradeAllowed": false,
+        "notes": [
+          "No trade expected value calculated because the signal is HOLD."
+        ],
+        "generatedAt": "2026-04-16T19:50:42.759Z"
+      },
+      "reliability": {
+        "regime": "trend",
+        "selectedEngine": "trend_continuation",
+        "sampleSize": 2,
+        "reliabilityScore": 0,
+        "blockedRate": 1,
+        "notes": [
+          "Reliability estimated from historical swarm runs with the same regime and selected engine."
+        ],
+        "generatedAt": "2026-04-16T19:50:42.762Z"
+      },
+      "memory": {
+        "symbol": "BTC-USDT",
+        "timeframe": "1H",
+        "totalMemories": 0,
+        "effectiveSampleSize": 0,
+        "blockedRatio": 0,
+        "averageConfidence": 0,
+        "directionalWeights": {
+          "BUY": 0,
+          "SELL": 0,
+          "HOLD": 0
+        },
+        "dominantSignal": "BUY",
+        "topRecalls": [],
+        "generatedAt": "2026-04-16T19:45:48.537Z"
+      },
+      "harness": {
+        "generatedAt": "2026-04-16T19:50:42.762Z",
+        "marketQualityScore": 0.993,
+        "liquidityScore": 1,
+        "volatilityPenalty": 0.014,
+        "memoryAlignmentScore": 0,
+        "confidenceAdjustment": -0.014,
+        "blockedByHarness": false,
+        "notes": [
+          "Harness found no material reason to adjust the raw consensus."
+        ]
+      }
+    }
+  },
+  {
+    "id": "swarm_1776369040277_1lv5qn",
+    "type": "swarm_run",
+    "timestamp": "2026-04-16T19:50:40.277Z",
+    "symbol": "BTC-USDT",
+    "timeframe": "1H",
+    "cached": false,
+    "totalElapsedMs": 260855,
+    "consensus": {
+      "symbol": "BTC-USDT",
+      "timeframe": "1H",
+      "signal": "HOLD",
+      "confidence": 0.386,
+      "agreement": 1,
+      "votes": [
+        {
+          "model": "deepseek-v3.2:cloud",
+          "role": "trend_follower",
+          "modelRole": "strategy",
+          "signal": "BUY",
+          "confidence": 0.527,
+          "reasoning": "Uptrend confirmed across latest bars with closing prices supporting direction. [Model call failed; heuristic used]",
+          "elapsedMs": 543,
+          "voteWeight": 1,
+          "isVetoLayer": false,
+          "researchTrace": {
+            "status": "completed",
+            "searched": true,
+            "focus": "recent news, sentiment, macro catalysts, and exchange-specific developments",
+            "rationale": "Heuristic fallback requested research due to uncertainty or elevated market conditions."
+          }
+        },
+        {
+          "model": "gemma4:31b-cloud",
+          "role": "momentum_analyst",
+          "modelRole": "signal_worker",
+          "signal": "BUY",
+          "confidence": 0.7,
+          "reasoning": "Strong bullish order flow imbalance (99.7% bid depth) and advancing candle momentum. Negative funding rates suggest a short-squeeze potential as price pushes toward $76k. ROC is positive with a bullish close.",
+          "elapsedMs": 260818,
+          "voteWeight": 0.9,
+          "isVetoLayer": false,
+          "researchTrace": {
+            "status": "completed",
+            "searched": true,
+            "focus": "recent news, sentiment, macro catalysts, and exchange-specific developments",
+            "rationale": "Heuristic fallback requested research due to uncertainty or elevated market conditions."
+          }
+        },
+        {
+          "model": "kimi-k2.5:cloud",
+          "role": "sentiment_reader",
+          "modelRole": "signal_worker",
+          "signal": "BUY",
+          "confidence": 0.95,
+          "reasoning": "Bid depth dominates and aligns with the session bias. [Model call failed; heuristic used]",
+          "elapsedMs": 503,
+          "voteWeight": 0.85,
+          "isVetoLayer": false,
+          "researchTrace": {
+            "status": "skipped",
+            "searched": false,
+            "focus": null,
+            "rationale": "Heuristic fallback found local market data sufficient."
+          }
+        },
+        {
+          "model": "glm-5.1:cloud",
+          "role": "execution_tactician",
+          "modelRole": "validator",
+          "signal": "BUY",
+          "confidence": 0.601,
+          "reasoning": "Execution conditions are clean; buy signal is executable. [Model call failed; heuristic used]",
+          "elapsedMs": 309,
+          "voteWeight": 0.8,
+          "isVetoLayer": true,
+          "researchTrace": {
+            "status": "not_allowed",
+            "searched": false,
+            "rationale": "This agent role is restricted to local market data and cannot perform external web research."
+          }
+        },
+        {
+          "model": "ministral-3:cloud",
+          "role": "macro_filter",
+          "modelRole": "risk",
+          "signal": "BUY",
+          "confidence": 0.555,
+          "reasoning": "Regime appears bullish with acceptable market quality. [Model call failed; heuristic used]",
+          "elapsedMs": 310,
+          "voteWeight": 0.8,
+          "isVetoLayer": true,
+          "researchTrace": {
+            "status": "not_allowed",
+            "searched": false,
+            "rationale": "This agent role is restricted to local market data and cannot perform external web research."
+          }
+        }
+      ],
+      "weightedScores": {
+        "BUY": 2.8893,
+        "SELL": 0,
+        "HOLD": 0
+      },
+      "validatedAt": "2026-04-16T19:50:40.243Z",
+      "blocked": true,
+      "researchSummary": {
+        "searchedAgents": 2,
+        "totalAgents": 5,
+        "completedAgents": 2,
+        "skippedAgents": 1,
+        "failedAgents": 0,
+        "topFocuses": [
+          "recent news, sentiment, macro catalysts, and exchange-specific developments"
+        ],
+        "topRationales": [
+          "Heuristic fallback requested research due to uncertainty or elevated market conditions.",
+          "This agent role is restricted to local market data and cannot perform external web research."
+        ]
+      },
+      "regime": {
+        "regime": "trend",
+        "confidence": 0.797,
+        "trendScore": 0.797,
+        "breakoutScore": 0.411,
+        "meanReversionScore": 0.193,
+        "volatilityScore": 0.634,
+        "liquidityScore": 1,
+        "notes": [
+          "Directional move and order book alignment favor trend continuation."
+        ],
+        "generatedAt": "2026-04-16T19:50:40.238Z"
+      },
+      "engineReports": [
+        {
+          "engine": "trend_continuation",
+          "signal": "BUY",
+          "confidence": 1,
+          "supportScore": 0.527,
+          "reasons": [
+            "Uptrend confirmed across latest bars with closing prices supporting direction. [Model call failed; heuristic used]"
+          ],
+          "supportingRoles": [
+            "trend_follower"
+          ]
+        },
+        {
+          "engine": "breakout",
+          "signal": "BUY",
+          "confidence": 1,
+          "supportScore": 0.63,
+          "reasons": [
+            "Strong bullish order flow imbalance (99.7% bid depth) and advancing candle momentum. Negative funding rates suggest a short-squeeze potential as price pushes toward $76k. ROC is positive with a bullish close."
+          ],
+          "supportingRoles": [
+            "momentum_analyst"
+          ]
+        },
+        {
+          "engine": "mean_reversion",
+          "signal": "SELL",
+          "confidence": 0.472,
+          "supportScore": 0.425,
+          "reasons": [
+            "Price is above recent average and may mean revert if liquidity remains stable."
+          ],
+          "supportingRoles": []
+        },
+        {
+          "engine": "microstructure",
+          "signal": "BUY",
+          "confidence": 1,
+          "supportScore": 0.807,
+          "reasons": [
+            "Bid depth dominates and aligns with the session bias. [Model call failed; heuristic used]"
+          ],
+          "supportingRoles": [
+            "sentiment_reader"
+          ]
+        }
+      ],
+      "decision": "HOLD",
+      "blockReason": "Meta-selector found weak alignment between the active regime and engine support.",
+      "metaSelection": {
+        "selectedEngine": "trend_continuation",
+        "suitability": 0.352,
+        "actionBias": "HOLD",
+        "engineScores": {
+          "trend_continuation": 0.527,
+          "breakout": 0.441,
+          "mean_reversion": 0.085,
+          "microstructure": 0.444,
+          "none": 0
+        },
+        "notes": [
+          "No strategy engine has strong enough regime fit to justify a trade."
+        ],
+        "generatedAt": "2026-04-16T19:50:40.240Z"
+      },
+      "expectedValue": {
+        "grossEdgeBps": 0,
+        "estimatedFeeBps": 10,
+        "estimatedSlippageBps": 2,
+        "netEdgeBps": -12,
+        "rewardRiskRatio": 0,
+        "tradeAllowed": false,
+        "notes": [
+          "No trade expected value calculated because the signal is HOLD."
+        ],
+        "generatedAt": "2026-04-16T19:50:40.240Z"
+      },
+      "reliability": {
+        "regime": "trend",
+        "selectedEngine": "trend_continuation",
+        "sampleSize": 1,
+        "reliabilityScore": 0,
+        "blockedRate": 1,
+        "notes": [
+          "Reliability estimated from historical swarm runs with the same regime and selected engine."
+        ],
+        "generatedAt": "2026-04-16T19:50:40.243Z"
+      },
+      "memory": {
+        "symbol": "BTC-USDT",
+        "timeframe": "1H",
+        "totalMemories": 0,
+        "effectiveSampleSize": 0,
+        "blockedRatio": 0,
+        "averageConfidence": 0,
+        "directionalWeights": {
+          "BUY": 0,
+          "SELL": 0,
+          "HOLD": 0
+        },
+        "dominantSignal": "BUY",
+        "topRecalls": [],
+        "generatedAt": "2026-04-16T19:46:19.420Z"
+      },
+      "harness": {
+        "generatedAt": "2026-04-16T19:50:40.243Z",
+        "marketQualityScore": 0.993,
+        "liquidityScore": 1,
+        "volatilityPenalty": 0.014,
+        "memoryAlignmentScore": 0,
+        "confidenceAdjustment": -0.014,
+        "blockedByHarness": false,
+        "notes": [
+          "Harness found no material reason to adjust the raw consensus."
+        ]
+      }
+    }
+  },
+  {
+    "id": "swarm_1776368794965_c7ej2z",
+    "type": "swarm_run",
+    "timestamp": "2026-04-16T19:46:34.966Z",
+    "symbol": "BTC-USDT",
+    "timeframe": "1H",
+    "cached": false,
+    "totalElapsedMs": 553,
+    "consensus": {
+      "symbol": "BTC-USDT",
+      "timeframe": "1H",
+      "signal": "HOLD",
+      "confidence": 0.386,
+      "agreement": 0.8,
+      "votes": [
+        {
+          "model": "deepseek-v3.2:cloud",
+          "role": "trend_follower",
+          "modelRole": "strategy",
+          "signal": "BUY",
+          "confidence": 0.527,
+          "reasoning": "Uptrend confirmed across latest bars with closing prices supporting direction. [Model call failed; heuristic used]",
+          "elapsedMs": 516,
+          "voteWeight": 1,
+          "isVetoLayer": false,
+          "researchTrace": {
+            "status": "completed",
+            "searched": true,
+            "focus": "recent news, sentiment, macro catalysts, and exchange-specific developments",
+            "rationale": "Heuristic fallback requested research due to uncertainty or elevated market conditions."
+          }
+        },
+        {
+          "model": "gemma4:31b-cloud",
+          "role": "momentum_analyst",
+          "modelRole": "signal_worker",
+          "signal": "HOLD",
+          "confidence": 0.397,
+          "reasoning": "Momentum is fading or under-confirmed by recent volume. [Model call failed; heuristic used]",
+          "elapsedMs": 507,
+          "voteWeight": 0.9,
+          "isVetoLayer": false,
+          "researchTrace": {
+            "status": "completed",
+            "searched": true,
+            "focus": "recent news, sentiment, macro catalysts, and exchange-specific developments",
+            "rationale": "Heuristic fallback requested research due to uncertainty or elevated market conditions."
+          }
+        },
+        {
+          "model": "kimi-k2.5:cloud",
+          "role": "sentiment_reader",
+          "modelRole": "signal_worker",
+          "signal": "BUY",
+          "confidence": 0.95,
+          "reasoning": "Bid depth dominates and aligns with the session bias. [Model call failed; heuristic used]",
+          "elapsedMs": 480,
+          "voteWeight": 0.85,
+          "isVetoLayer": false,
+          "researchTrace": {
+            "status": "skipped",
+            "searched": false,
+            "focus": null,
+            "rationale": "Heuristic fallback found local market data sufficient."
+          }
+        },
+        {
+          "model": "glm-5.1:cloud",
+          "role": "execution_tactician",
+          "modelRole": "validator",
+          "signal": "BUY",
+          "confidence": 0.601,
+          "reasoning": "Execution conditions are clean; buy signal is executable. [Model call failed; heuristic used]",
+          "elapsedMs": 303,
+          "voteWeight": 0.8,
+          "isVetoLayer": true,
+          "researchTrace": {
+            "status": "not_allowed",
+            "searched": false,
+            "rationale": "This agent role is restricted to local market data and cannot perform external web research."
+          }
+        },
+        {
+          "model": "ministral-3:cloud",
+          "role": "macro_filter",
+          "modelRole": "risk",
+          "signal": "BUY",
+          "confidence": 0.555,
+          "reasoning": "Regime appears bullish with acceptable market quality. [Model call failed; heuristic used]",
+          "elapsedMs": 307,
+          "voteWeight": 0.8,
+          "isVetoLayer": true,
+          "researchTrace": {
+            "status": "not_allowed",
+            "searched": false,
+            "rationale": "This agent role is restricted to local market data and cannot perform external web research."
+          }
+        }
+      ],
+      "weightedScores": {
+        "BUY": 2.2593,
+        "SELL": 0,
+        "HOLD": 0.3573
+      },
+      "validatedAt": "2026-04-16T19:46:34.931Z",
+      "blocked": true,
+      "researchSummary": {
+        "searchedAgents": 2,
+        "totalAgents": 5,
+        "completedAgents": 2,
+        "skippedAgents": 1,
+        "failedAgents": 0,
+        "topFocuses": [
+          "recent news, sentiment, macro catalysts, and exchange-specific developments"
+        ],
+        "topRationales": [
+          "Heuristic fallback requested research due to uncertainty or elevated market conditions.",
+          "This agent role is restricted to local market data and cannot perform external web research."
+        ]
+      },
+      "regime": {
+        "regime": "trend",
+        "confidence": 0.669,
+        "trendScore": 0.669,
+        "breakoutScore": 0.411,
+        "meanReversionScore": 0.27,
+        "volatilityScore": 0.634,
+        "liquidityScore": 1,
+        "notes": [
+          "Directional move and order book alignment favor trend continuation."
+        ],
+        "generatedAt": "2026-04-16T19:46:34.926Z"
+      },
+      "engineReports": [
+        {
+          "engine": "trend_continuation",
+          "signal": "BUY",
+          "confidence": 1,
+          "supportScore": 0.527,
+          "reasons": [
+            "Uptrend confirmed across latest bars with closing prices supporting direction. [Model call failed; heuristic used]"
+          ],
+          "supportingRoles": [
+            "trend_follower"
+          ]
+        },
+        {
+          "engine": "breakout",
+          "signal": "HOLD",
+          "confidence": 1,
+          "supportScore": 0.357,
+          "reasons": [
+            "Momentum is fading or under-confirmed by recent volume. [Model call failed; heuristic used]"
+          ],
+          "supportingRoles": [
+            "momentum_analyst"
+          ]
+        },
+        {
+          "engine": "mean_reversion",
+          "signal": "SELL",
+          "confidence": 0.472,
+          "supportScore": 0.425,
+          "reasons": [
+            "Price is above recent average and may mean revert if liquidity remains stable."
+          ],
+          "supportingRoles": []
+        },
+        {
+          "engine": "microstructure",
+          "signal": "BUY",
+          "confidence": 1,
+          "supportScore": 0.807,
+          "reasons": [
+            "Bid depth dominates and aligns with the session bias. [Model call failed; heuristic used]"
+          ],
+          "supportingRoles": [
+            "sentiment_reader"
+          ]
+        }
+      ],
+      "decision": "HOLD",
+      "blockReason": "Meta-selector found weak alignment between the active regime and engine support.",
+      "metaSelection": {
+        "selectedEngine": "trend_continuation",
+        "suitability": 0.404,
+        "actionBias": "HOLD",
+        "engineScores": {
+          "trend_continuation": 0.527,
+          "breakout": 0.25,
+          "mean_reversion": 0.085,
+          "microstructure": 0.444,
+          "none": 0
+        },
+        "notes": [
+          "No strategy engine has strong enough regime fit to justify a trade."
+        ],
+        "generatedAt": "2026-04-16T19:46:34.927Z"
+      },
+      "expectedValue": {
+        "grossEdgeBps": 0,
+        "estimatedFeeBps": 10,
+        "estimatedSlippageBps": 2,
+        "netEdgeBps": -12,
+        "rewardRiskRatio": 0,
+        "tradeAllowed": false,
+        "notes": [
+          "No trade expected value calculated because the signal is HOLD."
+        ],
+        "generatedAt": "2026-04-16T19:46:34.927Z"
+      },
+      "reliability": {
+        "regime": "trend",
+        "selectedEngine": "trend_continuation",
+        "sampleSize": 0,
+        "reliabilityScore": 0.5,
+        "blockedRate": 0,
+        "notes": [
+          "No historical sample yet; using neutral reliability prior."
+        ],
+        "generatedAt": "2026-04-16T19:46:34.931Z"
+      },
+      "memory": {
+        "symbol": "BTC-USDT",
+        "timeframe": "1H",
+        "totalMemories": 0,
+        "effectiveSampleSize": 0,
+        "blockedRatio": 0,
+        "averageConfidence": 0,
+        "directionalWeights": {
+          "BUY": 0,
+          "SELL": 0,
+          "HOLD": 0
+        },
+        "dominantSignal": "BUY",
+        "topRecalls": [],
+        "generatedAt": "2026-04-16T19:46:34.410Z"
+      },
+      "harness": {
+        "generatedAt": "2026-04-16T19:46:34.931Z",
+        "marketQualityScore": 0.993,
+        "liquidityScore": 1,
+        "volatilityPenalty": 0.014,
+        "memoryAlignmentScore": 0,
+        "confidenceAdjustment": -0.014,
+        "blockedByHarness": false,
+        "notes": [
+          "Harness found no material reason to adjust the raw consensus."
+        ]
+      }
+    }
+  }
+]

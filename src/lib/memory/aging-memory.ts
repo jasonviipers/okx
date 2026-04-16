@@ -35,7 +35,8 @@ declare global {
 function ensureMemoryTable(): Promise<void> {
   if (!globalThis.__swarmMemoryReady) {
     globalThis.__swarmMemoryReady = (async () => {
-      await db.run(sql.raw(`
+      await db.run(
+        sql.raw(`
         CREATE TABLE IF NOT EXISTS swarm_memory (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
           created_at TEXT NOT NULL,
@@ -53,11 +54,14 @@ function ensureMemoryTable(): Promise<void> {
           imbalance REAL NOT NULL,
           summary TEXT NOT NULL
         )
-      `));
-      await db.run(sql.raw(`
+      `),
+      );
+      await db.run(
+        sql.raw(`
         CREATE INDEX IF NOT EXISTS idx_swarm_memory_symbol_tf_created
         ON swarm_memory(symbol, timeframe, created_at DESC)
-      `));
+      `),
+      );
     })();
   }
 
@@ -190,7 +194,10 @@ export async function getRecentMemories(
       .select()
       .from(swarmMemory)
       .where(
-        and(eq(swarmMemory.symbol, symbol), eq(swarmMemory.timeframe, timeframe)),
+        and(
+          eq(swarmMemory.symbol, symbol),
+          eq(swarmMemory.timeframe, timeframe),
+        ),
       )
       .orderBy(desc(swarmMemory.createdAt))
       .limit(limit)) as RawMemoryRow[];

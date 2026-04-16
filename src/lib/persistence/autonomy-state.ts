@@ -36,9 +36,7 @@ function parseNumber(value: string | undefined, fallback: number): number {
   return Number.isFinite(parsed) ? parsed : fallback;
 }
 
-function parseSelectionMode(
-  value: string | undefined,
-): AutonomySelectionMode {
+function parseSelectionMode(value: string | undefined): AutonomySelectionMode {
   return value?.toLowerCase() === "fixed" ? "fixed" : "auto";
 }
 

@@ -36,6 +36,30 @@ export interface AgentVote {
   elapsedMs: number;
   voteWeight: number;
   isVetoLayer: boolean;
+  researchTrace?: AgentResearchTrace;
+}
+
+export interface AgentResearchTrace {
+  status:
+    | "not_allowed"
+    | "skipped"
+    | "requested"
+    | "completed"
+    | "unavailable"
+    | "failed";
+  searched: boolean;
+  focus?: string | null;
+  rationale?: string | null;
+}
+
+export interface ConsensusResearchSummary {
+  searchedAgents: number;
+  totalAgents: number;
+  completedAgents: number;
+  skippedAgents: number;
+  failedAgents: number;
+  topFocuses: string[];
+  topRationales: string[];
 }
 
 export interface RegimeAnalysis {
@@ -99,6 +123,7 @@ export interface ConsensusResult {
   metaSelection?: MetaSelectionReport;
   expectedValue?: ExpectedValueReport;
   reliability?: ReliabilityReport;
+  researchSummary?: ConsensusResearchSummary;
 }
 
 export interface ExecutionResult {

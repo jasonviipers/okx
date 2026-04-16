@@ -36,6 +36,11 @@ interface OllamaWebFetchResponse {
   links?: string[];
 }
 
+export interface MarketResearchRequest {
+  role?: string;
+  focus?: string | null;
+}
+
 function clampText(text: string | undefined, maxLength: number): string {
   if (!text) return "";
   const normalized = text.replace(/\s+/g, " ").trim();
@@ -43,22 +48,61 @@ function clampText(text: string | undefined, maxLength: number): string {
   return `${normalized.slice(0, maxLength - 3).trim()}...`;
 }
 
-function getResearchCacheKey(ctx: MarketContext): string {
-  return `ollama:web-research:${ctx.symbol}:${ctx.timeframe}`;
+function normalizeCacheToken(value: string | null | undefined): string {
+  if (!value) return "general";
+  return value
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 48);
+}
+
+function getResearchCacheKey(
+  ctx: MarketContext,
+  request?: MarketResearchRequest,
+): string {
+  const roleToken = normalizeCacheToken(request?.role);
+  const focusToken = normalizeCacheToken(request?.focus);
+  return `ollama:web-research:${ctx.symbol}:${ctx.timeframe}:${roleToken}:${focusToken}`;
 }
 
 function getBaseAsset(symbol: string): string {
   return symbol.split("-")[0] ?? symbol;
 }
 
-function buildSearchQuery(ctx: MarketContext): string {
+function buildRoleFocus(role?: string): string {
+  switch (role) {
+    case "trend_follower":
+      return "trend breakout continuation price structure";
+    case "momentum_analyst":
+      return "momentum volatility derivatives funding liquidation";
+    case "sentiment_reader":
+      return "market sentiment ETF flows positioning exchange sentiment";
+    case "macro_filter":
+      return "macro risk regulation liquidity regime";
+    case "execution_tactician":
+      return "execution liquidity slippage market microstructure";
+    default:
+      return "market catalysts sentiment macro regulation";
+  }
+}
+
+function buildSearchQuery(
+  ctx: MarketContext,
+  request?: MarketResearchRequest,
+): string {
   const baseAsset = getBaseAsset(ctx.symbol);
+  const focus = request?.focus?.trim();
   return [
     `${baseAsset} crypto latest news`,
     `${ctx.symbol} market catalysts`,
+    buildRoleFocus(request?.role),
+    focus ? `focus on ${focus}` : null,
     "macro regulation ETF exchange sentiment",
     "for short-term trading",
-  ].join(" ");
+  ]
+    .filter(Boolean)
+    .join(" ");
 }
 
 function getAuthHeaders(): HeadersInit {
@@ -137,14 +181,15 @@ export function isOllamaWebSearchConfigured(): boolean {
  */
 export async function getMarketResearchDigest(
   ctx: MarketContext,
+  request?: MarketResearchRequest,
 ): Promise<string | null> {
   if (!isOllamaWebSearchConfigured()) return null;
 
-  const cacheKey = getResearchCacheKey(ctx);
+  const cacheKey = getResearchCacheKey(ctx, request);
   const cached = await getCachedJson<string>(cacheKey);
   if (cached) return cached;
 
-  const query = buildSearchQuery(ctx);
+  const query = buildSearchQuery(ctx, request);
 
   try {
     const searchResults = await webSearch(query);
@@ -178,6 +223,8 @@ export async function getMarketResearchDigest(
 
     const digest = [
       `Fresh web research for ${ctx.symbol} (${ctx.timeframe})`,
+      request?.role ? `Agent role: ${request.role}` : null,
+      request?.focus ? `Research focus: ${request.focus}` : null,
       `Search query: ${query}`,
       "Search results:",
       ...formatSearchResults(searchResults),

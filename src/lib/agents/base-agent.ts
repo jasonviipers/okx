@@ -3,7 +3,7 @@ import { buildBaseSystemPrompt } from "@/lib/prompts/base-system";
 import { summarizeMarketContext } from "@/lib/prompts/market-context";
 import type { MarketContext } from "@/types/market";
 import type { MemorySummary } from "@/types/memory";
-import type { AgentVote, TradeSignal } from "@/types/swarm";
+import type { AgentResearchTrace, AgentVote, TradeSignal } from "@/types/swarm";
 
 interface FinalizeVoteInput {
   model: string;
@@ -12,6 +12,7 @@ interface FinalizeVoteInput {
   confidence: number;
   reasoning: string;
   startedAt: number;
+  researchTrace?: AgentResearchTrace;
 }
 
 export function buildAgentPrompt(
@@ -56,5 +57,6 @@ export function finalizeVote(input: FinalizeVoteInput): AgentVote {
     elapsedMs: Math.max(1, Date.now() - input.startedAt),
     voteWeight: input.roleConfig.voteWeight,
     isVetoLayer: input.roleConfig.isVetoLayer,
+    researchTrace: input.researchTrace,
   };
 }

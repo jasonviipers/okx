@@ -19,12 +19,18 @@ import { buildMemoryPrompt, getMemorySummary } from "@/lib/memory/aging-memory";
 import { checkRateLimit } from "@/lib/redis/rate-limiter";
 import type { Candle, MarketContext } from "@/types/market";
 import type { MemorySummary } from "@/types/memory";
-import type { AgentVote, TradeSignal } from "@/types/swarm";
+import type { AgentResearchTrace, AgentVote, TradeSignal } from "@/types/swarm";
 
 type SignalScore = {
   signal: TradeSignal;
   confidence: number;
   reasoning: string;
+};
+
+type ResearchDecision = {
+  useWebResearch: boolean;
+  focus: string | null;
+  rationale: string | null;
 };
 
 function extractJsonObject(text: string): string | null {
@@ -40,6 +46,31 @@ function extractJsonObject(text: string): string | null {
   }
 
   return null;
+}
+
+function parseResearchDecision(text: string): ResearchDecision | null {
+  const jsonCandidate = extractJsonObject(text);
+  if (!jsonCandidate) {
+    return null;
+  }
+
+  try {
+    const parsed = JSON.parse(jsonCandidate) as Partial<ResearchDecision>;
+    return {
+      useWebResearch: parsed.useWebResearch === true,
+      focus:
+        typeof parsed.focus === "string" && parsed.focus.trim().length > 0
+          ? parsed.focus.trim()
+          : null,
+      rationale:
+        typeof parsed.rationale === "string" &&
+        parsed.rationale.trim().length > 0
+          ? parsed.rationale.trim()
+          : null,
+    };
+  } catch {
+    return null;
+  }
 }
 
 function parseModelVote(text: string, fallback: SignalScore): SignalScore {
@@ -121,6 +152,37 @@ function detectSignal(score: number, threshold = 0.0025): TradeSignal {
     return "SELL";
   }
   return "HOLD";
+}
+
+function shouldUseWebResearchHeuristic(
+  ctx: MarketContext,
+  heuristicVote: SignalScore,
+): ResearchDecision {
+  const lastCandle = ctx.candles.at(-1);
+  const rangePct =
+    lastCandle && ctx.ticker.last > 0
+      ? (lastCandle.high - lastCandle.low) / ctx.ticker.last
+      : 0;
+  const dailyMovePct = Math.abs(ctx.ticker.change24h);
+  const spreadPct =
+    ctx.ticker.last > 0
+      ? (ctx.ticker.ask - ctx.ticker.bid) / ctx.ticker.last
+      : 0;
+  const uncertainSignal =
+    heuristicVote.signal === "HOLD" || heuristicVote.confidence < 0.62;
+  const fastMarket = dailyMovePct >= 3 || rangePct >= 0.02;
+  const dislocatedExecution = spreadPct >= 0.0025;
+  const useWebResearch = uncertainSignal || fastMarket || dislocatedExecution;
+
+  return {
+    useWebResearch,
+    focus: useWebResearch
+      ? "recent news, sentiment, macro catalysts, and exchange-specific developments"
+      : null,
+    rationale: useWebResearch
+      ? "Heuristic fallback requested research due to uncertainty or elevated market conditions."
+      : "Heuristic fallback found local market data sufficient.",
+  };
 }
 
 function runTrendFollower(ctx: MarketContext): SignalScore {
@@ -302,6 +364,83 @@ function buildSystemPrompt(roleConfig: AgentRoleConfig): string {
     .join("\n");
 }
 
+function buildResearchDecisionPrompt(
+  ctx: MarketContext,
+  roleConfig: AgentRoleConfig,
+  heuristicVote: SignalScore,
+  memoryLabel: string | null,
+): string {
+  const lastCandle = ctx.candles.at(-1);
+
+  return [
+    "Decide whether external web research is needed before finalizing this trade vote.",
+    "Return strict JSON only.",
+    '{"useWebResearch":boolean,"focus":"short search focus or null","rationale":"short reason"}',
+    "Set useWebResearch=true only if recent news, sentiment, macro, regulatory, ETF, exchange, or market-structure developments could materially change the decision or confidence.",
+    "Prefer false when the supplied live market data is already sufficient.",
+    `Role: ${roleConfig.label} (${roleConfig.role})`,
+    `Symbol: ${ctx.symbol}`,
+    `Timeframe: ${ctx.timeframe}`,
+    `Heuristic signal: ${heuristicVote.signal}`,
+    `Heuristic confidence: ${heuristicVote.confidence.toFixed(3)}`,
+    `24h change: ${ctx.ticker.change24h.toFixed(2)}%`,
+    `Spread: ${ctx.ticker.last > 0 ? (((ctx.ticker.ask - ctx.ticker.bid) / ctx.ticker.last) * 100).toFixed(3) : "0.000"}%`,
+    lastCandle
+      ? `Last candle range vs price: ${(((lastCandle.high - lastCandle.low) / ctx.ticker.last) * 100).toFixed(3)}%`
+      : null,
+    memoryLabel ? memoryLabel : null,
+  ]
+    .filter(Boolean)
+    .join("\n");
+}
+
+async function decideWebResearchNeed(
+  modelId: string,
+  roleConfig: AgentRoleConfig,
+  ctx: MarketContext,
+  heuristicVote: SignalScore,
+  memoryLabel: string | null,
+): Promise<ResearchDecision> {
+  const heuristicDecision = shouldUseWebResearchHeuristic(ctx, heuristicVote);
+
+  if (!isOllamaConfigured()) {
+    return heuristicDecision;
+  }
+
+  try {
+    const { text } = await generateText({
+      model: getOllamaModel(modelId),
+      system: [
+        "You are deciding whether an analyst should perform external web research before finalizing a crypto trade vote.",
+        "Return strict JSON only.",
+        '{"useWebResearch":boolean,"focus":"short search focus or null","rationale":"short reason"}',
+        "Be cost-aware and selective. External research should be requested when it can materially change the decision quality.",
+      ].join("\n"),
+      prompt: buildResearchDecisionPrompt(
+        ctx,
+        roleConfig,
+        heuristicVote,
+        memoryLabel,
+      ),
+      temperature: 0,
+      maxOutputTokens: 120,
+    });
+
+    const parsed = parseResearchDecision(text);
+    if (!parsed) {
+      return heuristicDecision;
+    }
+
+    return {
+      useWebResearch: parsed.useWebResearch || heuristicDecision.useWebResearch,
+      focus: parsed.focus ?? heuristicDecision.focus,
+      rationale: parsed.rationale ?? heuristicDecision.rationale,
+    };
+  } catch {
+    return heuristicDecision;
+  }
+}
+
 export function createAgent(modelId: string, roleConfig: AgentRoleConfig) {
   assertCanReason(modelId as AIModel);
 
@@ -330,13 +469,81 @@ export function createAgent(modelId: string, roleConfig: AgentRoleConfig) {
         confidence: heuristicVote.confidence,
         reasoning: `${heuristicVote.reasoning} [Rate-limited: heuristic used]${memoryLabel ? ` ${memoryLabel}` : ""}`,
         startedAt,
+        researchTrace: {
+          status: "skipped",
+          searched: false,
+          rationale:
+            "Agent rate-limited; heuristic vote returned without external research.",
+        },
       });
     }
 
     const webSearchAllowed = modelCanUseWebSearch(modelId as AIModel);
-    const researchContext = webSearchAllowed
-      ? await getMarketResearchDigest(ctx)
+    let researchTrace: AgentResearchTrace | undefined = webSearchAllowed
+      ? undefined
+      : {
+          status: "not_allowed",
+          searched: false,
+          rationale:
+            "This agent role is restricted to local market data and cannot perform external web research.",
+        };
+    const researchDecision = webSearchAllowed
+      ? await decideWebResearchNeed(
+          modelId,
+          roleConfig,
+          ctx,
+          heuristicVote,
+          memoryLabel,
+        )
       : null;
+    if (
+      webSearchAllowed &&
+      researchDecision &&
+      !researchDecision.useWebResearch
+    ) {
+      researchTrace = {
+        status: "skipped",
+        searched: false,
+        focus: researchDecision.focus,
+        rationale:
+          researchDecision.rationale ??
+          "Agent determined local market context was sufficient.",
+      };
+    }
+
+    let researchContext: string | null = null;
+    if (webSearchAllowed && researchDecision?.useWebResearch) {
+      researchTrace = {
+        status: "requested",
+        searched: true,
+        focus: researchDecision.focus,
+        rationale:
+          researchDecision.rationale ??
+          "Agent requested external research to improve context.",
+      };
+      researchContext = await getMarketResearchDigest(ctx, {
+        role: roleConfig.role,
+        focus: researchDecision.focus,
+      });
+
+      researchTrace = researchContext
+        ? {
+            status: "completed",
+            searched: true,
+            focus: researchDecision.focus,
+            rationale:
+              researchDecision.rationale ??
+              "External research was added to the agent context.",
+          }
+        : {
+            status: isOllamaConfigured() ? "failed" : "unavailable",
+            searched: true,
+            focus: researchDecision.focus,
+            rationale:
+              researchDecision.rationale ??
+              "External research was requested but no digest was available.",
+          };
+    }
     const memoryContext = buildMemoryPrompt(resolvedMemorySummary);
     const prompt = buildAgentPrompt(
       ctx,
@@ -395,6 +602,7 @@ export function createAgent(modelId: string, roleConfig: AgentRoleConfig) {
       ),
       reasoning: resolvedVote.reasoning,
       startedAt,
+      researchTrace,
     });
   };
 }

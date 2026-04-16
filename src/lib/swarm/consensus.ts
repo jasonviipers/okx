@@ -1,10 +1,60 @@
 import type { MarketContext } from "@/types/market";
-import type { AgentVote, ConsensusResult, TradeSignal } from "@/types/swarm";
+import type {
+  AgentVote,
+  ConsensusResearchSummary,
+  ConsensusResult,
+  TradeSignal,
+} from "@/types/swarm";
 
 function sumVotes(votes: AgentVote[], signal: TradeSignal): number {
   return votes
     .filter((vote) => vote.signal === signal)
     .reduce((sum, vote) => sum + vote.confidence * vote.voteWeight, 0);
+}
+
+function takeTopEntries(
+  values: Array<string | null | undefined>,
+  limit = 2,
+): string[] {
+  const counts = new Map<string, number>();
+
+  for (const value of values) {
+    const normalized = value?.trim();
+    if (!normalized) continue;
+    counts.set(normalized, (counts.get(normalized) ?? 0) + 1);
+  }
+
+  return [...counts.entries()]
+    .sort((left, right) => right[1] - left[1])
+    .slice(0, limit)
+    .map(([value]) => value);
+}
+
+function buildResearchSummary(votes: AgentVote[]): ConsensusResearchSummary {
+  const traces = votes
+    .map((vote) => vote.researchTrace)
+    .filter((trace): trace is NonNullable<AgentVote["researchTrace"]> =>
+      Boolean(trace),
+    );
+
+  return {
+    searchedAgents: traces.filter((trace) => trace.searched).length,
+    totalAgents: votes.length,
+    completedAgents: traces.filter((trace) => trace.status === "completed")
+      .length,
+    skippedAgents: traces.filter((trace) => trace.status === "skipped").length,
+    failedAgents: traces.filter(
+      (trace) => trace.status === "failed" || trace.status === "unavailable",
+    ).length,
+    topFocuses: takeTopEntries(
+      traces.map((trace) => trace.focus),
+      2,
+    ),
+    topRationales: takeTopEntries(
+      traces.map((trace) => trace.rationale),
+      2,
+    ),
+  };
 }
 
 export function computeConsensus(
@@ -43,5 +93,6 @@ export function computeConsensus(
     weightedScores,
     validatedAt: new Date().toISOString(),
     blocked: false,
+    researchSummary: buildResearchSummary(votes),
   };
 }

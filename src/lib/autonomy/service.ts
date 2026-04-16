@@ -59,7 +59,9 @@ function toAutonomyStatus(
   budgetRemainingUsd: number,
 ): AutonomyStatus {
   const selectionModeLabel =
-    state.selectionMode === "auto" ? "symbol selection is automatic." : "symbol is fixed.";
+    state.selectionMode === "auto"
+      ? "symbol selection is automatic."
+      : "symbol is fixed.";
 
   return {
     enabled: true,
@@ -156,7 +158,11 @@ function parseSymbolList(value: string[] | undefined): string[] | undefined {
     return undefined;
   }
 
-  return [...new Set(value.map((symbol) => symbol.trim().toUpperCase()).filter(Boolean))];
+  return [
+    ...new Set(
+      value.map((symbol) => symbol.trim().toUpperCase()).filter(Boolean),
+    ),
+  ];
 }
 
 type AutonomySymbolEvaluation = {
@@ -171,14 +177,18 @@ function scoreAutonomyCandidate(
 ): number {
   const { snapshot, result } = evaluation;
   const consensus = result.consensus;
-  const confidence = consensus.confidence <= 1
-    ? consensus.confidence
-    : consensus.confidence / 100;
-  const agreement = consensus.agreement <= 1
-    ? consensus.agreement
-    : consensus.agreement / 100;
+  const confidence =
+    consensus.confidence <= 1
+      ? consensus.confidence
+      : consensus.confidence / 100;
+  const agreement =
+    consensus.agreement <= 1 ? consensus.agreement : consensus.agreement / 100;
 
-  if (!snapshot.status.tradeable || consensus.blocked || consensus.signal === "HOLD") {
+  if (
+    !snapshot.status.tradeable ||
+    consensus.blocked ||
+    consensus.signal === "HOLD"
+  ) {
     return 0;
   }
 
@@ -224,7 +234,10 @@ async function selectAutonomyRun(
 
   for (const symbol of symbols) {
     try {
-      const evaluation = await evaluateAutonomyCandidate(symbol, state.timeframe);
+      const evaluation = await evaluateAutonomyCandidate(
+        symbol,
+        state.timeframe,
+      );
       if (!best || evaluation.score > best.score) {
         best = evaluation;
       }
@@ -363,7 +376,9 @@ export async function dispatchAutonomyWorker(options?: {
       lastReason:
         execution?.reason ??
         execution?.error ??
-        (errors.length > 0 ? `Partial scan issues: ${errors.join("; ")}` : undefined),
+        (errors.length > 0
+          ? `Partial scan issues: ${errors.join("; ")}`
+          : undefined),
       iterationCount: current.iterationCount + 1,
       lastTradeAt:
         execution?.status === "success" ? Date.now() : current.lastTradeAt,

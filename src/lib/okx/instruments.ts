@@ -90,7 +90,8 @@ export async function listSpotInstruments(quoteCurrency = "USDT") {
       (row) =>
         row.instId &&
         (row.state ?? "live") === "live" &&
-        (row.quoteCcy?.toUpperCase() ?? row.instId.split("-")[1]?.toUpperCase()) ===
+        (row.quoteCcy?.toUpperCase() ??
+          row.instId.split("-")[1]?.toUpperCase()) ===
           quoteCurrency.toUpperCase(),
     )
     .map((row) => row.instId);

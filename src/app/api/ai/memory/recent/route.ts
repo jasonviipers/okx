@@ -8,7 +8,8 @@ export const dynamic = "force-dynamic";
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const symbol = searchParams.get("symbol") ?? undefined;
-  const timeframe = (searchParams.get("timeframe") as Timeframe | null) ?? undefined;
+  const timeframe =
+    (searchParams.get("timeframe") as Timeframe | null) ?? undefined;
   const limit = Number.parseInt(searchParams.get("limit") ?? "50", 10);
   const memories = await getRecentMemories(symbol, timeframe, limit);
 

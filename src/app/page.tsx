@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useRef, useState } from "react";
 import { Streamdown } from "streamdown";
 import {
   controlAutonomy,
@@ -130,26 +130,56 @@ function Sparkline({ data }: { data: number[] }) {
 }
 
 function VoteBar({ vote }: { vote: AgentVote }) {
+  const researchTrace = vote.researchTrace;
+  const researchLabel = researchTrace
+    ? researchTrace.searched
+      ? `WEB:${researchTrace.status.toUpperCase()}`
+      : `WEB:${researchTrace.status.toUpperCase()}`
+    : "WEB:NA";
+
   return (
-    <div className="flex items-center border-b border-border min-h-[1.25rem]">
-      <span className="data-cell w-[7%] truncate">{vote.modelRole}</span>
-      <span className={`data-cell w-[6%] ${signalClass(vote.signal)}`}>
-        {vote.signal}
-      </span>
-      <span className="data-cell w-[6%]">
-        {(vote.confidence * 100).toFixed(0)}%
-      </span>
-      <span className="data-cell w-[4%] data-neutral">
-        {vote.voteWeight.toFixed(1)}
-      </span>
-      <span className="data-cell flex-1 truncate data-neutral text-[0.6rem]">
-        {vote.reasoning}
-      </span>
-      <span className="data-cell w-[6%] text-right data-neutral">
-        {vote.elapsedMs}ms
-      </span>
+    <div className="border-b border-border min-h-[1.25rem]">
+      <div className="flex items-center">
+        <span className="data-cell w-[7%] truncate">{vote.modelRole}</span>
+        <span className={`data-cell w-[6%] ${signalClass(vote.signal)}`}>
+          {vote.signal}
+        </span>
+        <span className="data-cell w-[6%]">
+          {(vote.confidence * 100).toFixed(0)}%
+        </span>
+        <span className="data-cell w-[4%] data-neutral">
+          {vote.voteWeight.toFixed(1)}
+        </span>
+        <span className="data-cell flex-1 truncate data-neutral text-[0.6rem]">
+          {vote.reasoning}
+        </span>
+        <span className="data-cell w-[8%] text-right data-neutral">
+          {researchLabel}
+        </span>
+        <span className="data-cell w-[6%] text-right data-neutral">
+          {vote.elapsedMs}ms
+        </span>
+      </div>
+      {researchTrace ? (
+        <div className="px-2 pb-1 text-[0.55rem] uppercase tracking-wide text-terminal-dim">
+          {researchTrace.focus
+            ? `focus: ${researchTrace.focus}`
+            : "focus: none"}{" "}
+          | {researchTrace.rationale ?? "no research rationale"}
+        </div>
+      ) : null}
     </div>
   );
+}
+
+function formatResearchSummary(consensus: ConsensusResult): string {
+  const summary = consensus.researchSummary;
+  if (!summary) {
+    return "---";
+  }
+
+  const focus = summary.topFocuses[0] ?? "none";
+  return `${summary.searchedAgents}/${summary.totalAgents} | ${focus}`;
 }
 
 function CommandBar({
@@ -285,12 +315,17 @@ export default function Dashboard() {
           const event = JSON.parse(e.data) as SwarmStreamEvent;
           if (event.type === "vote" && event.vote) {
             const v = event.vote;
+            const researchLine = v.researchTrace
+              ? `**Research:** ${v.researchTrace.status}${v.researchTrace.focus ? ` | focus: ${v.researchTrace.focus}` : ""}${v.researchTrace.rationale ? ` | ${v.researchTrace.rationale}` : ""}`
+              : null;
             discussionLenRef.current += 1;
             setAgentDiscussion((prev) => {
               const block = [
                 `### ${v.modelRole} [${v.model}]`,
                 `**Signal:** ${v.signal} | **Confidence:** ${(v.confidence * 100).toFixed(0)}% | **Weight:** ${v.voteWeight.toFixed(1)}`,
                 "",
+                researchLine,
+                researchLine ? "" : null,
                 v.reasoning,
                 "",
                 "---",
@@ -668,7 +703,34 @@ export default function Dashboard() {
                       </span>
                     </>
                   )}
+                  {consensus.researchSummary && (
+                    <>
+                      <span className="data-neutral">RESEARCH</span>
+                      <span>
+                        {consensus.researchSummary.searchedAgents}/
+                        {consensus.researchSummary.totalAgents} AGENTS
+                      </span>
+                      <span className="data-neutral">WEB OK</span>
+                      <span>
+                        {consensus.researchSummary.completedAgents}
+                        {consensus.researchSummary.failedAgents > 0
+                          ? ` / FAIL ${consensus.researchSummary.failedAgents}`
+                          : ""}
+                      </span>
+                      <span className="data-neutral">TOP FOCUS</span>
+                      <span className="data-neutral">
+                        {consensus.researchSummary.topFocuses.join(" | ") ||
+                          "---"}
+                      </span>
+                    </>
+                  )}
                 </div>
+                {consensus.researchSummary ? (
+                  <div className="border-b border-border px-2 py-1 text-[0.6rem] text-terminal-dim">
+                    {consensus.researchSummary.topRationales.join(" | ") ||
+                      "No research rationale recorded."}
+                  </div>
+                ) : null}
                 <div className="flex-1 overflow-auto">
                   {consensus.votes.map((v) => (
                     <VoteBar key={`${v.model}-${v.role}`} vote={v} />
@@ -749,29 +811,56 @@ export default function Dashboard() {
                     <th className="data-header text-left">TIME</th>
                     <th className="data-header text-left">SYM</th>
                     <th className="data-header text-left">SIG</th>
+                    <th className="data-header text-left">WEB</th>
                     <th className="data-header text-right">CONF</th>
                     <th className="data-header text-right">MS</th>
                   </tr>
                 </thead>
                 <tbody>
                   {swarmHistory.slice(0, 15).map((e) => (
-                    <tr key={e.id} className="border-b border-border">
-                      <td className="data-cell data-neutral">
-                        {fmtTs(e.timestamp)} {fmtDate(e.timestamp)}
-                      </td>
-                      <td className="data-cell">{e.symbol}</td>
-                      <td
-                        className={`data-cell ${signalClass(e.consensus.signal)}`}
-                      >
-                        {e.consensus.signal}
-                      </td>
-                      <td className="data-cell text-right">
-                        {(e.consensus.confidence * 100).toFixed(0)}%
-                      </td>
-                      <td className="data-cell text-right data-neutral">
-                        {e.totalElapsedMs}
-                      </td>
-                    </tr>
+                    <Fragment key={e.id}>
+                      <tr key={e.id} className="border-b border-border">
+                        <td className="data-cell data-neutral">
+                          {fmtTs(e.timestamp)} {fmtDate(e.timestamp)}
+                        </td>
+                        <td className="data-cell">{e.symbol}</td>
+                        <td
+                          className={`data-cell ${signalClass(e.consensus.signal)}`}
+                        >
+                          {e.consensus.signal}
+                        </td>
+                        <td className="data-cell data-neutral">
+                          {formatResearchSummary(e.consensus)}
+                        </td>
+                        <td className="data-cell text-right">
+                          {(e.consensus.confidence * 100).toFixed(0)}%
+                        </td>
+                        <td className="data-cell text-right data-neutral">
+                          {e.totalElapsedMs}
+                        </td>
+                      </tr>
+                      <tr className="border-b border-border">
+                        <td
+                          className="data-cell data-neutral text-[0.55rem]"
+                          colSpan={6}
+                        >
+                          {e.consensus.researchSummary
+                            ? `WEB ${e.consensus.researchSummary.completedAgents}/${e.consensus.researchSummary.totalAgents} completed${
+                                e.consensus.researchSummary.failedAgents > 0
+                                  ? ` | fail ${e.consensus.researchSummary.failedAgents}`
+                                  : ""
+                              } | focus: ${
+                                e.consensus.researchSummary.topFocuses.join(
+                                  " | ",
+                                ) || "none"
+                              } | ${
+                                e.consensus.researchSummary.topRationales[0] ??
+                                "No research rationale recorded."
+                              }`
+                            : "WEB summary unavailable"}
+                        </td>
+                      </tr>
+                    </Fragment>
                   ))}
                 </tbody>
               </table>
