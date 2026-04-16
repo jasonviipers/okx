@@ -149,11 +149,15 @@ export interface SwarmRunResult {
 }
 
 export interface SwarmStreamEvent {
-  type: "status" | "vote" | "consensus" | "heartbeat" | "error";
+  type: "status" | "vote" | "consensus" | "heartbeat" | "error" | "pipeline";
   timestamp: string;
   symbol?: string;
   timeframe?: Timeframe;
   message?: string;
   vote?: AgentVote;
   consensus?: ConsensusResult;
+  pipeline?: {
+    stage: string;
+    detail: string;
+  };
 }

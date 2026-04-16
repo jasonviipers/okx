@@ -61,10 +61,13 @@ export function computeConsensus(
   votes: AgentVote[],
   ctx: MarketContext,
 ): ConsensusResult {
+  const directionalVotes = votes.filter((vote) => !vote.isVetoLayer);
+  const scoringVotes = directionalVotes.length > 0 ? directionalVotes : votes;
+
   const weightedScores = {
-    BUY: sumVotes(votes, "BUY"),
-    SELL: sumVotes(votes, "SELL"),
-    HOLD: sumVotes(votes, "HOLD"),
+    BUY: sumVotes(scoringVotes, "BUY"),
+    SELL: sumVotes(scoringVotes, "SELL"),
+    HOLD: sumVotes(scoringVotes, "HOLD"),
   };
 
   const orderedSignals = Object.entries(weightedScores).sort(
@@ -78,9 +81,9 @@ export function computeConsensus(
   const confidence =
     totalWeight > 0 ? weightedScores[finalSignal ?? "HOLD"] / totalWeight : 0;
   const agreement =
-    votes.length > 0 && finalSignal
-      ? votes.filter((vote) => vote.signal === finalSignal).length /
-        votes.length
+    scoringVotes.length > 0 && finalSignal
+      ? scoringVotes.filter((vote) => vote.signal === finalSignal).length /
+        scoringVotes.length
       : 0;
 
   return {

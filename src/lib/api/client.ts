@@ -1,6 +1,11 @@
 import type { ApiEnvelope, AutonomyStatus, RuntimeStatus } from "@/types/api";
 import type { StoredSwarmRun, StoredTradeExecution } from "@/types/history";
-import type { Candle, MarketFeedStatus, OKXTicker } from "@/types/market";
+import type {
+  Candle,
+  MarketFeedStatus,
+  OKXTicker,
+  OrderBook,
+} from "@/types/market";
 import type { MemoryRecord, MemorySummary } from "@/types/memory";
 import type { ConsensusResult, ExecutionResult } from "@/types/swarm";
 import type { AccountOverview, Position } from "@/types/trade";
@@ -34,6 +39,41 @@ export function getCandles(symbol: string, timeframe: string, limit = 20) {
     }>
   >(
     `/api/ai/market/candles?symbol=${symbol}&timeframe=${timeframe}&limit=${limit}`,
+  );
+}
+
+export function getMarketSnapshot(
+  symbol: string,
+  timeframe: string,
+  limit = 80,
+) {
+  return fetchJson<
+    ApiEnvelope<{
+      symbol: string;
+      timeframe: string;
+      ticker: OKXTicker;
+      orderbook: OrderBook;
+      candles: Candle[];
+      status: MarketFeedStatus;
+    }>
+  >(
+    `/api/ai/market/snapshot?symbol=${symbol}&timeframe=${timeframe}&limit=${limit}`,
+  );
+}
+
+export function getWatchlist(symbols: string[], timeframe = "1H") {
+  return fetchJson<
+    ApiEnvelope<{
+      items: {
+        symbol: string;
+        ticker: OKXTicker;
+        status: MarketFeedStatus;
+      }[];
+      count: number;
+      timeframe: string;
+    }>
+  >(
+    `/api/ai/market/watchlist?symbols=${encodeURIComponent(symbols.join(","))}&timeframe=${timeframe}`,
   );
 }
 

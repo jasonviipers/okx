@@ -59,6 +59,10 @@ function clamp01(value: number): number {
   return Math.max(0, Math.min(1, value));
 }
 
+const HARD_BLOCK_SUITABILITY = 0.3;
+const MIN_SUPPORTIVE_CONFIDENCE = 0.55;
+const MIN_SUPPORTIVE_AGREEMENT = 0.67;
+
 function determineActionBias(consensus: ConsensusResult): TradeSignal {
   const { BUY, SELL, HOLD } = consensus.weightedScores;
   if (HOLD >= BUY && HOLD >= SELL) {
@@ -121,7 +125,12 @@ export function applyMetaSelection(
         "Microstructure carries more weight in rotational conditions.",
       );
     }
-  } else if (suitability < 0.45 && consensus.signal !== "HOLD") {
+  } else if (
+    suitability < HARD_BLOCK_SUITABILITY &&
+    consensus.signal !== "HOLD" &&
+    (consensus.confidence < MIN_SUPPORTIVE_CONFIDENCE ||
+      consensus.agreement < MIN_SUPPORTIVE_AGREEMENT)
+  ) {
     nextSignal = "HOLD";
     nextConfidence = Math.min(nextConfidence, 0.4);
     blocked = true;
@@ -130,6 +139,11 @@ export function applyMetaSelection(
       "Meta-selector found weak alignment between the active regime and engine support.";
     notes.push(
       "No strategy engine has strong enough regime fit to justify a trade.",
+    );
+  } else if (suitability < 0.45 && consensus.signal !== "HOLD") {
+    nextConfidence = Math.max(0, nextConfidence - 0.05);
+    notes.push(
+      "Regime fit is only partial, so conviction was reduced without blocking the setup.",
     );
   } else if (
     (regime.regime === "trend" && selectedEngine === "trend_continuation") ||

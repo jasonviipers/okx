@@ -38,6 +38,21 @@ function isLeaseActive(leaseAcquiredAt?: string) {
   );
 }
 
+function normalizeWorkerLeaseState(
+  state: Awaited<ReturnType<typeof readAutonomyState>>,
+) {
+  if (!state.inFlight || isLeaseActive(state.leaseAcquiredAt)) {
+    return state;
+  }
+
+  return {
+    ...state,
+    inFlight: false,
+    leaseId: undefined,
+    leaseAcquiredAt: undefined,
+  };
+}
+
 async function getTodayExecutedNotionalUsd() {
   const history = await getHistory(200);
   const since = Date.now() - 24 * 60 * 60 * 1000;
@@ -117,10 +132,14 @@ export async function ensureAutonomyBootState() {
 }
 
 export async function getAutonomyStatus(): Promise<AutonomyStatus> {
-  const [state, usedBudgetUsd] = await Promise.all([
+  const [rawState, usedBudgetUsd] = await Promise.all([
     readAutonomyState(),
     getTodayExecutedNotionalUsd(),
   ]);
+  const state = normalizeWorkerLeaseState(rawState);
+  if (state !== rawState) {
+    await writeAutonomyState(state);
+  }
   const budgetUsd = state.budgetUsd ?? 0;
   const budgetRemainingUsd =
     budgetUsd > 0 ? Math.max(0, budgetUsd - usedBudgetUsd) : 0;
@@ -276,7 +295,11 @@ export async function dispatchAutonomyWorker(options?: {
   force?: boolean;
   trigger?: "manual_start" | "status_poll" | "scheduler" | "manual";
 }) {
-  const state = await readAutonomyState();
+  const rawState = await readAutonomyState();
+  const state = normalizeWorkerLeaseState(rawState);
+  if (state !== rawState) {
+    await writeAutonomyState(state);
+  }
   if (!state.running) {
     return { executed: false, reason: "autonomy stopped" } as const;
   }

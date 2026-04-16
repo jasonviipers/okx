@@ -36,21 +36,25 @@ export async function applyReliabilityWeighting(
   const blockedCount = relevantRuns.filter(
     (entry) => entry.consensus.blocked,
   ).length;
+  const successfulComparableRuns = relevantRuns.filter(
+    (entry) => !entry.consensus.blocked,
+  );
   const alignedCount = relevantRuns.filter(
     (entry) =>
       !entry.consensus.blocked &&
       entry.consensus.expectedValue?.tradeAllowed !== false,
   ).length;
   const blockedRate = sampleSize > 0 ? blockedCount / sampleSize : 0;
+  const hasEnoughComparableSuccesses = successfulComparableRuns.length >= 3;
   const reliabilityScore =
-    sampleSize > 0
+    sampleSize > 0 && hasEnoughComparableSuccesses
       ? clamp01(alignedCount / sampleSize - blockedRate * 0.35)
       : 0.5;
 
   const notes = [
-    sampleSize > 0
+    sampleSize > 0 && hasEnoughComparableSuccesses
       ? "Reliability estimated from historical swarm runs with the same regime and selected engine."
-      : "No historical sample yet; using neutral reliability prior.",
+      : "Not enough successful comparable history yet; using neutral reliability prior.",
   ];
 
   let nextConfidence = consensus.confidence;
@@ -60,6 +64,7 @@ export async function applyReliabilityWeighting(
 
   if (
     sampleSize >= 8 &&
+    hasEnoughComparableSuccesses &&
     reliabilityScore < 0.35 &&
     consensus.signal !== "HOLD"
   ) {
@@ -70,7 +75,11 @@ export async function applyReliabilityWeighting(
       blockReason ??
       "Reliability weighting suppressed the setup due to weak historical fit.";
     notes.push("Historical reliability is too weak for live deployment.");
-  } else if (sampleSize >= 8 && reliabilityScore > 0.65) {
+  } else if (
+    sampleSize >= 8 &&
+    hasEnoughComparableSuccesses &&
+    reliabilityScore > 0.65
+  ) {
     nextConfidence = clamp01(nextConfidence + 0.05);
     notes.push("Historical reliability modestly boosts conviction.");
   }
