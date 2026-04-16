@@ -2,7 +2,7 @@
   "crons": [
     {
       "path": "/api/ai/system/autonomy/worker",
-      "schedule": "* * * * *"
+      "schedule": "5 * * * *"
     }
   ]
 }
