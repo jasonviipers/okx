@@ -1,6 +1,7 @@
 import "server-only";
 
 import { headers } from "next/headers";
+import { getOkxAccountModeLabel } from "@/lib/configs/okx";
 import { getMarketSnapshot } from "@/lib/market-data/service";
 import { getAccountOverview } from "@/lib/okx/account";
 import { getInstrumentRules, normalizeOrderSize } from "@/lib/okx/instruments";
@@ -23,6 +24,7 @@ const DEFAULT_MIN_CONFIDENCE_THRESHOLD = 60;
 const DEFAULT_MAX_BALANCE_USAGE_PCT = 0.9;
 const DEFAULT_MIN_TRADE_NOTIONAL = 5;
 const DEFAULT_MAX_DAILY_TRADES = 20;
+const DEFAULT_LIVE_TRADING_BUDGET_USD = 0;
 const CIRCUIT_BREAKER_WINDOW_MS = 60_000;
 const CIRCUIT_BREAKER_ERROR_LIMIT = 3;
 
@@ -165,6 +167,34 @@ async function checkExecutionRiskGuards(
     };
   }
 
+  const liveTradingBudgetUsd = parseNumber(
+    process.env.LIVE_TRADING_BUDGET_USD,
+    DEFAULT_LIVE_TRADING_BUDGET_USD,
+  );
+  if (getOkxAccountModeLabel() === "live" && liveTradingBudgetUsd > 0) {
+    const usedBudgetUsd = history.reduce((sum, entry) => {
+      if (
+        entry.type !== "trade_execution" ||
+        new Date(entry.timestamp).getTime() < since
+      ) {
+        return sum;
+      }
+
+      return sum + (entry.order.notionalUsd ?? 0);
+    }, 0);
+
+    if (usedBudgetUsd >= liveTradingBudgetUsd) {
+      return {
+        allowed: false,
+        reason: "live trading budget exhausted",
+        response: {
+          liveTradingBudgetUsd,
+          usedBudgetUsd: Number(usedBudgetUsd.toFixed(2)),
+        },
+      };
+    }
+  }
+
   const positions = await getPositions().catch(() => []);
   const existing = positions.find(
     (position) => position.symbol === consensus.symbol,
@@ -243,11 +273,19 @@ export async function autoExecuteConsensus(
     process.env.MAX_POSITION_USD,
     DEFAULT_MAX_POSITION_USD,
   );
+  const liveTradingBudgetUsd = parseNumber(
+    process.env.LIVE_TRADING_BUDGET_USD,
+    DEFAULT_LIVE_TRADING_BUDGET_USD,
+  );
   const minConfidenceThreshold = parseNumber(
     process.env.MIN_CONFIDENCE_THRESHOLD,
     DEFAULT_MIN_CONFIDENCE_THRESHOLD,
   );
-  const targetNotionalUsd = deriveSize(confidence, maxPositionUsd);
+  const cappedMaxPositionUsd =
+    getOkxAccountModeLabel() === "live" && liveTradingBudgetUsd > 0
+      ? Math.min(maxPositionUsd, liveTradingBudgetUsd)
+      : maxPositionUsd;
+  const targetNotionalUsd = deriveSize(confidence, cappedMaxPositionUsd);
   const consensusKey = getConsensusKey(consensus, decision);
   const executionIntent = await createExecutionIntent(
     consensus,

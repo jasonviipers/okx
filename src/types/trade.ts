@@ -12,6 +12,7 @@ export interface Order {
   side: OrderSide;
   type: OrderType;
   size: number;
+  notionalUsd?: number;
   price?: number; // limit price (undefined for market orders)
   filledPrice?: number;
   status: OrderStatus;

@@ -3,7 +3,7 @@ import "server-only";
 import { isOllamaConfigured } from "@/lib/ai/ollama";
 import { isOllamaWebSearchConfigured } from "@/lib/ai/ollama-web";
 import {
-  ensureAutonomyLoopStarted,
+  ensureAutonomyBootState,
   getAutonomyStatus,
 } from "@/lib/autonomy/service";
 import {
@@ -15,8 +15,8 @@ import { getMarketDataRuntimeStatus } from "@/lib/market-data/service";
 import { isRedisConfigured } from "@/lib/redis/client";
 import type { RuntimeStatus } from "@/types/api";
 
-export function getRuntimeStatus(): RuntimeStatus {
-  ensureAutonomyLoopStarted();
+export async function getRuntimeStatus(): Promise<RuntimeStatus> {
+  await ensureAutonomyBootState();
   const okxConfigured = hasOkxTradingCredentials();
   const redisConfigured = isRedisConfigured();
   const ollamaConfigured = isOllamaConfigured();
@@ -38,7 +38,7 @@ export function getRuntimeStatus(): RuntimeStatus {
       available: redisConfigured,
       detail: redisConfigured
         ? "Redis configured"
-        : "Redis not configured, in-memory fallback active",
+        : "Redis not configured, file-backed persistence active",
     },
     ollama: {
       configured: ollamaConfigured,
@@ -55,7 +55,7 @@ export function getRuntimeStatus(): RuntimeStatus {
         ? "Ollama web research enabled"
         : "Ollama web research disabled",
     },
-    autonomy: getAutonomyStatus(),
+    autonomy: await getAutonomyStatus(),
     timestamp: new Date().toISOString(),
   };
 }

@@ -57,7 +57,11 @@ export interface AutonomyStatus {
   lastDecision?: string;
   lastExecutionStatus?: "success" | "hold" | "error";
   lastError?: string;
+  lastReason?: string;
   iterationCount: number;
+  budgetUsd?: number;
+  budgetRemainingUsd?: number;
+  inFlight?: boolean;
 }
 
 export interface RuntimeStatus {

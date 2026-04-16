@@ -37,16 +37,19 @@ interface OkxPositionRow {
 }
 
 export async function placeOrder(input: PlaceOrderInput): Promise<Order> {
+  const referencePrice = input.price ?? (await getTicker(input.symbol)).last;
+  const notionalUsd = Number((referencePrice * input.size).toFixed(8));
+
   if (!hasOkxTradingCredentials()) {
-    const price = input.price ?? (await getTicker(input.symbol)).last;
     return {
       id: `sim_${Date.now()}`,
       symbol: input.symbol,
       side: input.side,
       type: input.type,
       size: input.size,
+      notionalUsd,
       price: input.price,
-      filledPrice: price,
+      filledPrice: referencePrice,
       status: "filled",
       createdAt: new Date().toISOString(),
       filledAt: new Date().toISOString(),
@@ -69,6 +72,7 @@ export async function placeOrder(input: PlaceOrderInput): Promise<Order> {
     side: input.side,
     type: input.type,
     size: input.size,
+    notionalUsd,
     price: input.price,
     status: "pending",
     createdAt: new Date().toISOString(),

@@ -38,10 +38,14 @@ function historyToFeedEntry(
   entry: StoredSwarmRun | StoredTradeExecution,
 ): FeedEntry {
   if (entry.type === "swarm_run") {
+    const reason =
+      entry.consensus.blockReason ??
+      entry.consensus.expectedValue?.notes?.[0] ??
+      undefined;
     return {
       ts: toFeedTime(entry.timestamp),
       type: entry.consensus.blocked ? "WRN" : "SYS",
-      msg: `${entry.symbol} ${entry.timeframe} -> ${entry.consensus.signal} ${(entry.consensus.confidence * 100).toFixed(0)}% ${entry.cached ? "[CACHE]" : `[${entry.totalElapsedMs}MS]`}`,
+      msg: `${entry.symbol} ${entry.timeframe} -> ${entry.consensus.signal} ${(entry.consensus.confidence * 100).toFixed(0)}% ${entry.cached ? "[CACHE]" : `[${entry.totalElapsedMs}MS]`}${reason ? ` | ${reason}` : ""}`,
     };
   }
 
@@ -84,11 +88,17 @@ export default function DashboardPage() {
       }
 
       if (execution.status === "hold") {
-        addFeed("SYS", "[AutoExec] HOLD - position maintained");
+        addFeed(
+          "SYS",
+          `[AutoExec] HOLD - ${execution.reason ?? "position maintained"}`,
+        );
         return;
       }
 
-      addFeed("ERR", "[AutoExec] ERROR - circuit breaker check logs");
+      addFeed(
+        "ERR",
+        `[AutoExec] ERROR - ${execution.error ?? execution.reason ?? "check logs"}`,
+      );
     },
     [addFeed],
   );
@@ -361,6 +371,19 @@ export default function DashboardPage() {
                     ? `STATUS:${autonomy.running ? " LIVE" : " IDLE"} | ${autonomy.symbol} ${autonomy.timeframe} | ${(autonomy.intervalMs / 1000).toFixed(0)}S`
                     : "STATUS: UNKNOWN"}
                 </div>
+                {autonomy && (
+                  <div className="text-[0.5625rem] text-muted-foreground space-y-0.5">
+                    <div>
+                      {`WORKER:${autonomy.inFlight ? " ACTIVE" : " IDLE"} | NEXT:${autonomy.nextRunAt ? toFeedTime(autonomy.nextRunAt) : "--:--:--"}`}
+                    </div>
+                    <div>
+                      {`BUDGET:${(autonomy.budgetRemainingUsd ?? autonomy.budgetUsd ?? 0).toFixed(2)} / ${(autonomy.budgetUsd ?? 0).toFixed(2)} USD`}
+                    </div>
+                    <div className="truncate">
+                      {`LAST:${autonomy.lastExecutionStatus?.toUpperCase() ?? "N/A"} | ${autonomy.lastReason ?? autonomy.lastError ?? autonomy.detail}`}
+                    </div>
+                  </div>
+                )}
               </div>
               <div className="border-t border-border pt-1">
                 <div className="text-[0.5625rem] text-muted-foreground uppercase mb-0.5">

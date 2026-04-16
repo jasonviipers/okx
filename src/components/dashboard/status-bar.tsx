@@ -116,7 +116,7 @@ export function StatusBar() {
             runtimeStatus?.redis.available ? "data-positive" : "data-negative"
           }
         >
-          {runtimeStatus?.redis.available ? "ON" : "MEM"}
+          {runtimeStatus?.redis.available ? "ON" : "FILE"}
         </span>
       </div>
       <div className="px-2 border-r border-border flex items-center gap-1.5 h-full">
