@@ -1,3 +1,5 @@
+import "server-only";
+
 import { cacheGet, cacheSet } from "@/lib/redis/client";
 import type { Timeframe } from "@/types/market";
 import type { ConsensusResult } from "@/types/swarm";

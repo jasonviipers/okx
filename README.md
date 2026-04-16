@@ -1,36 +1,215 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# AI Trading Swarm
+
+AI Trading Swarm is a Next.js full-stack trading workstation built around a multi-agent decision engine.
+
+It combines:
+
+- live and demo OKX market/account connectivity
+- a role-based AI swarm for signal generation
+- validator and veto layers for safer trade decisions
+- Ollama-backed model reasoning with optional web research
+- a terminal-style dashboard for operators
+- Redis-backed caching and throttling
+- local durable history for swarm runs and executions
+
+## Core Concepts
+
+### Market layer
+
+The app fetches:
+
+- ticker
+- candles
+- order book
+- positions
+- trading wallet
+- funding wallet
+- spot buying power for the selected symbol
+
+### Swarm layer
+
+The current swarm is built from five active voting models:
+
+- `deepseek-v3.2:cloud` -> `trend_follower`
+- `gemma4:31b-cloud` -> `momentum_analyst`
+- `kimi-k2.5:cloud` -> `sentiment_reader`
+- `ministral-3:cloud` -> `macro_filter` (veto layer)
+- `glm-5.1:cloud` -> `execution_tactician` (veto layer)
+
+The system computes weighted consensus, then runs structural and veto validation before anything can be considered executable.
+
+### Research layer
+
+When configured, agents can enrich their decision context using:
+
+- Ollama `web_search`
+- Ollama `web_fetch`
+
+Research is cached briefly to avoid duplicate lookups across agents.
+
+### Trust and observability
+
+The app now includes:
+
+- canonical `/api/*` routes for frontend data access
+- runtime status endpoint for OKX / Redis / Ollama / web research
+- source-health metadata in API responses
+- local durable history storage for swarm runs and trade executions
+
+## Project Structure
+
+```text
+src/
+  app/
+    api/
+      market/
+      swarm/
+      trade/
+      system/
+  components/
+    dashboard/
+    ui/
+  lib/
+    agents/
+    ai/
+    api/
+    configs/
+    observability/
+    okx/
+    persistence/
+    prompts/
+    redis/
+    swarm/
+  types/
+```
+
+## Canonical API Routes
+
+Use these routes from the frontend:
+
+### Market
+
+- `GET /api/market/ticker?symbol=BTC-USDT`
+- `GET /api/market/candles?symbol=BTC-USDT&timeframe=1H&limit=20`
+
+### Swarm
+
+- `GET /api/swarm/consensus?symbol=BTC-USDT&timeframe=1H`
+- `GET /api/swarm/stream?symbol=BTC-USDT&timeframe=1H`
+- `POST /api/swarm/analyze`
+- `GET /api/swarm/history?limit=50`
+
+### Trade
+
+- `GET /api/trade/account?symbol=BTC-USDT`
+- `GET /api/trade/positions`
+- `POST /api/trade/execute`
+- `GET /api/trade/history?limit=50`
+
+### System
+
+- `GET /api/system/status`
+
+## Environment Variables
+
+Create your local env from `.env.local.example`.
+
+### OKX
+
+```bash
+OKX_API_KEY=
+OKX_SECRET=
+OKX_PASSPHRASE=
+OKX_API_REGION=global
+OKX_BASE_URL=https://www.okx.com
+OKX_WS_URL=wss://ws.okx.com:8443/ws/v5/public
+OKX_ACCOUNT_MODE=paper
+```
+
+Use `OKX_ACCOUNT_MODE=live` for real account access.
+
+### Redis
+
+```bash
+REDIS_URL=redis://localhost:6379
+```
+
+If Redis is missing, the app falls back to in-memory cache behavior.
+
+### Ollama
+
+```bash
+OLLAMA_BASE_URL=http://localhost:11434
+OLLAMA_API_KEY=
+```
+
+`OLLAMA_API_KEY` is also used for Ollama web research when enabled.
 
 ## Getting Started
 
-First, run the development server:
+Install dependencies and run the dev server:
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
+pnpm install
 pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Then open:
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```text
+http://localhost:3000
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Useful Commands
 
-## Learn More
+```bash
+pnpm dev
+pnpm exec next typegen
+pnpm exec tsc --noEmit
+pnpm exec biome check .
+pnpm exec biome format --write .
+```
 
-To learn more about Next.js, take a look at the following resources:
+## Runtime Notes
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+### Live vs demo
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+The footer shows runtime service status and account mode.
 
-## Deploy on Vercel
+- `OKX LIVE` means private requests are live-account scoped
+- `OKX PAPER` means simulated-trading header mode
+- `REDIS MEM` means Redis is not configured and memory fallback is active
+- `SEARCH WEB` means Ollama web research is enabled
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+### Fallback market data
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Some market helpers still fall back to synthetic data if the public OKX request fails.
+This is useful in development, but you should treat it as non-production behavior.
+
+Recommended future hardening:
+
+- add an env flag to disable synthetic fallback in production
+- surface explicit fallback warnings in the dashboard panels
+
+## Persistence
+
+The app now keeps a local durable history file under:
+
+```text
+.data/history.json
+```
+
+This currently stores:
+
+- swarm runs
+- trade executions
+
+It is a bridge toward full database-backed persistence.
+
+## Next Recommended Steps
+
+1. Add Postgres-backed persistence for swarm runs, votes, executions, and portfolio snapshots.
+2. Add unit tests for consensus, validator, and OKX parsing logic.
+3. Add explicit fallback-data warnings and source-health display in panels.
+4. Build history pages for swarm runs and executions.
+5. Add internal paper-trading mode independent of OKX demo.

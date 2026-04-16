@@ -1,3 +1,5 @@
+import "server-only";
+
 import { cacheIncrement } from "@/lib/redis/client";
 
 export async function checkRateLimit(

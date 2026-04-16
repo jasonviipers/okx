@@ -1,0 +1,97 @@
+import "server-only";
+
+import { getHistory } from "@/lib/persistence/history";
+import type { StoredSwarmRun } from "@/types/history";
+import type { ConsensusResult, ReliabilityReport } from "@/types/swarm";
+
+const MAX_HISTORY_LOOKBACK = 150;
+
+function clamp01(value: number): number {
+  return Math.max(0, Math.min(1, value));
+}
+
+function isStoredSwarmRun(
+  entry: Awaited<ReturnType<typeof getHistory>>[number],
+): entry is StoredSwarmRun {
+  return entry.type === "swarm_run";
+}
+
+export async function applyReliabilityWeighting(
+  consensus: ConsensusResult,
+): Promise<ConsensusResult> {
+  if (!consensus.regime || !consensus.metaSelection) {
+    return consensus;
+  }
+
+  const history = await getHistory(MAX_HISTORY_LOOKBACK);
+  const relevantRuns = history.filter(
+    (entry): entry is StoredSwarmRun =>
+      isStoredSwarmRun(entry) &&
+      entry.consensus.regime?.regime === consensus.regime?.regime &&
+      entry.consensus.metaSelection?.selectedEngine ===
+        consensus.metaSelection?.selectedEngine,
+  );
+
+  const sampleSize = relevantRuns.length;
+  const blockedCount = relevantRuns.filter(
+    (entry) => entry.consensus.blocked,
+  ).length;
+  const alignedCount = relevantRuns.filter(
+    (entry) =>
+      !entry.consensus.blocked &&
+      entry.consensus.expectedValue?.tradeAllowed !== false,
+  ).length;
+  const blockedRate = sampleSize > 0 ? blockedCount / sampleSize : 0;
+  const reliabilityScore =
+    sampleSize > 0
+      ? clamp01(alignedCount / sampleSize - blockedRate * 0.35)
+      : 0.5;
+
+  const notes = [
+    sampleSize > 0
+      ? "Reliability estimated from historical swarm runs with the same regime and selected engine."
+      : "No historical sample yet; using neutral reliability prior.",
+  ];
+
+  let nextConfidence = consensus.confidence;
+  let nextSignal = consensus.signal;
+  let blocked = consensus.blocked;
+  let blockReason = consensus.blockReason;
+
+  if (
+    sampleSize >= 8 &&
+    reliabilityScore < 0.35 &&
+    consensus.signal !== "HOLD"
+  ) {
+    nextSignal = "HOLD";
+    nextConfidence = Math.min(nextConfidence, 0.4);
+    blocked = true;
+    blockReason =
+      blockReason ??
+      "Reliability weighting suppressed the setup due to weak historical fit.";
+    notes.push("Historical reliability is too weak for live deployment.");
+  } else if (sampleSize >= 8 && reliabilityScore > 0.65) {
+    nextConfidence = clamp01(nextConfidence + 0.05);
+    notes.push("Historical reliability modestly boosts conviction.");
+  }
+
+  const reliability: ReliabilityReport = {
+    regime: consensus.regime.regime,
+    selectedEngine: consensus.metaSelection.selectedEngine,
+    sampleSize,
+    reliabilityScore: Number(reliabilityScore.toFixed(3)),
+    blockedRate: Number(blockedRate.toFixed(3)),
+    notes,
+    generatedAt: new Date().toISOString(),
+  };
+
+  return {
+    ...consensus,
+    signal: nextSignal,
+    decision: nextSignal,
+    confidence: Number(nextConfidence.toFixed(3)),
+    blocked,
+    blockReason,
+    reliability,
+  };
+}

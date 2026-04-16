@@ -1,5 +1,15 @@
-import { hasOkxTradingCredentials, OKX_ENDPOINTS } from "@/lib/configs/okx";
-import { okxPrivateGet, okxPrivatePost } from "@/lib/okx/client";
+import "server-only";
+
+import {
+  getOkxAccountModeLabel,
+  hasOkxTradingCredentials,
+  OKX_ENDPOINTS,
+} from "@/lib/configs/okx";
+import {
+  OkxRequestError,
+  okxPrivateGet,
+  okxPrivatePost,
+} from "@/lib/okx/client";
 import { getTicker } from "@/lib/okx/market";
 import type { Order, OrderSide, OrderType, Position } from "@/types/trade";
 
@@ -40,6 +50,7 @@ export async function placeOrder(input: PlaceOrderInput): Promise<Order> {
       status: "filled",
       createdAt: new Date().toISOString(),
       filledAt: new Date().toISOString(),
+      accountMode: getOkxAccountModeLabel(),
     };
   }
 
@@ -62,6 +73,7 @@ export async function placeOrder(input: PlaceOrderInput): Promise<Order> {
     status: "pending",
     createdAt: new Date().toISOString(),
     okxOrderId: response[0]?.ordId,
+    accountMode: getOkxAccountModeLabel(),
   };
 }
 
@@ -70,7 +82,20 @@ export async function getPositions(): Promise<Position[]> {
     return [];
   }
 
-  const rows = await okxPrivateGet<OkxPositionRow>(OKX_ENDPOINTS.positions);
+  let rows: OkxPositionRow[];
+  try {
+    rows = await okxPrivateGet<OkxPositionRow>(OKX_ENDPOINTS.positions);
+  } catch (error) {
+    if (
+      error instanceof OkxRequestError &&
+      (error.status === 401 || error.status === 403)
+    ) {
+      return [];
+    }
+
+    throw error;
+  }
+
   const tickers = await Promise.all(rows.map((row) => getTicker(row.instId)));
   const tickerMap = new Map(tickers.map((ticker) => [ticker.symbol, ticker]));
 

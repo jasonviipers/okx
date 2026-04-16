@@ -1,3 +1,5 @@
+import "server-only";
+
 import { OKX_ENDPOINTS, OKX_TIMEFRAME_MAP } from "@/lib/configs/okx";
 import { okxPublicGet } from "@/lib/okx/client";
 import { getCachedJson, setCachedJson } from "@/lib/redis/swarm-cache";
@@ -9,6 +11,15 @@ import type {
   OrderBookEntry,
   Timeframe,
 } from "@/types/market";
+
+function allowSyntheticMarketFallback() {
+  const value = process.env.ALLOW_SYNTHETIC_MARKET_FALLBACK;
+  if (value !== undefined) {
+    return value.toLowerCase() === "true";
+  }
+
+  return process.env.NODE_ENV !== "production";
+}
 
 interface OkxTickerRow {
   instId: string;
@@ -180,6 +191,12 @@ export async function getTicker(symbol: string): Promise<OKXTicker> {
     await setCachedJson(cacheKey, ticker, 5);
     return ticker;
   } catch {
+    if (!allowSyntheticMarketFallback()) {
+      throw new Error(
+        `Live ticker unavailable for ${symbol} and synthetic fallback is disabled.`,
+      );
+    }
+
     const ticker = buildFallbackTicker(symbol);
     await setCachedJson(cacheKey, ticker, 5);
     return ticker;
@@ -208,6 +225,12 @@ export async function getCandles(
     await setCachedJson(cacheKey, candles, 60);
     return candles;
   } catch {
+    if (!allowSyntheticMarketFallback()) {
+      throw new Error(
+        `Live candles unavailable for ${symbol} ${timeframe} and synthetic fallback is disabled.`,
+      );
+    }
+
     const candles = buildFallbackCandles(symbol, timeframe, limit);
     await setCachedJson(cacheKey, candles, 60);
     return candles;
@@ -231,6 +254,12 @@ export async function getOrderBook(
     await setCachedJson(cacheKey, book, 5);
     return book;
   } catch {
+    if (!allowSyntheticMarketFallback()) {
+      throw new Error(
+        `Live order book unavailable for ${symbol} and synthetic fallback is disabled.`,
+      );
+    }
+
     const book = buildFallbackOrderBook(symbol);
     await setCachedJson(cacheKey, book, 5);
     return book;

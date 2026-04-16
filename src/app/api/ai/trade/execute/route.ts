@@ -1,6 +1,12 @@
 import { type NextRequest, NextResponse } from "next/server";
-import { AI_MODE_CONFIGS } from "@/config/models";
-import { hasOkxTradingCredentials } from "@/config/okx";
+import { AI_MODE_CONFIGS } from "@/lib/configs/models";
+import {
+  getOkxAccountModeLabel,
+  hasOkxTradingCredentials,
+} from "@/lib/configs/okx";
+import { makeSourceHealth } from "@/lib/observability/source-health";
+import { recordTradeExecution } from "@/lib/persistence/history";
+import { OkxRequestError } from "@/lib/okx/client";
 import { placeOrder } from "@/lib/okx/orders";
 import type { TradeExecutionRequest } from "@/types/trade";
 
@@ -58,15 +64,37 @@ export async function POST(req: NextRequest) {
       size,
       price,
     });
+    await recordTradeExecution(order);
 
     return NextResponse.json({
-      success: true,
-      order,
-      executedAt: new Date().toISOString(),
-      simulated: !hasOkxTradingCredentials(),
+      data: {
+        success: true,
+        order,
+        executedAt: new Date().toISOString(),
+        simulated: !hasOkxTradingCredentials(),
+        accountMode: getOkxAccountModeLabel(),
+      },
+      sourceHealth: {
+        execution: makeSourceHealth("okx_private"),
+      },
+      timestamp: new Date().toISOString(),
     });
   } catch (error) {
     console.error("[API] /api/trade/execute error:", error);
+
+    if (error instanceof OkxRequestError) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: error.message,
+          code: error.code,
+          subCode: error.subCode,
+          executedAt: new Date().toISOString(),
+        },
+        { status: 502 },
+      );
+    }
+
     return NextResponse.json(
       {
         success: false,

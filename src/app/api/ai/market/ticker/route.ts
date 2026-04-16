@@ -1,5 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server";
-import { getTicker } from "@/lib/okx/market";
+import { getMarketSnapshot } from "@/lib/market-data/service";
+import { makeSourceHealth } from "@/lib/observability/source-health";
+import type { Timeframe } from "@/types/market";
 
 export const dynamic = "force-dynamic";
 
@@ -15,10 +17,27 @@ export async function GET(req: NextRequest) {
       );
     }
 
-    const ticker = await getTicker(symbol);
+    const timeframe = (searchParams.get("timeframe") as Timeframe) || "1H";
+    const snapshot = await getMarketSnapshot(symbol, timeframe);
 
     return NextResponse.json({
-      ticker,
+      data: {
+        ticker: snapshot.context.ticker,
+        status: snapshot.status,
+      },
+      sourceHealth: {
+        ticker: makeSourceHealth(
+          snapshot.status.source === "fallback"
+            ? "fallback"
+            : snapshot.status.source === "websocket"
+              ? "okx"
+              : "computed",
+          {
+            warning: snapshot.status.warnings[0],
+            timestamp: snapshot.status.lastTickerAt ?? new Date().toISOString(),
+          },
+        ),
+      },
       timestamp: new Date().toISOString(),
     });
   } catch (error) {

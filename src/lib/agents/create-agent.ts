@@ -1,10 +1,24 @@
-import type { AgentRoleConfig } from "@/lib/configs/roles";
+import { generateText } from "ai";
 import {
   buildAgentPrompt,
   clampConfidence,
   finalizeVote,
+  summarizeMemoryForDisplay,
 } from "@/lib/agents/base-agent";
+import { getOllamaModel, isOllamaConfigured } from "@/lib/ai/ollama";
+import { getMarketResearchDigest } from "@/lib/ai/ollama-web";
+import type { AIModel } from "@/lib/configs/models";
+import {
+  assertCanReason,
+  MODEL_ROLES,
+  modelCanUseWebSearch,
+  modelCanVote,
+} from "@/lib/configs/models";
+import type { AgentRoleConfig } from "@/lib/configs/roles";
+import { buildMemoryPrompt, getMemorySummary } from "@/lib/memory/aging-memory";
+import { checkRateLimit } from "@/lib/redis/rate-limiter";
 import type { Candle, MarketContext } from "@/types/market";
+import type { MemorySummary } from "@/types/memory";
 import type { AgentVote, TradeSignal } from "@/types/swarm";
 
 type SignalScore = {
@@ -12,6 +26,49 @@ type SignalScore = {
   confidence: number;
   reasoning: string;
 };
+
+function extractJsonObject(text: string): string | null {
+  const fencedMatch = text.match(/```json\s*([\s\S]*?)```/i);
+  if (fencedMatch?.[1]) {
+    return fencedMatch[1].trim();
+  }
+
+  const firstBrace = text.indexOf("{");
+  const lastBrace = text.lastIndexOf("}");
+  if (firstBrace >= 0 && lastBrace > firstBrace) {
+    return text.slice(firstBrace, lastBrace + 1);
+  }
+
+  return null;
+}
+
+function parseModelVote(text: string, fallback: SignalScore): SignalScore {
+  const jsonCandidate = extractJsonObject(text);
+  if (!jsonCandidate) {
+    return fallback;
+  }
+
+  try {
+    const parsed = JSON.parse(jsonCandidate) as Partial<SignalScore>;
+    const signal =
+      parsed.signal === "BUY" ||
+      parsed.signal === "SELL" ||
+      parsed.signal === "HOLD"
+        ? parsed.signal
+        : fallback.signal;
+    const confidence =
+      typeof parsed.confidence === "number"
+        ? clampConfidence(parsed.confidence)
+        : fallback.confidence;
+    const reasoning =
+      typeof parsed.reasoning === "string" && parsed.reasoning.trim().length > 0
+        ? parsed.reasoning.trim()
+        : fallback.reasoning;
+    return { signal, confidence, reasoning };
+  } catch {
+    return fallback;
+  }
+}
 
 function average(values: number[]): number {
   return values.length === 0
@@ -57,8 +114,12 @@ function orderbookImbalance(ctx: MarketContext): number {
 }
 
 function detectSignal(score: number, threshold = 0.0025): TradeSignal {
-  if (score > threshold) return "BUY";
-  if (score < -threshold) return "SELL";
+  if (score > threshold) {
+    return "BUY";
+  }
+  if (score < -threshold) {
+    return "SELL";
+  }
   return "HOLD";
 }
 
@@ -66,10 +127,8 @@ function runTrendFollower(ctx: MarketContext): SignalScore {
   const move = priceMove(ctx, 8);
   const recentCloses = ctx.candles.slice(-5).map((candle) => candle.close);
   const latestClose = recentCloses.at(-1) ?? 0;
-  const trendStrength =
-    recentCloses.length > 0
-      ? (latestClose - average(recentCloses)) / average(recentCloses)
-      : 0;
+  const avg = average(recentCloses);
+  const trendStrength = avg > 0 ? (latestClose - avg) / avg : 0;
   const composite = move * 0.7 + trendStrength * 0.3;
   const signal = detectSignal(composite);
   return {
@@ -78,20 +137,17 @@ function runTrendFollower(ctx: MarketContext): SignalScore {
     reasoning:
       signal === "HOLD"
         ? "Trend structure is mixed across the recent candle sequence."
-        : `${signal === "BUY" ? "Uptrend" : "Downtrend"} remains intact across the latest bars with closing prices confirming direction.`,
+        : `${signal === "BUY" ? "Uptrend" : "Downtrend"} confirmed across latest bars with closing prices supporting direction.`,
   };
 }
 
 function runMomentumAnalyst(ctx: MarketContext): SignalScore {
   const move = priceMove(ctx, 5);
   const volumes = ctx.candles.slice(-8).map((candle) => candle.volume);
-  const recentVolume = average(volumes.slice(-3));
-  const baselineVolume = average(
-    volumes.slice(0, Math.max(1, volumes.length - 3)),
-  );
-  const volumeBoost =
-    baselineVolume > 0 ? recentVolume / baselineVolume - 1 : 0;
-  const composite = move + volumeBoost * 0.01;
+  const recentVol = average(volumes.slice(-3));
+  const baseVol = average(volumes.slice(0, Math.max(1, volumes.length - 3)));
+  const volBoost = baseVol > 0 ? recentVol / baseVol - 1 : 0;
+  const composite = move + volBoost * 0.01;
   const signal = detectSignal(composite, 0.003);
   return {
     signal,
@@ -100,32 +156,6 @@ function runMomentumAnalyst(ctx: MarketContext): SignalScore {
       signal === "HOLD"
         ? "Momentum is fading or under-confirmed by recent volume."
         : `${signal === "BUY" ? "Upside" : "Downside"} velocity is supported by the latest volume profile.`,
-  };
-}
-
-function runRiskSentinel(ctx: MarketContext): SignalScore {
-  const spread = spreadPercent(ctx);
-  const lastCandle = ctx.candles.at(-1);
-  const range = lastCandle ? highLowRange(lastCandle) : 0;
-  const move = priceMove(ctx, 5);
-
-  if (spread > 0.004 || range > 0.03) {
-    return {
-      signal: "HOLD",
-      confidence: 0.82,
-      reasoning:
-        "Market quality is poor due to wide spread or elevated intrabar volatility.",
-    };
-  }
-
-  const signal = detectSignal(move, 0.004);
-  return {
-    signal,
-    confidence: Math.abs(move) * 14 + 0.3,
-    reasoning:
-      signal === "HOLD"
-        ? "Risk-adjusted edge is not strong enough to justify exposure."
-        : `Execution risk remains acceptable for a cautious ${signal.toLowerCase()} bias.`,
   };
 }
 
@@ -139,46 +169,100 @@ function runSentimentReader(ctx: MarketContext): SignalScore {
     confidence: Math.abs(composite) * 5 + 0.28,
     reasoning:
       signal === "HOLD"
-        ? "Order book pressure is balanced and does not offer a clear directional edge."
-        : `${signal === "BUY" ? "Bid" : "Ask"} depth is dominating the book and aligns with the broader session bias.`,
+        ? "Order book pressure is balanced; no clear directional edge."
+        : `${signal === "BUY" ? "Bid" : "Ask"} depth dominates and aligns with the session bias.`,
   };
 }
 
-function runContrarian(ctx: MarketContext): SignalScore {
-  const lastClose = ctx.candles.at(-1)?.close ?? ctx.ticker.last;
-  const lows = ctx.candles.map((candle) => candle.low);
-  const highs = ctx.candles.map((candle) => candle.high);
-  const min = Math.min(...lows);
-  const max = Math.max(...highs);
-  const nearHigh = max > 0 ? (max - lastClose) / max : 1;
-  const nearLow = lastClose > 0 ? (lastClose - min) / lastClose : 1;
-  const recentBodies = ctx.candles.slice(-4).map(candleBody);
-  const averageBody = average(recentBodies);
-  const latestBody = recentBodies.at(-1) ?? 0;
+function runMacroFilter(ctx: MarketContext): SignalScore {
+  const spread = spreadPercent(ctx);
+  const lastCandle = ctx.candles.at(-1);
+  const range = lastCandle ? highLowRange(lastCandle) : 0;
 
-  if (nearHigh < 0.02 && latestBody < averageBody) {
+  if (spread > 0.005) {
     return {
-      signal: "SELL",
-      confidence: 0.68 + (0.02 - nearHigh) * 8,
-      reasoning:
-        "Price is pressing a recent high while candle bodies are compressing, which supports mean reversion lower.",
+      signal: "HOLD",
+      confidence: 0.9,
+      reasoning: `Spread of ${(spread * 100).toFixed(3)}% exceeds 0.5%; execution quality is too poor to trade.`,
+    };
+  }
+  if (range > 0.03) {
+    return {
+      signal: "HOLD",
+      confidence: 0.9,
+      reasoning: `Intrabar range of ${(range * 100).toFixed(2)}% exceeds 3%; volatility regime is elevated.`,
     };
   }
 
-  if (nearLow < 0.02 && latestBody < averageBody) {
-    return {
-      signal: "BUY",
-      confidence: 0.68 + (0.02 - nearLow) * 8,
-      reasoning:
-        "Price is testing a recent low with signs of seller exhaustion, which supports a rebound setup.",
-    };
-  }
-
+  const move = priceMove(ctx, 6);
+  const signal = detectSignal(move, 0.004);
   return {
-    signal: "HOLD",
-    confidence: 0.44,
+    signal,
+    confidence: Math.abs(move) * 12 + 0.3,
     reasoning:
-      "Price is not stretched enough toward an extreme for a contrarian trade.",
+      signal === "HOLD"
+        ? "Market conditions are acceptable but no clear regime signal."
+        : `Regime appears ${signal === "BUY" ? "bullish" : "bearish"} with acceptable market quality.`,
+  };
+}
+
+function runExecutionTactician(ctx: MarketContext): SignalScore {
+  const spread = spreadPercent(ctx);
+  const lastCandle = ctx.candles.at(-1);
+
+  const recentSpreads = ctx.candles
+    .slice(-10)
+    .map((candle) =>
+      ctx.ticker.last > 0 ? (candle.high - candle.low) / ctx.ticker.last : 0,
+    );
+  const medianSpread =
+    recentSpreads.sort((left, right) => left - right)[
+      Math.floor(recentSpreads.length / 2)
+    ] ?? 0;
+
+  if (medianSpread > 0 && spread > medianSpread * 1.5) {
+    return {
+      signal: "HOLD",
+      confidence: 0.88,
+      reasoning: `Spread is ${(spread / medianSpread).toFixed(1)}x median; fill quality is unacceptable.`,
+    };
+  }
+
+  if (lastCandle) {
+    const body = candleBody(lastCandle);
+    const upperWick =
+      lastCandle.high - Math.max(lastCandle.open, lastCandle.close);
+    const lowerWick =
+      Math.min(lastCandle.open, lastCandle.close) - lastCandle.low;
+    const wickThreshold = body * 2;
+
+    if (upperWick > wickThreshold && lowerWick < upperWick) {
+      return {
+        signal: "HOLD",
+        confidence: 0.82,
+        reasoning:
+          "Prominent upper wick rejection on last candle; do not buy into rejection.",
+      };
+    }
+    if (lowerWick > wickThreshold && lowerWick > upperWick) {
+      return {
+        signal: "HOLD",
+        confidence: 0.82,
+        reasoning:
+          "Prominent lower wick rejection on last candle; do not sell into support absorption.",
+      };
+    }
+  }
+
+  const move = priceMove(ctx, 4);
+  const signal = detectSignal(move, 0.003);
+  return {
+    signal,
+    confidence: Math.abs(move) * 14 + 0.35,
+    reasoning:
+      signal === "HOLD"
+        ? "Execution conditions are adequate but no confirmed entry signal."
+        : `Execution conditions are clean; ${signal.toLowerCase()} signal is executable.`,
   };
 }
 
@@ -191,35 +275,125 @@ function analyzeRole(
       return runTrendFollower(ctx);
     case "momentum_analyst":
       return runMomentumAnalyst(ctx);
-    case "risk_sentinel":
-      return runRiskSentinel(ctx);
     case "sentiment_reader":
       return runSentimentReader(ctx);
-    case "contrarian":
-      return runContrarian(ctx);
-    default:
-      return {
-        signal: "HOLD",
-        confidence: 0.4,
-        reasoning: "This role is reserved for future production-only models.",
-      };
+    case "macro_filter":
+      return runMacroFilter(ctx);
+    case "execution_tactician":
+      return runExecutionTactician(ctx);
   }
 }
 
+function buildSystemPrompt(roleConfig: AgentRoleConfig): string {
+  const vetoNote = roleConfig.isVetoLayer
+    ? "\nIMPORTANT: You are a VETO LAYER. A HOLD from you with confidence > 0.75 overrides the full consensus. Use this power deliberately."
+    : "";
+
+  return [
+    "You are one specialist agent in a crypto trading swarm.",
+    `Role: ${roleConfig.label} (${roleConfig.modelRole})`,
+    "Return strict JSON only.",
+    '{"signal":"BUY"|"SELL"|"HOLD","confidence":0.0-1.0,"reasoning":"short rationale"}',
+    "Keep reasoning under 220 characters.",
+    "Use web research as supporting context only and weigh it against live market data.",
+    vetoNote,
+  ]
+    .filter(Boolean)
+    .join("\n");
+}
+
 export function createAgent(modelId: string, roleConfig: AgentRoleConfig) {
-  return async function runAgent(ctx: MarketContext): Promise<AgentVote> {
+  assertCanReason(modelId as AIModel);
+
+  if (!modelCanVote(modelId as AIModel)) {
+    throw new Error(
+      `Model "${modelId}" (role: ${MODEL_ROLES[modelId as AIModel]}) cannot vote. Orchestrator models are not valid swarm participants.`,
+    );
+  }
+
+  return async function runAgent(
+    ctx: MarketContext,
+    memorySummary?: MemorySummary,
+  ): Promise<AgentVote> {
     const startedAt = Date.now();
-    const prompt = buildAgentPrompt(ctx, roleConfig);
-    const { signal, confidence, reasoning } = analyzeRole(roleConfig, ctx);
+    const heuristicVote = analyzeRole(roleConfig, ctx);
+    const resolvedMemorySummary =
+      memorySummary ?? (await getMemorySummary(ctx));
+    const memoryLabel = summarizeMemoryForDisplay(resolvedMemorySummary);
+
+    const rateLimit = await checkRateLimit(`agent:call:${modelId}`, 1, 1);
+    if (!rateLimit.allowed) {
+      return finalizeVote({
+        model: modelId,
+        roleConfig,
+        signal: heuristicVote.signal,
+        confidence: heuristicVote.confidence,
+        reasoning: `${heuristicVote.reasoning} [Rate-limited: heuristic used]${memoryLabel ? ` ${memoryLabel}` : ""}`,
+        startedAt,
+      });
+    }
+
+    const webSearchAllowed = modelCanUseWebSearch(modelId as AIModel);
+    const researchContext = webSearchAllowed
+      ? await getMarketResearchDigest(ctx)
+      : null;
+    const memoryContext = buildMemoryPrompt(resolvedMemorySummary);
+    const prompt = buildAgentPrompt(
+      ctx,
+      roleConfig,
+      researchContext,
+      memoryContext,
+    );
+    let resolvedVote = heuristicVote;
+
+    if (isOllamaConfigured()) {
+      try {
+        const { text } = await generateText({
+          model: getOllamaModel(modelId),
+          system: buildSystemPrompt(roleConfig),
+          prompt,
+          temperature: roleConfig.isVetoLayer ? 0.05 : 0.2,
+          maxOutputTokens: 220,
+        });
+
+        resolvedVote = parseModelVote(text, heuristicVote);
+
+        if (
+          roleConfig.isVetoLayer &&
+          heuristicVote.signal === "HOLD" &&
+          heuristicVote.confidence >= 0.75 &&
+          resolvedVote.signal !== "HOLD"
+        ) {
+          resolvedVote = {
+            signal: "HOLD",
+            confidence: heuristicVote.confidence,
+            reasoning: `${heuristicVote.reasoning} [Veto layer: LLM directional override rejected; heuristic HOLD enforced]`,
+          };
+        }
+      } catch {
+        resolvedVote = {
+          ...heuristicVote,
+          reasoning: `${heuristicVote.reasoning} [Model call failed; heuristic used]${memoryLabel ? ` ${memoryLabel}` : ""}`,
+        };
+      }
+    } else {
+      const suffix = researchContext
+        ? " [Ollama offline; heuristic used without web synthesis]"
+        : " [Ollama offline; heuristic used]";
+      resolvedVote = {
+        ...heuristicVote,
+        reasoning: `${heuristicVote.reasoning}${suffix}${memoryLabel ? ` ${memoryLabel}` : ""}`,
+      };
+    }
 
     return finalizeVote({
       model: modelId,
       roleConfig,
-      signal,
+      signal: resolvedVote.signal,
       confidence: clampConfidence(
-        confidence + Math.min(prompt.length / 4000, 0.05),
+        resolvedVote.confidence + Math.min(prompt.length / 4000, 0.05),
       ),
-      reasoning,
+      reasoning: resolvedVote.reasoning,
       startedAt,
     });
   };

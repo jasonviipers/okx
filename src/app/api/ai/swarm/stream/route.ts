@@ -1,10 +1,10 @@
 import type { NextRequest } from "next/server";
-import { ACTIVE_SWARM_MODELS } from "@/config/models";
-import { getRoleForModel } from "@/config/roles";
 import { createAgent } from "@/lib/agents/create-agent";
-import { getMarketContext } from "@/lib/okx/market";
-import { computeConsensus } from "@/lib/swarm/consensus";
-import { validateConsensus } from "@/lib/swarm/validator";
+import { ACTIVE_SWARM_MODELS } from "@/lib/configs/models";
+import { getRoleForModel } from "@/lib/configs/roles";
+import { getRealtimeMarketContext } from "@/lib/market-data/service";
+import { getMemorySummary } from "@/lib/memory/aging-memory";
+import { buildSwarmDecision } from "@/lib/swarm/pipeline";
 import type { Timeframe } from "@/types/market";
 import type { SwarmStreamEvent } from "@/types/swarm";
 
@@ -29,15 +29,19 @@ export async function GET(req: NextRequest) {
           message: "Fetching market context",
         });
 
-        const ctx = await getMarketContext(symbol, timeframe);
+        const ctx = await getRealtimeMarketContext(symbol, timeframe);
+        const memorySummary = await getMemorySummary(ctx);
         const votes = [];
 
         for (const modelId of ACTIVE_SWARM_MODELS) {
-          if (req.signal.aborted) break;
-          const vote = await createAgent(
-            modelId,
-            getRoleForModel(modelId),
-          )(ctx);
+          if (req.signal.aborted) {
+            break;
+          }
+
+          const vote = await createAgent(modelId, getRoleForModel(modelId))(
+            ctx,
+            memorySummary,
+          );
           votes.push(vote);
           sendEvent({
             type: "vote",
@@ -49,9 +53,10 @@ export async function GET(req: NextRequest) {
         }
 
         if (votes.length > 0) {
-          const consensus = validateConsensus(
-            computeConsensus(votes, ctx),
+          const { consensus } = await buildSwarmDecision(
             ctx,
+            votes,
+            memorySummary,
           );
           sendEvent({
             type: "consensus",

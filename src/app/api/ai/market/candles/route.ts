@@ -1,5 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server";
-import { getCandles } from "@/lib/okx/market";
+import { getMarketSnapshot } from "@/lib/market-data/service";
+import { makeSourceHealth } from "@/lib/observability/source-health";
 import type { Timeframe } from "@/types/market";
 
 export const dynamic = "force-dynamic";
@@ -18,13 +19,31 @@ export async function GET(req: NextRequest) {
       );
     }
 
-    const candles = await getCandles(symbol, timeframe, limit);
+    const snapshot = await getMarketSnapshot(symbol, timeframe);
+    const candles = snapshot.context.candles.slice(-limit);
 
     return NextResponse.json({
-      candles,
-      symbol,
-      timeframe,
-      count: candles.length,
+      data: {
+        candles,
+        symbol,
+        timeframe,
+        count: candles.length,
+        status: snapshot.status,
+      },
+      sourceHealth: {
+        candles: makeSourceHealth(
+          snapshot.status.source === "fallback"
+            ? "fallback"
+            : snapshot.status.source === "websocket"
+              ? "okx"
+              : "computed",
+          {
+            warning: snapshot.status.warnings[0],
+            timestamp:
+              snapshot.status.lastCandlesAt ?? new Date().toISOString(),
+          },
+        ),
+      },
       timestamp: new Date().toISOString(),
     });
   } catch (error) {

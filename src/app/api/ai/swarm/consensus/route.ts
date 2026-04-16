@@ -1,5 +1,14 @@
 import { type NextRequest, NextResponse } from "next/server";
+import {
+  AI_MODE_CONFIGS,
+  type AIMode,
+  DEFAULT_AI_MODE,
+} from "@/lib/configs/models";
+import { getRealtimeMarketContext } from "@/lib/market-data/service";
+import { makeSourceHealth } from "@/lib/observability/source-health";
 import { getCachedSwarmResult } from "@/lib/redis/swarm-cache";
+import { autoExecuteConsensus } from "@/lib/swarm/autoExecute";
+import { runSwarm } from "@/lib/swarm/orchestrator";
 import type { Timeframe } from "@/types/market";
 
 export const dynamic = "force-dynamic";
@@ -9,20 +18,53 @@ export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url);
     const symbol = searchParams.get("symbol") ?? "BTC-USDT";
     const timeframe = (searchParams.get("timeframe") as Timeframe) || "1H";
+    const requestedMode =
+      (searchParams.get("mode") as AIMode) || DEFAULT_AI_MODE;
+    const modeConfig =
+      AI_MODE_CONFIGS[requestedMode] ?? AI_MODE_CONFIGS[DEFAULT_AI_MODE];
     const consensus = await getCachedSwarmResult(symbol, timeframe);
 
-    if (!consensus) {
-      return NextResponse.json(
-        {
-          error: "No cached consensus available yet.",
-          symbol,
-          timeframe,
+    if (consensus) {
+      const execution =
+        modeConfig.autoExecute && !consensus.blocked
+          ? await autoExecuteConsensus(consensus)
+          : undefined;
+      if (execution) {
+        console.log("[SwarmConsensus] Execution result:", execution);
+      }
+
+      return NextResponse.json({
+        data: { consensus, cached: true, execution },
+        sourceHealth: {
+          consensus: makeSourceHealth("cache", { cached: true }),
         },
-        { status: 404 },
-      );
+        timestamp: new Date().toISOString(),
+      });
     }
 
-    return NextResponse.json({ consensus, cached: true });
+    const ctx = await getRealtimeMarketContext(symbol, timeframe);
+    const result = await runSwarm(ctx);
+    const execution =
+      modeConfig.autoExecute && !result.consensus.blocked
+        ? await autoExecuteConsensus(result.consensus)
+        : undefined;
+    if (execution) {
+      console.log("[SwarmConsensus] Execution result:", execution);
+    }
+
+    return NextResponse.json({
+      data: {
+        consensus: result.consensus,
+        cached: result.cached,
+        execution,
+        marketContext: result.marketContext,
+        totalElapsedMs: result.totalElapsedMs,
+      },
+      sourceHealth: {
+        consensus: makeSourceHealth("computed"),
+      },
+      timestamp: new Date().toISOString(),
+    });
   } catch (error) {
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "Unknown error" },

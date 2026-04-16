@@ -1,5 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server";
-import { getMarketContext } from "@/lib/okx/market";
+import { getRealtimeMarketContext } from "@/lib/market-data/service";
+import { makeSourceHealth } from "@/lib/observability/source-health";
 import { runSwarm } from "@/lib/swarm/orchestrator";
 import type { Timeframe } from "@/types/market";
 
@@ -18,12 +19,21 @@ export async function POST(req: NextRequest) {
     }
 
     // Fetch market data
-    const ctx = await getMarketContext(symbol, timeframe as Timeframe);
+    const ctx = await getRealtimeMarketContext(symbol, timeframe as Timeframe);
 
     // Run swarm analysis
     const result = await runSwarm(ctx);
 
-    return NextResponse.json(result);
+    return NextResponse.json({
+      data: result,
+      sourceHealth: {
+        marketContext: makeSourceHealth("computed"),
+        consensus: makeSourceHealth(result.cached ? "cache" : "computed", {
+          cached: result.cached,
+        }),
+      },
+      timestamp: new Date().toISOString(),
+    });
   } catch (error) {
     console.error("[API] /api/swarm/analyze error:", error);
     return NextResponse.json(

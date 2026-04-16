@@ -56,3 +56,31 @@ export interface MarketContext {
   orderbook: OrderBook; // top 10 bids + asks
   timeframe: Timeframe;
 }
+
+export type MarketDataSource = "websocket" | "rest" | "fallback" | "unknown";
+export type FeedConnectionState =
+  | "idle"
+  | "connecting"
+  | "connected"
+  | "degraded"
+  | "error";
+
+export interface MarketFeedStatus {
+  symbol: string;
+  timeframe: Timeframe;
+  source: MarketDataSource;
+  realtime: boolean;
+  stale: boolean;
+  tradeable: boolean;
+  connectionState: FeedConnectionState;
+  lastTickerAt?: string;
+  lastOrderBookAt?: string;
+  lastCandlesAt?: string;
+  lastEventAt?: string;
+  warnings: string[];
+}
+
+export interface MarketSnapshot {
+  context: MarketContext;
+  status: MarketFeedStatus;
+}

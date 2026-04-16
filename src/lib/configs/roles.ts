@@ -1,26 +1,26 @@
 // ---------------------------------------------------------------------------
 // Swarm Agent Roles
 //
-// Each sub-agent is assigned a specialized analytical persona.
-// This focuses its LLM reasoning on a specific aspect of the market,
-// reducing redundancy and improving signal diversity across the swarm.
+// SwarmRole is the analytical persona injected into the LLM prompt.
+// ModelRole (in models.ts) is the structural tier that governs permissions.
+// Each model has exactly one of each, and they are aligned below.
 //
-// 7-model swarm:
-//   Slot 1  glm-5.1          → trend_follower      (w: 1.00)
-//   Slot 2  gemma4:31b       → momentum_analyst     (w: 0.90)
-//   Slot 3  qwen3.5          → risk_sentinel        (w: 0.80)
-//   Slot 4  kimi-k2.5        → sentiment_reader     (w: 0.85)
-//   Slot 5  deepseek-v3.2    → contrarian           (w: 0.75)
-//   Slot 6  ministral-3      → macro_filter         (w: 0.70)
-//   Slot 7  gpt-oss          → execution_tactician  (w: 0.80)
+// 7-model map:
+//   deepseek-v3.2   strategy        → trend_follower      (w: 1.00)
+//   gemma4:31b      signal_worker   → momentum_analyst    (w: 0.90)
+//   kimi-k2.5       signal_worker   → sentiment_reader    (w: 0.85)
+//   ministral-3     risk            → macro_filter        (w: 0.80)  ← veto
+//   glm-5.1         validator       → execution_tactician (w: 0.80)  ← veto
+//   qwen3.5         execution       → (no swarm role — order routing only)
+//   gpt-oss         orchestrator    → (no swarm role — coordinates, never votes)
 // ---------------------------------------------------------------------------
+
+import type { ModelRole } from "@/lib/configs/models";
 
 export const SWARM_ROLES = [
   "trend_follower",
   "momentum_analyst",
-  "risk_sentinel",
   "sentiment_reader",
-  "contrarian",
   "macro_filter",
   "execution_tactician",
 ] as const;
@@ -29,22 +29,32 @@ export type SwarmRole = (typeof SWARM_ROLES)[number];
 
 export interface AgentRoleConfig {
   role: SwarmRole;
-  /** Display name for logs */
+  /** Structural tier this role belongs to */
+  modelRole: ModelRole;
+  /** Display name for logs and UI */
   label: string;
   /** Weight this agent's vote carries in the final consensus (0.0–1.0) */
   voteWeight: number;
+  /**
+   * Whether this role acts as a veto layer.
+   * A high-confidence HOLD from a veto role overrides the consensus.
+   */
+  isVetoLayer: boolean;
   /** Role-specific system prompt suffix injected into the LLM */
   systemPromptSuffix: string;
 }
 
-/**
- * Role configuration map — each role has a distinct analytical lens.
- */
 export const ROLE_CONFIGS: Record<SwarmRole, AgentRoleConfig> = {
+  // -------------------------------------------------------------------------
+  // Strategy tier — deepseek-v3.2
+  // Deep sequential reasoning; sets the broad directional thesis.
+  // -------------------------------------------------------------------------
   trend_follower: {
     role: "trend_follower",
+    modelRole: "strategy",
     label: "Trend Follower",
     voteWeight: 1.0,
+    isVetoLayer: false,
     systemPromptSuffix: `
 ANALYTICAL MANDATE: Trend Structure & Moving Average Alignment
 
@@ -66,10 +76,16 @@ Confidence calibration:
 - 0.0–0.4: ambiguous — default to HOLD`,
   },
 
+  // -------------------------------------------------------------------------
+  // Signal worker — gemma4:31b
+  // Fast pattern recognition; confirms or denies momentum.
+  // -------------------------------------------------------------------------
   momentum_analyst: {
     role: "momentum_analyst",
+    modelRole: "signal_worker",
     label: "Momentum Analyst",
     voteWeight: 0.9,
+    isVetoLayer: false,
     systemPromptSuffix: `
 ANALYTICAL MANDATE: Price Velocity & Momentum Confirmation
 
@@ -91,36 +107,16 @@ Confidence calibration:
 - 0.0–0.4: weak or stalling momentum — lean HOLD`,
   },
 
-  risk_sentinel: {
-    role: "risk_sentinel",
-    label: "Risk Sentinel",
-    voteWeight: 0.8,
-    systemPromptSuffix: `
-ANALYTICAL MANDATE: Risk/Reward Assessment & Capital Preservation
-
-Primary focus areas:
-- Candle wick analysis: long upper wicks signal rejection of higher prices; long lower wicks signal rejection of lows
-- Bid/ask spread relative to recent volatility: wide spreads increase slippage risk and reduce edge
-- Intrabar volatility: large high-low ranges without directional close = indecision or manipulation
-- Drawdown proximity: is price near a key support or resistance level where a stop would be required?
-
-Decision rules:
-- Default posture is HOLD — the burden of proof rests on the bull/bear case, not on caution
-- BUY or SELL only when risk/reward is asymmetrically favorable (estimated gain > 2× estimated risk)
-- Reject signals with prominent wick rejection in the direction of the intended trade
-- Reject signals when spread is abnormally wide or candles show extreme intrabar volatility
-
-Confidence calibration:
-- Confidence reflects risk clarity, not directional conviction
-- 0.8–1.0: tight spread, clean candle structure, well-defined risk level
-- 0.5–0.7: acceptable structure with minor risk concerns
-- 0.0–0.4: elevated risk, ambiguous structure — output HOLD`,
-  },
-
+  // -------------------------------------------------------------------------
+  // Signal worker — kimi-k2.5
+  // Context-heavy order flow reading; reads microstructure.
+  // -------------------------------------------------------------------------
   sentiment_reader: {
     role: "sentiment_reader",
+    modelRole: "signal_worker",
     label: "Sentiment Reader",
     voteWeight: 0.85,
+    isVetoLayer: false,
     systemPromptSuffix: `
 ANALYTICAL MANDATE: Order Flow Interpretation & Market Microstructure
 
@@ -142,116 +138,114 @@ Confidence calibration:
 - 0.0–0.4: balanced book or missing data — output HOLD`,
   },
 
-  contrarian: {
-    role: "contrarian",
-    label: "Contrarian",
-    voteWeight: 0.75,
-    systemPromptSuffix: `
-ANALYTICAL MANDATE: Mean Reversion & Exhaustion Detection
-
-Primary focus areas:
-- Price proximity to 20-bar extremes: within 2–3% of the 20-bar high or low is the contrarian trigger zone
-- Exhaustion signals: progressively smaller candle bodies at a high or low suggest momentum failure
-- Wick-to-body ratio at extremes: long wicks at highs (upper rejection) or lows (lower rejection) are primary signals
-- Rate of price change deceleration: a move that is slowing at an extreme is more actionable than one still accelerating
-
-Decision rules:
-- Consider SELL when price is within 2% of 20-bar high AND candle structure shows rejection or exhaustion
-- Consider BUY when price is within 2% of 20-bar low AND selling pressure is visibly diminishing
-- HOLD when price is mid-range or when no exhaustion signal is present at the extreme
-- Do not fade a move that still has momentum and volume behind it — wait for deceleration confirmation
-
-Confidence calibration:
-- 0.8–1.0: price at clear 20-bar extreme with strong wick rejection and decelerating momentum
-- 0.5–0.7: near-extreme positioning with partial reversal signals
-- 0.0–0.4: no clear exhaustion or not at an actionable extreme — output HOLD`,
-  },
-
+  // -------------------------------------------------------------------------
+  // Risk veto layer — ministral-3
+  // Regime detection; kills signals in stressed or illiquid environments.
+  // A high-confidence HOLD from this role overrides the consensus entirely.
+  // -------------------------------------------------------------------------
   macro_filter: {
     role: "macro_filter",
+    modelRole: "risk",
     label: "Macro Filter",
-    voteWeight: 0.7,
+    voteWeight: 0.8,
+    isVetoLayer: true,
     systemPromptSuffix: `
-ANALYTICAL MANDATE: Regime Detection & Cross-Asset Context
+ANALYTICAL MANDATE: Regime Detection & Capital Preservation (VETO LAYER)
+
+You are a risk-tier veto agent. Your HOLD carries override power.
+A high-confidence HOLD from you cancels the consensus regardless of other votes.
 
 Primary focus areas:
-- Broad market regime: is the overall crypto/risk-asset environment trending, ranging, or in stress?
-- Correlation signal: does the asset's recent price action diverge from or confirm the broader market move?
-- Volatility regime: is realized volatility expanding (breakout/crisis mode) or compressing (coiling/ranging)?
-- Session context: is the current candle in a high-liquidity session (US/EU overlap) or a thin overnight window?
+- Broad market regime: is the environment trending, ranging, or in stress?
+- Volatility regime: is realized volatility expanding (crisis mode) or compressing (ranging)?
+- Spread quality: is the bid/ask spread consistent with a liquid, tradeable market?
+- Session context: is this a high-liquidity window (US/EU overlap) or thin overnight?
 
 Decision rules:
-- BUY only when regime is trending bullish AND the asset is not diverging negatively from its peers
-- SELL only when regime is trending bearish AND asset confirms the macro direction
-- HOLD during regime transitions, high-volatility stress events, or when session liquidity is thin
-- Override other signals toward HOLD if the volatility regime is extreme (VIX spike equivalent)
-- Do not generate directional signals based on price action alone — regime context is required
+- BUY only when regime is clearly bullish, volatility is normal, and session is liquid
+- SELL only when regime is clearly bearish and confirmed by the broader environment
+- HOLD during regime transitions, volatility spikes, or thin-session windows
+- Default posture is HOLD — the burden of proof rests on the bull/bear case
+
+Veto rules:
+- If spread > 0.5% of price: output HOLD, confidence 0.90
+- If intrabar range > 3% of price: output HOLD, confidence 0.90
+- If session liquidity is thin: output HOLD, confidence 0.80
 
 Confidence calibration:
-- 0.8–1.0: clear trending regime with confirmed asset alignment and normal session liquidity
-- 0.5–0.7: regime is identifiable but transitioning, or asset shows mild divergence
-- 0.0–0.4: regime ambiguous, stress detected, or thin session — output HOLD`,
+- 0.8–1.0: clear regime with normal volatility and confirmed session liquidity
+- 0.5–0.7: regime identifiable but transitioning, or mild divergence detected
+- 0.0–0.4: regime ambiguous, stress present, or thin session — output HOLD`,
   },
 
+  // -------------------------------------------------------------------------
+  // Validator veto layer — glm-5.1
+  // Structural execution gate; kills signals where fill quality is poor.
+  // A high-confidence HOLD from this role overrides the consensus entirely.
+  // -------------------------------------------------------------------------
   execution_tactician: {
     role: "execution_tactician",
+    modelRole: "validator",
     label: "Execution Tactician",
     voteWeight: 0.8,
+    isVetoLayer: true,
     systemPromptSuffix: `
-ANALYTICAL MANDATE: Entry Timing & Order Execution Quality
+ANALYTICAL MANDATE: Entry Timing & Order Execution Quality (VETO LAYER)
+
+You are a validator-tier veto agent. Your HOLD carries override power.
+A high-confidence HOLD from you cancels the consensus regardless of other votes.
+You do NOT set directional thesis — you gate whether the consensus signal is executable.
 
 Primary focus areas:
-- Candle timing: is the current bar near open (untested), mid-range (uncertain), or near close (confirmed)?
-- Spread at signal time: is the bid/ask spread at or below its recent median? Wide spread = poor fill probability
-- Depth at best bid/ask: is there sufficient size at the top of book to absorb the intended order without slippage?
-- Recent fill quality proxy: have the last 3–5 candles shown clean closes near their highs/lows, or frequent wicks?
+- Spread at signal time: is the bid/ask spread at or below its recent median?
+- Depth at best bid/ask: is there sufficient size at the top of book to absorb the order?
+- Candle timing: is the bar near its close (confirmed) or still mid-range (untested)?
+- Fill quality proxy: do recent candles close cleanly near highs/lows, or show frequent rejection wicks?
 
 Decision rules:
-- BUY only when spread is at or below median AND sufficient bid depth exists AND bar close confirms direction
-- SELL only when ask depth is thin relative to recent average AND spread is not elevated
-- HOLD when spread is above 1.5× its recent median, or when top-of-book depth is insufficient
-- Do not generate signals near major economic releases or known low-liquidity windows
-- This role is a late-stage gate: it validates that execution conditions support the consensus signal
+- Confirm BUY only when spread ≤ median AND bid depth is adequate AND bar close supports direction
+- Confirm SELL only when ask depth is thin relative to average AND spread is not elevated
+- HOLD when spread > 1.5× median, top-of-book depth is thin, or bar close is ambiguous
+- Never generate a directional signal independently — only validate or block the incoming consensus
+
+Veto rules:
+- If spread > 1.5× recent median: output HOLD, confidence 0.88
+- If top-of-book depth is < 50% of recent average: output HOLD, confidence 0.85
+- If the last candle has a prominent wick in the trade direction: output HOLD, confidence 0.80
 
 Confidence calibration:
-- Confidence reflects execution quality, not directional conviction
-- 0.8–1.0: tight spread, deep book, clean candle close — ideal entry conditions
-- 0.5–0.7: acceptable spread, moderate depth — proceed with reduced size
+- Reflects execution quality, not directional conviction
+- 0.8–1.0: tight spread, deep book, clean close — ideal entry conditions
+- 0.5–0.7: acceptable spread, moderate depth — proceed with caution
 - 0.0–0.4: poor fill conditions — output HOLD regardless of directional consensus`,
   },
 };
 
 // ---------------------------------------------------------------------------
-// Model → Role assignment
+// Model → SwarmRole assignment
+// Only models in ACTIVE_SWARM_MODELS have a SwarmRole.
+// qwen3.5 (execution) and gpt-oss (orchestrator) are intentionally absent.
 // ---------------------------------------------------------------------------
-
-/**
- * Maps each model to its assigned role in the swarm.
- *
- * Assignment rationale:
- *   glm-5.1        — strong sequential reasoning → trend structure
- *   gemma4:31b     — fast inference, pattern recognition → momentum
- *   qwen3.5        — cautious/analytical → risk assessment
- *   kimi-k2.5      — context-heavy reading → order flow / sentiment
- *   deepseek-v3.2  — adversarial reasoning → contrarian exhaustion
- *   ministral-3    — broad world-knowledge → macro regime context
- *   gpt-oss        — instruction-following precision → execution gate
- */
-export const MODEL_ROLE_MAP: Record<string, SwarmRole> = {
-  "glm-5.1:cloud": "trend_follower",
+export const MODEL_SWARM_ROLE_MAP: Record<string, SwarmRole> = {
+  "deepseek-v3.2:cloud": "trend_follower",
   "gemma4:31b-cloud": "momentum_analyst",
-  "qwen3.5:cloud": "risk_sentinel",
   "kimi-k2.5:cloud": "sentiment_reader",
-  "deepseek-v3.2:cloud": "contrarian",
   "ministral-3:cloud": "macro_filter",
-  "gpt-oss:cloud": "execution_tactician",
+  "glm-5.1:cloud": "execution_tactician",
 };
 
 /**
- * Get the role config for a given model.
- * Falls back to trend_follower if model is unknown.
+ * Get the SwarmRole config for a given model.
+ * Throws if the model does not participate in swarm voting
+ * (i.e. execution or orchestrator tier).
  */
 export function getRoleForModel(modelId: string): AgentRoleConfig {
-  const role = MODEL_ROLE_MAP[modelId] ?? "trend_follower";
+  const role = MODEL_SWARM_ROLE_MAP[modelId];
+  if (!role) {
+    throw new Error(
+      `Model "${modelId}" is not a swarm voting participant. ` +
+        `Check MODEL_ROLES — execution and orchestrator models must not be passed to createAgent.`,
+    );
+  }
   return ROLE_CONFIGS[role];
 }
