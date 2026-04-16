@@ -1,0 +1,10 @@
+{
+  "running": false,
+  "symbol": "BTC-USDT",
+  "timeframe": "1H",
+  "intervalMs": 60000,
+  "cooldownMs": 120000,
+  "budgetUsd": 10,
+  "iterationCount": 0,
+  "inFlight": false
+}

@@ -1,5 +1,1328 @@
 [
   {
+    "id": "swarm_1776317589644_yews4r",
+    "type": "swarm_run",
+    "timestamp": "2026-04-16T05:33:09.644Z",
+    "symbol": "BTC-USDT",
+    "timeframe": "1H",
+    "cached": false,
+    "totalElapsedMs": 17063,
+    "consensus": {
+      "symbol": "BTC-USDT",
+      "timeframe": "1H",
+      "signal": "HOLD",
+      "confidence": 0.684,
+      "agreement": 0.8,
+      "votes": [
+        {
+          "model": "deepseek-v3.2:cloud",
+          "role": "trend_follower",
+          "modelRole": "strategy",
+          "signal": "HOLD",
+          "confidence": 0.426,
+          "reasoning": "Trend structure is mixed across the recent candle sequence.",
+          "elapsedMs": 17029,
+          "voteWeight": 1,
+          "isVetoLayer": false
+        },
+        {
+          "model": "gemma4:31b-cloud",
+          "role": "momentum_analyst",
+          "modelRole": "signal_worker",
+          "signal": "HOLD",
+          "confidence": 0.382,
+          "reasoning": "Momentum is fading or under-confirmed by recent volume.",
+          "elapsedMs": 9640,
+          "voteWeight": 0.9,
+          "isVetoLayer": false
+        },
+        {
+          "model": "kimi-k2.5:cloud",
+          "role": "sentiment_reader",
+          "modelRole": "signal_worker",
+          "signal": "BUY",
+          "confidence": 0.95,
+          "reasoning": "Bid depth dominates and aligns with the session bias.",
+          "elapsedMs": 6360,
+          "voteWeight": 0.85,
+          "isVetoLayer": false
+        },
+        {
+          "model": "glm-5.1:cloud",
+          "role": "execution_tactician",
+          "modelRole": "validator",
+          "signal": "HOLD",
+          "confidence": 0.433,
+          "reasoning": "Execution conditions are adequate but no confirmed entry signal.",
+          "elapsedMs": 5279,
+          "voteWeight": 0.8,
+          "isVetoLayer": true
+        },
+        {
+          "model": "ministral-3:cloud",
+          "role": "macro_filter",
+          "modelRole": "risk",
+          "signal": "HOLD",
+          "confidence": 0.391,
+          "reasoning": "Market conditions are acceptable but no clear regime signal. [Model call failed; heuristic used] Memory: 6 samples | dominant HOLD | blocked 8%",
+          "elapsedMs": 1129,
+          "voteWeight": 0.8,
+          "isVetoLayer": true
+        }
+      ],
+      "weightedScores": {
+        "BUY": 0.8075,
+        "SELL": 0,
+        "HOLD": 1.429
+      },
+      "validatedAt": "2026-04-16T05:33:09.612Z",
+      "blocked": false,
+      "regime": {
+        "regime": "mean_reversion",
+        "confidence": 0.781,
+        "trendScore": 0.278,
+        "breakoutScore": 0.163,
+        "meanReversionScore": 0.781,
+        "volatilityScore": 0.809,
+        "liquidityScore": 1,
+        "notes": [
+          "Directional strength is muted; rotational behavior is more likely."
+        ],
+        "generatedAt": "2026-04-16T05:33:09.607Z"
+      },
+      "engineReports": [
+        {
+          "engine": "trend_continuation",
+          "signal": "HOLD",
+          "confidence": 1,
+          "supportScore": 0.426,
+          "reasons": [
+            "Trend structure is mixed across the recent candle sequence."
+          ],
+          "supportingRoles": [
+            "trend_follower"
+          ]
+        },
+        {
+          "engine": "breakout",
+          "signal": "HOLD",
+          "confidence": 1,
+          "supportScore": 0.344,
+          "reasons": [
+            "Momentum is fading or under-confirmed by recent volume."
+          ],
+          "supportingRoles": [
+            "momentum_analyst"
+          ]
+        },
+        {
+          "engine": "mean_reversion",
+          "signal": "HOLD",
+          "confidence": 0.35,
+          "supportScore": 0.315,
+          "reasons": [
+            "Price is not sufficiently stretched away from local fair value."
+          ],
+          "supportingRoles": []
+        },
+        {
+          "engine": "microstructure",
+          "signal": "BUY",
+          "confidence": 1,
+          "supportScore": 0.807,
+          "reasons": [
+            "Bid depth dominates and aligns with the session bias."
+          ],
+          "supportingRoles": [
+            "sentiment_reader"
+          ]
+        }
+      ],
+      "decision": "HOLD",
+      "metaSelection": {
+        "selectedEngine": "microstructure",
+        "suitability": 0.451,
+        "actionBias": "HOLD",
+        "engineScores": {
+          "trend_continuation": 0.106,
+          "breakout": 0.069,
+          "mean_reversion": 0.315,
+          "microstructure": 0.404,
+          "none": 0
+        },
+        "notes": [
+          "Microstructure carries more weight in rotational conditions."
+        ],
+        "generatedAt": "2026-04-16T05:33:09.607Z"
+      },
+      "expectedValue": {
+        "grossEdgeBps": 0,
+        "estimatedFeeBps": 10,
+        "estimatedSlippageBps": 2,
+        "netEdgeBps": -12,
+        "rewardRiskRatio": 0,
+        "tradeAllowed": false,
+        "notes": [
+          "No trade expected value calculated because the signal is HOLD."
+        ],
+        "generatedAt": "2026-04-16T05:33:09.607Z"
+      },
+      "reliability": {
+        "regime": "mean_reversion",
+        "selectedEngine": "microstructure",
+        "sampleSize": 48,
+        "reliabilityScore": 0,
+        "blockedRate": 0.417,
+        "notes": [
+          "Reliability estimated from historical swarm runs with the same regime and selected engine."
+        ],
+        "generatedAt": "2026-04-16T05:33:09.612Z"
+      },
+      "memory": {
+        "symbol": "BTC-USDT",
+        "timeframe": "1H",
+        "totalMemories": 6,
+        "effectiveSampleSize": 2.726,
+        "blockedRatio": 0.084,
+        "averageConfidence": 0.6,
+        "directionalWeights": {
+          "BUY": 0,
+          "SELL": 0,
+          "HOLD": 2.726
+        },
+        "dominantSignal": "HOLD",
+        "topRecalls": [
+          {
+            "id": 56,
+            "createdAt": "2026-04-16T05:30:46.575Z",
+            "signal": "HOLD",
+            "confidence": 0.688,
+            "agreement": 0.8,
+            "blocked": false,
+            "summary": "HOLD 69% | agree 80% | lead sentiment_reader",
+            "ageHours": 0.04,
+            "decayWeight": 1,
+            "similarity": 0.99,
+            "weightedInfluence": 0.681
+          },
+          {
+            "id": 57,
+            "createdAt": "2026-04-16T05:30:48.960Z",
+            "signal": "HOLD",
+            "confidence": 0.688,
+            "agreement": 0.8,
+            "blocked": false,
+            "summary": "HOLD 69% | agree 80% | lead sentiment_reader",
+            "ageHours": 0.03,
+            "decayWeight": 1,
+            "similarity": 0.987,
+            "weightedInfluence": 0.679
+          },
+          {
+            "id": 55,
+            "createdAt": "2026-04-16T05:28:54.702Z",
+            "signal": "HOLD",
+            "confidence": 0.692,
+            "agreement": 0.8,
+            "blocked": false,
+            "summary": "HOLD 69% | agree 80% | lead sentiment_reader",
+            "ageHours": 0.07,
+            "decayWeight": 0.999,
+            "similarity": 0.877,
+            "weightedInfluence": 0.606
+          },
+          {
+            "id": 54,
+            "createdAt": "2026-04-16T03:21:04.481Z",
+            "signal": "HOLD",
+            "confidence": 0.346,
+            "agreement": 0.4,
+            "blocked": false,
+            "summary": "HOLD 35% | agree 40% | lead sentiment_reader",
+            "ageHours": 2.2,
+            "decayWeight": 0.979,
+            "similarity": 0.796,
+            "weightedInfluence": 0.27
+          },
+          {
+            "id": 24,
+            "createdAt": "2026-04-16T02:33:43.743Z",
+            "signal": "HOLD",
+            "confidence": 0.345,
+            "agreement": 0.4,
+            "blocked": false,
+            "summary": "HOLD 35% | agree 40% | lead sentiment_reader",
+            "ageHours": 2.99,
+            "decayWeight": 0.972,
+            "similarity": 0.778,
+            "weightedInfluence": 0.261
+          }
+        ],
+        "generatedAt": "2026-04-16T05:32:52.578Z"
+      },
+      "harness": {
+        "generatedAt": "2026-04-16T05:33:09.612Z",
+        "marketQualityScore": 0.997,
+        "liquidityScore": 1,
+        "volatilityPenalty": 0.005,
+        "memoryAlignmentScore": 1,
+        "confidenceAdjustment": 0.045,
+        "blockedByHarness": false,
+        "notes": [
+          "Aging memory aligns with the current consensus."
+        ]
+      }
+    }
+  },
+  {
+    "id": "swarm_1776317579088_ylibjq",
+    "type": "swarm_run",
+    "timestamp": "2026-04-16T05:32:59.088Z",
+    "symbol": "BTC-USDT",
+    "timeframe": "1H",
+    "cached": false,
+    "totalElapsedMs": 12186,
+    "consensus": {
+      "symbol": "BTC-USDT",
+      "timeframe": "1H",
+      "signal": "HOLD",
+      "confidence": 0.692,
+      "agreement": 0.8,
+      "votes": [
+        {
+          "model": "deepseek-v3.2:cloud",
+          "role": "trend_follower",
+          "modelRole": "strategy",
+          "signal": "HOLD",
+          "confidence": 0.426,
+          "reasoning": "Trend structure is mixed across the recent candle sequence.",
+          "elapsedMs": 12135,
+          "voteWeight": 1,
+          "isVetoLayer": false
+        },
+        {
+          "model": "gemma4:31b-cloud",
+          "role": "momentum_analyst",
+          "modelRole": "signal_worker",
+          "signal": "HOLD",
+          "confidence": 0.7,
+          "reasoning": "Price is consolidating around the 75k psychological level. While the 20-bar move is positive (+1.62%) and the last candle was bullish, the body-to-range ratio (54.1%) and balanced order book indicate a lack of aggressive momentum. No clear acceleration or volume spike to justify a breakout entry.",
+          "elapsedMs": 6340,
+          "voteWeight": 0.9,
+          "isVetoLayer": false
+        },
+        {
+          "model": "kimi-k2.5:cloud",
+          "role": "sentiment_reader",
+          "modelRole": "signal_worker",
+          "signal": "SELL",
+          "confidence": 0.612,
+          "reasoning": "Ask depth dominates and aligns with the session bias.",
+          "elapsedMs": 9209,
+          "voteWeight": 0.85,
+          "isVetoLayer": false
+        },
+        {
+          "model": "glm-5.1:cloud",
+          "role": "execution_tactician",
+          "modelRole": "validator",
+          "signal": "HOLD",
+          "confidence": 0.433,
+          "reasoning": "Execution conditions are adequate but no confirmed entry signal.",
+          "elapsedMs": 2872,
+          "voteWeight": 0.8,
+          "isVetoLayer": true
+        },
+        {
+          "model": "ministral-3:cloud",
+          "role": "macro_filter",
+          "modelRole": "risk",
+          "signal": "HOLD",
+          "confidence": 0.391,
+          "reasoning": "Market conditions are acceptable but no clear regime signal. [Model call failed; heuristic used] Memory: 6 samples | dominant HOLD | blocked 10%",
+          "elapsedMs": 380,
+          "voteWeight": 0.8,
+          "isVetoLayer": true
+        }
+      ],
+      "weightedScores": {
+        "BUY": 0,
+        "SELL": 0.5202,
+        "HOLD": 1.7152
+      },
+      "validatedAt": "2026-04-16T05:32:59.054Z",
+      "blocked": false,
+      "regime": {
+        "regime": "mean_reversion",
+        "confidence": 0.885,
+        "trendScore": 0.105,
+        "breakoutScore": 0.163,
+        "meanReversionScore": 0.885,
+        "volatilityScore": 0.809,
+        "liquidityScore": 1,
+        "notes": [
+          "Directional strength is muted; rotational behavior is more likely."
+        ],
+        "generatedAt": "2026-04-16T05:32:59.048Z"
+      },
+      "engineReports": [
+        {
+          "engine": "trend_continuation",
+          "signal": "HOLD",
+          "confidence": 1,
+          "supportScore": 0.426,
+          "reasons": [
+            "Trend structure is mixed across the recent candle sequence."
+          ],
+          "supportingRoles": [
+            "trend_follower"
+          ]
+        },
+        {
+          "engine": "breakout",
+          "signal": "HOLD",
+          "confidence": 1,
+          "supportScore": 0.63,
+          "reasons": [
+            "Price is consolidating around the 75k psychological level. While the 20-bar move is positive (+1.62%) and the last candle was bullish, the body-to-range ratio (54.1%) and balanced order book indicate a lack of aggressive momentum. No clear acceleration or volume spike to justify a breakout entry."
+          ],
+          "supportingRoles": [
+            "momentum_analyst"
+          ]
+        },
+        {
+          "engine": "mean_reversion",
+          "signal": "HOLD",
+          "confidence": 0.35,
+          "supportScore": 0.315,
+          "reasons": [
+            "Price is not sufficiently stretched away from local fair value."
+          ],
+          "supportingRoles": []
+        },
+        {
+          "engine": "microstructure",
+          "signal": "SELL",
+          "confidence": 1,
+          "supportScore": 0.52,
+          "reasons": [
+            "Ask depth dominates and aligns with the session bias."
+          ],
+          "supportingRoles": [
+            "sentiment_reader"
+          ]
+        }
+      ],
+      "decision": "HOLD",
+      "metaSelection": {
+        "selectedEngine": "mean_reversion",
+        "suitability": 0.39,
+        "actionBias": "HOLD",
+        "engineScores": {
+          "trend_continuation": 0.106,
+          "breakout": 0.126,
+          "mean_reversion": 0.315,
+          "microstructure": 0.26,
+          "none": 0
+        },
+        "notes": [
+          "Directional engines are down-weighted because the market looks rotational."
+        ],
+        "generatedAt": "2026-04-16T05:32:59.049Z"
+      },
+      "expectedValue": {
+        "grossEdgeBps": 0,
+        "estimatedFeeBps": 10,
+        "estimatedSlippageBps": 2,
+        "netEdgeBps": -12,
+        "rewardRiskRatio": 0,
+        "tradeAllowed": false,
+        "notes": [
+          "No trade expected value calculated because the signal is HOLD."
+        ],
+        "generatedAt": "2026-04-16T05:32:59.049Z"
+      },
+      "reliability": {
+        "regime": "mean_reversion",
+        "selectedEngine": "mean_reversion",
+        "sampleSize": 8,
+        "reliabilityScore": 0,
+        "blockedRate": 0.375,
+        "notes": [
+          "Reliability estimated from historical swarm runs with the same regime and selected engine."
+        ],
+        "generatedAt": "2026-04-16T05:32:59.054Z"
+      },
+      "memory": {
+        "symbol": "BTC-USDT",
+        "timeframe": "1H",
+        "totalMemories": 6,
+        "effectiveSampleSize": 2.745,
+        "blockedRatio": 0.098,
+        "averageConfidence": 0.587,
+        "directionalWeights": {
+          "BUY": 0,
+          "SELL": 0,
+          "HOLD": 2.745
+        },
+        "dominantSignal": "HOLD",
+        "topRecalls": [
+          {
+            "id": 55,
+            "createdAt": "2026-04-16T05:28:54.702Z",
+            "signal": "HOLD",
+            "confidence": 0.692,
+            "agreement": 0.8,
+            "blocked": false,
+            "summary": "HOLD 69% | agree 80% | lead sentiment_reader",
+            "ageHours": 0.06,
+            "decayWeight": 0.999,
+            "similarity": 0.977,
+            "weightedInfluence": 0.676
+          },
+          {
+            "id": 57,
+            "createdAt": "2026-04-16T05:30:48.960Z",
+            "signal": "HOLD",
+            "confidence": 0.688,
+            "agreement": 0.8,
+            "blocked": false,
+            "summary": "HOLD 69% | agree 80% | lead sentiment_reader",
+            "ageHours": 0.03,
+            "decayWeight": 1,
+            "similarity": 0.868,
+            "weightedInfluence": 0.597
+          },
+          {
+            "id": 56,
+            "createdAt": "2026-04-16T05:30:46.575Z",
+            "signal": "HOLD",
+            "confidence": 0.688,
+            "agreement": 0.8,
+            "blocked": false,
+            "summary": "HOLD 69% | agree 80% | lead sentiment_reader",
+            "ageHours": 0.03,
+            "decayWeight": 1,
+            "similarity": 0.865,
+            "weightedInfluence": 0.595
+          },
+          {
+            "id": 54,
+            "createdAt": "2026-04-16T03:21:04.481Z",
+            "signal": "HOLD",
+            "confidence": 0.346,
+            "agreement": 0.4,
+            "blocked": false,
+            "summary": "HOLD 35% | agree 40% | lead sentiment_reader",
+            "ageHours": 2.2,
+            "decayWeight": 0.979,
+            "similarity": 0.928,
+            "weightedInfluence": 0.314
+          },
+          {
+            "id": 24,
+            "createdAt": "2026-04-16T02:33:43.743Z",
+            "signal": "HOLD",
+            "confidence": 0.345,
+            "agreement": 0.4,
+            "blocked": false,
+            "summary": "HOLD 35% | agree 40% | lead sentiment_reader",
+            "ageHours": 2.98,
+            "decayWeight": 0.972,
+            "similarity": 0.876,
+            "weightedInfluence": 0.294
+          }
+        ],
+        "generatedAt": "2026-04-16T05:32:46.911Z"
+      },
+      "harness": {
+        "generatedAt": "2026-04-16T05:32:59.054Z",
+        "marketQualityScore": 0.997,
+        "liquidityScore": 1,
+        "volatilityPenalty": 0.005,
+        "memoryAlignmentScore": 1,
+        "confidenceAdjustment": 0.045,
+        "blockedByHarness": false,
+        "notes": [
+          "Aging memory aligns with the current consensus."
+        ]
+      }
+    }
+  },
+  {
+    "id": "swarm_1776317448952_4ifhyh",
+    "type": "swarm_run",
+    "timestamp": "2026-04-16T05:30:48.952Z",
+    "symbol": "BTC-USDT",
+    "timeframe": "1H",
+    "cached": false,
+    "totalElapsedMs": 22592,
+    "consensus": {
+      "symbol": "BTC-USDT",
+      "timeframe": "1H",
+      "signal": "HOLD",
+      "confidence": 0.688,
+      "agreement": 0.8,
+      "votes": [
+        {
+          "model": "deepseek-v3.2:cloud",
+          "role": "trend_follower",
+          "modelRole": "strategy",
+          "signal": "HOLD",
+          "confidence": 0.434,
+          "reasoning": "Trend structure is mixed across the recent candle sequence.",
+          "elapsedMs": 22554,
+          "voteWeight": 1,
+          "isVetoLayer": false
+        },
+        {
+          "model": "gemma4:31b-cloud",
+          "role": "momentum_analyst",
+          "modelRole": "signal_worker",
+          "signal": "HOLD",
+          "confidence": 0.391,
+          "reasoning": "Momentum is fading or under-confirmed by recent volume.",
+          "elapsedMs": 20845,
+          "voteWeight": 0.9,
+          "isVetoLayer": false
+        },
+        {
+          "model": "kimi-k2.5:cloud",
+          "role": "sentiment_reader",
+          "modelRole": "signal_worker",
+          "signal": "BUY",
+          "confidence": 0.95,
+          "reasoning": "Bid depth dominates and aligns with the session bias.",
+          "elapsedMs": 9799,
+          "voteWeight": 0.85,
+          "isVetoLayer": false
+        },
+        {
+          "model": "glm-5.1:cloud",
+          "role": "execution_tactician",
+          "modelRole": "validator",
+          "signal": "HOLD",
+          "confidence": 0.441,
+          "reasoning": "Execution conditions are adequate but no confirmed entry signal.",
+          "elapsedMs": 4842,
+          "voteWeight": 0.8,
+          "isVetoLayer": true
+        },
+        {
+          "model": "ministral-3:cloud",
+          "role": "macro_filter",
+          "modelRole": "risk",
+          "signal": "HOLD",
+          "confidence": 0.397,
+          "reasoning": "Market conditions are acceptable but no clear regime signal. [Model call failed; heuristic used] Memory: 4 samples | dominant HOLD | blocked 17%",
+          "elapsedMs": 1680,
+          "voteWeight": 0.8,
+          "isVetoLayer": true
+        }
+      ],
+      "weightedScores": {
+        "BUY": 0.8075,
+        "SELL": 0,
+        "HOLD": 1.4563000000000001
+      },
+      "validatedAt": "2026-04-16T05:30:48.916Z",
+      "blocked": false,
+      "regime": {
+        "regime": "mean_reversion",
+        "confidence": 0.747,
+        "trendScore": 0.299,
+        "breakoutScore": 0.191,
+        "meanReversionScore": 0.747,
+        "volatilityScore": 0.809,
+        "liquidityScore": 1,
+        "notes": [
+          "Directional strength is muted; rotational behavior is more likely."
+        ],
+        "generatedAt": "2026-04-16T05:30:48.910Z"
+      },
+      "engineReports": [
+        {
+          "engine": "trend_continuation",
+          "signal": "HOLD",
+          "confidence": 1,
+          "supportScore": 0.434,
+          "reasons": [
+            "Trend structure is mixed across the recent candle sequence."
+          ],
+          "supportingRoles": [
+            "trend_follower"
+          ]
+        },
+        {
+          "engine": "breakout",
+          "signal": "HOLD",
+          "confidence": 1,
+          "supportScore": 0.352,
+          "reasons": [
+            "Momentum is fading or under-confirmed by recent volume."
+          ],
+          "supportingRoles": [
+            "momentum_analyst"
+          ]
+        },
+        {
+          "engine": "mean_reversion",
+          "signal": "HOLD",
+          "confidence": 0.35,
+          "supportScore": 0.315,
+          "reasons": [
+            "Price is not sufficiently stretched away from local fair value."
+          ],
+          "supportingRoles": []
+        },
+        {
+          "engine": "microstructure",
+          "signal": "BUY",
+          "confidence": 1,
+          "supportScore": 0.807,
+          "reasons": [
+            "Bid depth dominates and aligns with the session bias."
+          ],
+          "supportingRoles": [
+            "sentiment_reader"
+          ]
+        }
+      ],
+      "decision": "HOLD",
+      "metaSelection": {
+        "selectedEngine": "microstructure",
+        "suitability": 0.45,
+        "actionBias": "HOLD",
+        "engineScores": {
+          "trend_continuation": 0.108,
+          "breakout": 0.07,
+          "mean_reversion": 0.315,
+          "microstructure": 0.404,
+          "none": 0
+        },
+        "notes": [
+          "Microstructure carries more weight in rotational conditions."
+        ],
+        "generatedAt": "2026-04-16T05:30:48.910Z"
+      },
+      "expectedValue": {
+        "grossEdgeBps": 0,
+        "estimatedFeeBps": 10,
+        "estimatedSlippageBps": 2,
+        "netEdgeBps": -12,
+        "rewardRiskRatio": 0,
+        "tradeAllowed": false,
+        "notes": [
+          "No trade expected value calculated because the signal is HOLD."
+        ],
+        "generatedAt": "2026-04-16T05:30:48.910Z"
+      },
+      "reliability": {
+        "regime": "mean_reversion",
+        "selectedEngine": "microstructure",
+        "sampleSize": 47,
+        "reliabilityScore": 0,
+        "blockedRate": 0.426,
+        "notes": [
+          "Reliability estimated from historical swarm runs with the same regime and selected engine."
+        ],
+        "generatedAt": "2026-04-16T05:30:48.916Z"
+      },
+      "memory": {
+        "symbol": "BTC-USDT",
+        "timeframe": "1H",
+        "totalMemories": 4,
+        "effectiveSampleSize": 1.379,
+        "blockedRatio": 0.168,
+        "averageConfidence": 0.513,
+        "directionalWeights": {
+          "BUY": 0,
+          "SELL": 0,
+          "HOLD": 1.379
+        },
+        "dominantSignal": "HOLD",
+        "topRecalls": [
+          {
+            "id": 55,
+            "createdAt": "2026-04-16T05:28:54.702Z",
+            "signal": "HOLD",
+            "confidence": 0.692,
+            "agreement": 0.8,
+            "blocked": false,
+            "summary": "HOLD 69% | agree 80% | lead sentiment_reader",
+            "ageHours": 0.03,
+            "decayWeight": 1,
+            "similarity": 0.89,
+            "weightedInfluence": 0.616
+          },
+          {
+            "id": 54,
+            "createdAt": "2026-04-16T03:21:04.481Z",
+            "signal": "HOLD",
+            "confidence": 0.346,
+            "agreement": 0.4,
+            "blocked": false,
+            "summary": "HOLD 35% | agree 40% | lead sentiment_reader",
+            "ageHours": 2.16,
+            "decayWeight": 0.979,
+            "similarity": 0.799,
+            "weightedInfluence": 0.271
+          },
+          {
+            "id": 24,
+            "createdAt": "2026-04-16T02:33:43.743Z",
+            "signal": "HOLD",
+            "confidence": 0.345,
+            "agreement": 0.4,
+            "blocked": false,
+            "summary": "HOLD 35% | agree 40% | lead sentiment_reader",
+            "ageHours": 2.95,
+            "decayWeight": 0.972,
+            "similarity": 0.776,
+            "weightedInfluence": 0.26
+          },
+          {
+            "id": 2,
+            "createdAt": "2026-04-16T02:02:08.216Z",
+            "signal": "HOLD",
+            "confidence": 0.419,
+            "agreement": 0.4,
+            "blocked": true,
+            "summary": "HOLD 42% | agree 40% | blocked: Expected-value gate rejected the setup after fees and slippage. | lead sentiment_reader",
+            "ageHours": 3.47,
+            "decayWeight": 0.967,
+            "similarity": 0.818,
+            "weightedInfluence": 0.232
+          }
+        ],
+        "generatedAt": "2026-04-16T05:30:26.356Z"
+      },
+      "harness": {
+        "generatedAt": "2026-04-16T05:30:48.916Z",
+        "marketQualityScore": 0.997,
+        "liquidityScore": 1,
+        "volatilityPenalty": 0.005,
+        "memoryAlignmentScore": 1,
+        "confidenceAdjustment": 0.045,
+        "blockedByHarness": false,
+        "notes": [
+          "Aging memory aligns with the current consensus."
+        ]
+      }
+    }
+  },
+  {
+    "id": "swarm_1776317446562_woxxza",
+    "type": "swarm_run",
+    "timestamp": "2026-04-16T05:30:46.562Z",
+    "symbol": "BTC-USDT",
+    "timeframe": "1H",
+    "cached": false,
+    "totalElapsedMs": 21251,
+    "consensus": {
+      "symbol": "BTC-USDT",
+      "timeframe": "1H",
+      "signal": "HOLD",
+      "confidence": 0.688,
+      "agreement": 0.8,
+      "votes": [
+        {
+          "model": "deepseek-v3.2:cloud",
+          "role": "trend_follower",
+          "modelRole": "strategy",
+          "signal": "HOLD",
+          "confidence": 0.434,
+          "reasoning": "Trend structure is mixed across the recent candle sequence.",
+          "elapsedMs": 21190,
+          "voteWeight": 1,
+          "isVetoLayer": false
+        },
+        {
+          "model": "gemma4:31b-cloud",
+          "role": "momentum_analyst",
+          "modelRole": "signal_worker",
+          "signal": "HOLD",
+          "confidence": 0.391,
+          "reasoning": "Momentum is fading or under-confirmed by recent volume.",
+          "elapsedMs": 20717,
+          "voteWeight": 0.9,
+          "isVetoLayer": false
+        },
+        {
+          "model": "kimi-k2.5:cloud",
+          "role": "sentiment_reader",
+          "modelRole": "signal_worker",
+          "signal": "BUY",
+          "confidence": 0.95,
+          "reasoning": "Bid depth dominates and aligns with the session bias.",
+          "elapsedMs": 8912,
+          "voteWeight": 0.85,
+          "isVetoLayer": false
+        },
+        {
+          "model": "glm-5.1:cloud",
+          "role": "execution_tactician",
+          "modelRole": "validator",
+          "signal": "HOLD",
+          "confidence": 0.441,
+          "reasoning": "Execution conditions are adequate but no confirmed entry signal.",
+          "elapsedMs": 4567,
+          "voteWeight": 0.8,
+          "isVetoLayer": true
+        },
+        {
+          "model": "ministral-3:cloud",
+          "role": "macro_filter",
+          "modelRole": "risk",
+          "signal": "HOLD",
+          "confidence": 0.397,
+          "reasoning": "Market conditions are acceptable but no clear regime signal. [Model call failed; heuristic used] Memory: 4 samples | dominant HOLD | blocked 17%",
+          "elapsedMs": 361,
+          "voteWeight": 0.8,
+          "isVetoLayer": true
+        }
+      ],
+      "weightedScores": {
+        "BUY": 0.8075,
+        "SELL": 0,
+        "HOLD": 1.4563000000000001
+      },
+      "validatedAt": "2026-04-16T05:30:46.521Z",
+      "blocked": false,
+      "regime": {
+        "regime": "mean_reversion",
+        "confidence": 0.745,
+        "trendScore": 0.303,
+        "breakoutScore": 0.191,
+        "meanReversionScore": 0.745,
+        "volatilityScore": 0.809,
+        "liquidityScore": 1,
+        "notes": [
+          "Directional strength is muted; rotational behavior is more likely."
+        ],
+        "generatedAt": "2026-04-16T05:30:46.509Z"
+      },
+      "engineReports": [
+        {
+          "engine": "trend_continuation",
+          "signal": "HOLD",
+          "confidence": 1,
+          "supportScore": 0.434,
+          "reasons": [
+            "Trend structure is mixed across the recent candle sequence."
+          ],
+          "supportingRoles": [
+            "trend_follower"
+          ]
+        },
+        {
+          "engine": "breakout",
+          "signal": "HOLD",
+          "confidence": 1,
+          "supportScore": 0.352,
+          "reasons": [
+            "Momentum is fading or under-confirmed by recent volume."
+          ],
+          "supportingRoles": [
+            "momentum_analyst"
+          ]
+        },
+        {
+          "engine": "mean_reversion",
+          "signal": "HOLD",
+          "confidence": 0.35,
+          "supportScore": 0.315,
+          "reasons": [
+            "Price is not sufficiently stretched away from local fair value."
+          ],
+          "supportingRoles": []
+        },
+        {
+          "engine": "microstructure",
+          "signal": "BUY",
+          "confidence": 1,
+          "supportScore": 0.807,
+          "reasons": [
+            "Bid depth dominates and aligns with the session bias."
+          ],
+          "supportingRoles": [
+            "sentiment_reader"
+          ]
+        }
+      ],
+      "decision": "HOLD",
+      "metaSelection": {
+        "selectedEngine": "microstructure",
+        "suitability": 0.45,
+        "actionBias": "HOLD",
+        "engineScores": {
+          "trend_continuation": 0.108,
+          "breakout": 0.07,
+          "mean_reversion": 0.315,
+          "microstructure": 0.404,
+          "none": 0
+        },
+        "notes": [
+          "Microstructure carries more weight in rotational conditions."
+        ],
+        "generatedAt": "2026-04-16T05:30:46.511Z"
+      },
+      "expectedValue": {
+        "grossEdgeBps": 0,
+        "estimatedFeeBps": 10,
+        "estimatedSlippageBps": 2,
+        "netEdgeBps": -12,
+        "rewardRiskRatio": 0,
+        "tradeAllowed": false,
+        "notes": [
+          "No trade expected value calculated because the signal is HOLD."
+        ],
+        "generatedAt": "2026-04-16T05:30:46.511Z"
+      },
+      "reliability": {
+        "regime": "mean_reversion",
+        "selectedEngine": "microstructure",
+        "sampleSize": 46,
+        "reliabilityScore": 0,
+        "blockedRate": 0.435,
+        "notes": [
+          "Reliability estimated from historical swarm runs with the same regime and selected engine."
+        ],
+        "generatedAt": "2026-04-16T05:30:46.521Z"
+      },
+      "memory": {
+        "symbol": "BTC-USDT",
+        "timeframe": "1H",
+        "totalMemories": 4,
+        "effectiveSampleSize": 1.375,
+        "blockedRatio": 0.168,
+        "averageConfidence": 0.513,
+        "directionalWeights": {
+          "BUY": 0,
+          "SELL": 0,
+          "HOLD": 1.375
+        },
+        "dominantSignal": "HOLD",
+        "topRecalls": [
+          {
+            "id": 55,
+            "createdAt": "2026-04-16T05:28:54.702Z",
+            "signal": "HOLD",
+            "confidence": 0.692,
+            "agreement": 0.8,
+            "blocked": false,
+            "summary": "HOLD 69% | agree 80% | lead sentiment_reader",
+            "ageHours": 0.03,
+            "decayWeight": 1,
+            "similarity": 0.887,
+            "weightedInfluence": 0.614
+          },
+          {
+            "id": 54,
+            "createdAt": "2026-04-16T03:21:04.481Z",
+            "signal": "HOLD",
+            "confidence": 0.346,
+            "agreement": 0.4,
+            "blocked": false,
+            "summary": "HOLD 35% | agree 40% | lead sentiment_reader",
+            "ageHours": 2.16,
+            "decayWeight": 0.979,
+            "similarity": 0.796,
+            "weightedInfluence": 0.27
+          },
+          {
+            "id": 24,
+            "createdAt": "2026-04-16T02:33:43.743Z",
+            "signal": "HOLD",
+            "confidence": 0.345,
+            "agreement": 0.4,
+            "blocked": false,
+            "summary": "HOLD 35% | agree 40% | lead sentiment_reader",
+            "ageHours": 2.94,
+            "decayWeight": 0.972,
+            "similarity": 0.776,
+            "weightedInfluence": 0.26
+          },
+          {
+            "id": 2,
+            "createdAt": "2026-04-16T02:02:08.216Z",
+            "signal": "HOLD",
+            "confidence": 0.419,
+            "agreement": 0.4,
+            "blocked": true,
+            "summary": "HOLD 42% | agree 40% | blocked: Expected-value gate rejected the setup after fees and slippage. | lead sentiment_reader",
+            "ageHours": 3.47,
+            "decayWeight": 0.967,
+            "similarity": 0.815,
+            "weightedInfluence": 0.231
+          }
+        ],
+        "generatedAt": "2026-04-16T05:30:25.315Z"
+      },
+      "harness": {
+        "generatedAt": "2026-04-16T05:30:46.521Z",
+        "marketQualityScore": 0.997,
+        "liquidityScore": 1,
+        "volatilityPenalty": 0.005,
+        "memoryAlignmentScore": 1,
+        "confidenceAdjustment": 0.045,
+        "blockedByHarness": false,
+        "notes": [
+          "Aging memory aligns with the current consensus."
+        ]
+      }
+    }
+  },
+  {
+    "id": "swarm_1776317334678_6gpcn4",
+    "type": "swarm_run",
+    "timestamp": "2026-04-16T05:28:54.678Z",
+    "symbol": "BTC-USDT",
+    "timeframe": "1H",
+    "cached": false,
+    "totalElapsedMs": 13269,
+    "consensus": {
+      "symbol": "BTC-USDT",
+      "timeframe": "1H",
+      "signal": "HOLD",
+      "confidence": 0.692,
+      "agreement": 0.8,
+      "votes": [
+        {
+          "model": "deepseek-v3.2:cloud",
+          "role": "trend_follower",
+          "modelRole": "strategy",
+          "signal": "HOLD",
+          "confidence": 0.434,
+          "reasoning": "Trend structure is mixed across the recent candle sequence.",
+          "elapsedMs": 13141,
+          "voteWeight": 1,
+          "isVetoLayer": false
+        },
+        {
+          "model": "gemma4:31b-cloud",
+          "role": "momentum_analyst",
+          "modelRole": "signal_worker",
+          "signal": "HOLD",
+          "confidence": 0.388,
+          "reasoning": "Momentum is fading or under-confirmed by recent volume.",
+          "elapsedMs": 7661,
+          "voteWeight": 0.9,
+          "isVetoLayer": false
+        },
+        {
+          "model": "kimi-k2.5:cloud",
+          "role": "sentiment_reader",
+          "modelRole": "signal_worker",
+          "signal": "BUY",
+          "confidence": 0.52,
+          "reasoning": "Bid depth dominates and aligns with the session bias.",
+          "elapsedMs": 6641,
+          "voteWeight": 0.85,
+          "isVetoLayer": false
+        },
+        {
+          "model": "glm-5.1:cloud",
+          "role": "execution_tactician",
+          "modelRole": "validator",
+          "signal": "HOLD",
+          "confidence": 0.441,
+          "reasoning": "Execution conditions are adequate but no confirmed entry signal.",
+          "elapsedMs": 3340,
+          "voteWeight": 0.8,
+          "isVetoLayer": true
+        },
+        {
+          "model": "ministral-3:cloud",
+          "role": "macro_filter",
+          "modelRole": "risk",
+          "signal": "HOLD",
+          "confidence": 0.397,
+          "reasoning": "Market conditions are acceptable but no clear regime signal. [Model call failed; heuristic used] Memory: 3 samples | dominant HOLD | blocked 31%",
+          "elapsedMs": 499,
+          "voteWeight": 0.8,
+          "isVetoLayer": true
+        }
+      ],
+      "weightedScores": {
+        "BUY": 0.442,
+        "SELL": 0,
+        "HOLD": 1.4536000000000002
+      },
+      "validatedAt": "2026-04-16T05:28:54.618Z",
+      "blocked": false,
+      "regime": {
+        "regime": "mean_reversion",
+        "confidence": 0.846,
+        "trendScore": 0.134,
+        "breakoutScore": 0.193,
+        "meanReversionScore": 0.846,
+        "volatilityScore": 0.809,
+        "liquidityScore": 1,
+        "notes": [
+          "Directional strength is muted; rotational behavior is more likely."
+        ],
+        "generatedAt": "2026-04-16T05:28:54.574Z"
+      },
+      "engineReports": [
+        {
+          "engine": "trend_continuation",
+          "signal": "HOLD",
+          "confidence": 1,
+          "supportScore": 0.434,
+          "reasons": [
+            "Trend structure is mixed across the recent candle sequence."
+          ],
+          "supportingRoles": [
+            "trend_follower"
+          ]
+        },
+        {
+          "engine": "breakout",
+          "signal": "HOLD",
+          "confidence": 1,
+          "supportScore": 0.349,
+          "reasons": [
+            "Momentum is fading or under-confirmed by recent volume."
+          ],
+          "supportingRoles": [
+            "momentum_analyst"
+          ]
+        },
+        {
+          "engine": "mean_reversion",
+          "signal": "HOLD",
+          "confidence": 0.35,
+          "supportScore": 0.315,
+          "reasons": [
+            "Price is not sufficiently stretched away from local fair value."
+          ],
+          "supportingRoles": []
+        },
+        {
+          "engine": "microstructure",
+          "signal": "BUY",
+          "confidence": 1,
+          "supportScore": 0.442,
+          "reasons": [
+            "Bid depth dominates and aligns with the session bias."
+          ],
+          "supportingRoles": [
+            "sentiment_reader"
+          ]
+        }
+      ],
+      "decision": "HOLD",
+      "metaSelection": {
+        "selectedEngine": "mean_reversion",
+        "suitability": 0.441,
+        "actionBias": "HOLD",
+        "engineScores": {
+          "trend_continuation": 0.108,
+          "breakout": 0.07,
+          "mean_reversion": 0.315,
+          "microstructure": 0.221,
+          "none": 0
+        },
+        "notes": [
+          "Directional engines are down-weighted because the market looks rotational."
+        ],
+        "generatedAt": "2026-04-16T05:28:54.586Z"
+      },
+      "expectedValue": {
+        "grossEdgeBps": 0,
+        "estimatedFeeBps": 10,
+        "estimatedSlippageBps": 2,
+        "netEdgeBps": -12,
+        "rewardRiskRatio": 0,
+        "tradeAllowed": false,
+        "notes": [
+          "No trade expected value calculated because the signal is HOLD."
+        ],
+        "generatedAt": "2026-04-16T05:28:54.587Z"
+      },
+      "reliability": {
+        "regime": "mean_reversion",
+        "selectedEngine": "mean_reversion",
+        "sampleSize": 7,
+        "reliabilityScore": 0,
+        "blockedRate": 0.429,
+        "notes": [
+          "Reliability estimated from historical swarm runs with the same regime and selected engine."
+        ],
+        "generatedAt": "2026-04-16T05:28:54.616Z"
+      },
+      "memory": {
+        "symbol": "BTC-USDT",
+        "timeframe": "1H",
+        "totalMemories": 3,
+        "effectiveSampleSize": 0.857,
+        "blockedRatio": 0.307,
+        "averageConfidence": 0.368,
+        "directionalWeights": {
+          "BUY": 0,
+          "SELL": 0,
+          "HOLD": 0.857
+        },
+        "dominantSignal": "HOLD",
+        "topRecalls": [
+          {
+            "id": 54,
+            "createdAt": "2026-04-16T03:21:04.481Z",
+            "signal": "HOLD",
+            "confidence": 0.346,
+            "agreement": 0.4,
+            "blocked": false,
+            "summary": "HOLD 35% | agree 40% | lead sentiment_reader",
+            "ageHours": 2.13,
+            "decayWeight": 0.98,
+            "similarity": 0.908,
+            "weightedInfluence": 0.308
+          },
+          {
+            "id": 24,
+            "createdAt": "2026-04-16T02:33:43.743Z",
+            "signal": "HOLD",
+            "confidence": 0.345,
+            "agreement": 0.4,
+            "blocked": false,
+            "summary": "HOLD 35% | agree 40% | lead sentiment_reader",
+            "ageHours": 2.92,
+            "decayWeight": 0.972,
+            "similarity": 0.854,
+            "weightedInfluence": 0.286
+          },
+          {
+            "id": 2,
+            "createdAt": "2026-04-16T02:02:08.216Z",
+            "signal": "HOLD",
+            "confidence": 0.419,
+            "agreement": 0.4,
+            "blocked": true,
+            "summary": "HOLD 42% | agree 40% | blocked: Expected-value gate rejected the setup after fees and slippage. | lead sentiment_reader",
+            "ageHours": 3.44,
+            "decayWeight": 0.967,
+            "similarity": 0.928,
+            "weightedInfluence": 0.263
+          }
+        ],
+        "generatedAt": "2026-04-16T05:28:41.422Z"
+      },
+      "harness": {
+        "generatedAt": "2026-04-16T05:28:54.620Z",
+        "marketQualityScore": 0.997,
+        "liquidityScore": 1,
+        "volatilityPenalty": 0.005,
+        "memoryAlignmentScore": 1,
+        "confidenceAdjustment": 0.045,
+        "blockedByHarness": false,
+        "notes": [
+          "Aging memory aligns with the current consensus."
+        ]
+      }
+    }
+  },
+  {
     "id": "swarm_1776309664472_86xc35",
     "type": "swarm_run",
     "timestamp": "2026-04-16T03:21:04.472Z",
