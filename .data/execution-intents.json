@@ -1,5 +1,536 @@
 [
   {
+    "id": "intent_1776405397779_mh00oh",
+    "createdAt": "2026-04-17T05:56:37.779Z",
+    "updatedAt": "2026-04-17T05:56:37.807Z",
+    "symbol": "BTC-EUR",
+    "timeframe": "30m",
+    "decision": "HOLD",
+    "confidence": 0.49,
+    "targetSize": 4.9,
+    "status": "hold",
+    "decisionSnapshot": {
+      "signal": "BUY",
+      "directionalSignal": "BUY",
+      "decision": "HOLD",
+      "confidence": 0.49,
+      "agreement": 0.52,
+      "executionEligible": false,
+      "decisionSource": "deterministic",
+      "expectedNetEdgeBps": -3.07,
+      "marketQualityScore": 0.967,
+      "riskFlags": [
+        "slippage_elevated"
+      ],
+      "featureSummary": {
+        "return3Bps": -7.7224,
+        "return10Bps": -53.5889,
+        "volatilityShortBps": 12.103,
+        "volatilityLongBps": 20.3928,
+        "spreadBps": 0.0158,
+        "buySlippageBps": 0,
+        "sellSlippageBps": 4.4951,
+        "orderBookImbalancePct": 92.958,
+        "topBookPressurePct": -19.3549,
+        "volumeExpansion": 1.0541,
+        "distanceFromVwapBps": -7.9381,
+        "breakoutDistanceBps": -19.3307,
+        "compressionPct": 34.3501,
+        "maxExecutableBuyUsd": 9,
+        "maxExecutableSellUsd": 0
+      },
+      "rejectionReasons": [
+        {
+          "layer": "expected_value",
+          "code": "expected_net_edge_below_threshold",
+          "summary": "Expected net edge does not clear the minimum threshold.",
+          "detail": "Expected net edge -3.07 bps is below 4.00 bps.",
+          "metrics": {
+            "expectedNetEdgeBps": -3.07,
+            "minNetEdgeBps": 4
+          }
+        }
+      ]
+    },
+    "reason": "consensus not execution eligible",
+    "normalizedSize": 0,
+    "response": {
+      "executionEligible": false
+    }
+  },
+  {
+    "id": "intent_1776405332776_ue3c9o",
+    "createdAt": "2026-04-17T05:55:32.776Z",
+    "updatedAt": "2026-04-17T05:55:32.797Z",
+    "symbol": "BTC-EUR",
+    "timeframe": "30m",
+    "decision": "HOLD",
+    "confidence": 0.49,
+    "targetSize": 4.9,
+    "status": "hold",
+    "decisionSnapshot": {
+      "signal": "BUY",
+      "directionalSignal": "BUY",
+      "decision": "HOLD",
+      "confidence": 0.49,
+      "agreement": 0.412,
+      "executionEligible": false,
+      "decisionSource": "deterministic",
+      "expectedNetEdgeBps": -6.92,
+      "marketQualityScore": 0.946,
+      "riskFlags": [
+        "slippage_elevated"
+      ],
+      "featureSummary": {
+        "return3Bps": -7.7224,
+        "return10Bps": -53.5889,
+        "volatilityShortBps": 12.103,
+        "volatilityLongBps": 20.3928,
+        "spreadBps": 0.0158,
+        "buySlippageBps": 1.7823,
+        "sellSlippageBps": 0,
+        "orderBookImbalancePct": -89.7345,
+        "topBookPressurePct": -20.3166,
+        "volumeExpansion": 1.0541,
+        "distanceFromVwapBps": -7.9381,
+        "breakoutDistanceBps": -19.3307,
+        "compressionPct": 34.3501,
+        "maxExecutableBuyUsd": 9,
+        "maxExecutableSellUsd": 0
+      },
+      "rejectionReasons": [
+        {
+          "layer": "expected_value",
+          "code": "expected_net_edge_below_threshold",
+          "summary": "Expected net edge does not clear the minimum threshold.",
+          "detail": "Expected net edge -6.92 bps is below 4.00 bps.",
+          "metrics": {
+            "expectedNetEdgeBps": -6.92,
+            "minNetEdgeBps": 4
+          }
+        }
+      ]
+    },
+    "reason": "consensus not execution eligible",
+    "normalizedSize": 0,
+    "response": {
+      "executionEligible": false
+    }
+  },
+  {
+    "id": "intent_1776405267783_m6v0q9",
+    "createdAt": "2026-04-17T05:54:27.783Z",
+    "updatedAt": "2026-04-17T05:54:27.811Z",
+    "symbol": "BTC-EUR",
+    "timeframe": "30m",
+    "decision": "HOLD",
+    "confidence": 0.49,
+    "targetSize": 4.9,
+    "status": "hold",
+    "decisionSnapshot": {
+      "signal": "BUY",
+      "directionalSignal": "BUY",
+      "decision": "HOLD",
+      "confidence": 0.49,
+      "agreement": 0.391,
+      "executionEligible": false,
+      "decisionSource": "deterministic",
+      "expectedNetEdgeBps": -7.16,
+      "marketQualityScore": 0.946,
+      "riskFlags": [
+        "slippage_elevated"
+      ],
+      "featureSummary": {
+        "return3Bps": -7.7224,
+        "return10Bps": -53.5889,
+        "volatilityShortBps": 12.103,
+        "volatilityLongBps": 20.3928,
+        "spreadBps": 0.0158,
+        "buySlippageBps": 1.7823,
+        "sellSlippageBps": 0,
+        "orderBookImbalancePct": -92.2007,
+        "topBookPressurePct": -58.116,
+        "volumeExpansion": 1.0541,
+        "distanceFromVwapBps": -7.9381,
+        "breakoutDistanceBps": -19.3307,
+        "compressionPct": 34.3501,
+        "maxExecutableBuyUsd": 9,
+        "maxExecutableSellUsd": 0
+      },
+      "rejectionReasons": [
+        {
+          "layer": "expected_value",
+          "code": "expected_net_edge_below_threshold",
+          "summary": "Expected net edge does not clear the minimum threshold.",
+          "detail": "Expected net edge -7.16 bps is below 4.00 bps.",
+          "metrics": {
+            "expectedNetEdgeBps": -7.16,
+            "minNetEdgeBps": 4
+          }
+        }
+      ]
+    },
+    "reason": "consensus not execution eligible",
+    "normalizedSize": 0,
+    "response": {
+      "executionEligible": false
+    }
+  },
+  {
+    "id": "intent_1776405202924_cgbn6r",
+    "createdAt": "2026-04-17T05:53:22.924Z",
+    "updatedAt": "2026-04-17T05:53:22.985Z",
+    "symbol": "BTC-EUR",
+    "timeframe": "30m",
+    "decision": "HOLD",
+    "confidence": 0.49,
+    "targetSize": 4.9,
+    "status": "hold",
+    "decisionSnapshot": {
+      "signal": "BUY",
+      "directionalSignal": "BUY",
+      "decision": "HOLD",
+      "confidence": 0.49,
+      "agreement": 0.451,
+      "executionEligible": false,
+      "decisionSource": "deterministic",
+      "expectedNetEdgeBps": -8.37,
+      "marketQualityScore": 0.927,
+      "riskFlags": [
+        "slippage_elevated"
+      ],
+      "featureSummary": {
+        "return3Bps": -7.7224,
+        "return10Bps": -53.5889,
+        "volatilityShortBps": 12.103,
+        "volatilityLongBps": 20.3928,
+        "spreadBps": 0.0158,
+        "buySlippageBps": 3.533,
+        "sellSlippageBps": 0,
+        "orderBookImbalancePct": -51.1861,
+        "topBookPressurePct": -20.2571,
+        "volumeExpansion": 1.0541,
+        "distanceFromVwapBps": -7.9381,
+        "breakoutDistanceBps": -19.3307,
+        "compressionPct": 34.3501,
+        "maxExecutableBuyUsd": 9,
+        "maxExecutableSellUsd": 0
+      },
+      "rejectionReasons": [
+        {
+          "layer": "expected_value",
+          "code": "expected_net_edge_below_threshold",
+          "summary": "Expected net edge does not clear the minimum threshold.",
+          "detail": "Expected net edge -8.37 bps is below 4.00 bps.",
+          "metrics": {
+            "expectedNetEdgeBps": -8.37,
+            "minNetEdgeBps": 4
+          }
+        }
+      ]
+    },
+    "reason": "consensus not execution eligible",
+    "normalizedSize": 0,
+    "response": {
+      "executionEligible": false
+    }
+  },
+  {
+    "id": "intent_1776405137786_wh6pwe",
+    "createdAt": "2026-04-17T05:52:17.786Z",
+    "updatedAt": "2026-04-17T05:52:17.801Z",
+    "symbol": "BTC-EUR",
+    "timeframe": "30m",
+    "decision": "HOLD",
+    "confidence": 0.49,
+    "targetSize": 4.9,
+    "status": "hold",
+    "decisionSnapshot": {
+      "signal": "BUY",
+      "directionalSignal": "BUY",
+      "decision": "HOLD",
+      "confidence": 0.49,
+      "agreement": 0.52,
+      "executionEligible": false,
+      "decisionSource": "deterministic",
+      "expectedNetEdgeBps": -5.11,
+      "marketQualityScore": 0.945,
+      "riskFlags": [
+        "slippage_elevated"
+      ],
+      "featureSummary": {
+        "return3Bps": -7.7224,
+        "return10Bps": -53.5889,
+        "volatilityShortBps": 12.103,
+        "volatilityLongBps": 20.3928,
+        "spreadBps": 0.0158,
+        "buySlippageBps": 1.8927,
+        "sellSlippageBps": 0,
+        "orderBookImbalancePct": 83.9924,
+        "topBookPressurePct": 0,
+        "volumeExpansion": 1.0541,
+        "distanceFromVwapBps": -7.9381,
+        "breakoutDistanceBps": -19.3307,
+        "compressionPct": 34.3501,
+        "maxExecutableBuyUsd": 9,
+        "maxExecutableSellUsd": 0
+      },
+      "rejectionReasons": [
+        {
+          "layer": "expected_value",
+          "code": "expected_net_edge_below_threshold",
+          "summary": "Expected net edge does not clear the minimum threshold.",
+          "detail": "Expected net edge -5.11 bps is below 4.00 bps.",
+          "metrics": {
+            "expectedNetEdgeBps": -5.11,
+            "minNetEdgeBps": 4
+          }
+        }
+      ]
+    },
+    "reason": "consensus not execution eligible",
+    "normalizedSize": 0,
+    "response": {
+      "executionEligible": false
+    }
+  },
+  {
+    "id": "intent_1776405075760_kjwj62",
+    "createdAt": "2026-04-17T05:51:15.759Z",
+    "updatedAt": "2026-04-17T05:51:15.791Z",
+    "symbol": "BTC-EUR",
+    "timeframe": "30m",
+    "decision": "HOLD",
+    "confidence": 0.49,
+    "targetSize": 4.9,
+    "status": "hold",
+    "decisionSnapshot": {
+      "signal": "BUY",
+      "directionalSignal": "BUY",
+      "decision": "HOLD",
+      "confidence": 0.49,
+      "agreement": 0.52,
+      "executionEligible": false,
+      "decisionSource": "deterministic",
+      "expectedNetEdgeBps": -3.43,
+      "marketQualityScore": 0.967,
+      "riskFlags": [
+        "slippage_elevated"
+      ],
+      "featureSummary": {
+        "return3Bps": -7.7224,
+        "return10Bps": -53.5889,
+        "volatilityShortBps": 12.103,
+        "volatilityLongBps": 20.3928,
+        "spreadBps": 0.0158,
+        "buySlippageBps": 0,
+        "sellSlippageBps": 0.9621,
+        "orderBookImbalancePct": 48.5682,
+        "topBookPressurePct": 0.0675,
+        "volumeExpansion": 1.0541,
+        "distanceFromVwapBps": -7.9381,
+        "breakoutDistanceBps": -19.3307,
+        "compressionPct": 34.3501,
+        "maxExecutableBuyUsd": 9,
+        "maxExecutableSellUsd": 0
+      },
+      "rejectionReasons": [
+        {
+          "layer": "expected_value",
+          "code": "expected_net_edge_below_threshold",
+          "summary": "Expected net edge does not clear the minimum threshold.",
+          "detail": "Expected net edge -3.43 bps is below 4.00 bps.",
+          "metrics": {
+            "expectedNetEdgeBps": -3.43,
+            "minNetEdgeBps": 4
+          }
+        }
+      ]
+    },
+    "reason": "consensus not execution eligible",
+    "normalizedSize": 0,
+    "response": {
+      "executionEligible": false
+    }
+  },
+  {
+    "id": "intent_1776405012741_t8hl7m",
+    "createdAt": "2026-04-17T05:50:12.741Z",
+    "updatedAt": "2026-04-17T05:50:12.765Z",
+    "symbol": "BTC-EUR",
+    "timeframe": "30m",
+    "decision": "HOLD",
+    "confidence": 0.49,
+    "targetSize": 4.9,
+    "status": "hold",
+    "decisionSnapshot": {
+      "signal": "BUY",
+      "directionalSignal": "BUY",
+      "decision": "HOLD",
+      "confidence": 0.49,
+      "agreement": 0.52,
+      "executionEligible": false,
+      "decisionSource": "deterministic",
+      "expectedNetEdgeBps": -3.07,
+      "marketQualityScore": 0.967,
+      "riskFlags": [
+        "slippage_elevated"
+      ],
+      "featureSummary": {
+        "return3Bps": -7.7224,
+        "return10Bps": -53.5889,
+        "volatilityShortBps": 12.103,
+        "volatilityLongBps": 20.3928,
+        "spreadBps": 0.0158,
+        "buySlippageBps": 0,
+        "sellSlippageBps": 0.9621,
+        "orderBookImbalancePct": 92.9578,
+        "topBookPressurePct": -19.3549,
+        "volumeExpansion": 1.0541,
+        "distanceFromVwapBps": -7.9381,
+        "breakoutDistanceBps": -19.3307,
+        "compressionPct": 34.3501,
+        "maxExecutableBuyUsd": 9,
+        "maxExecutableSellUsd": 0
+      },
+      "rejectionReasons": [
+        {
+          "layer": "expected_value",
+          "code": "expected_net_edge_below_threshold",
+          "summary": "Expected net edge does not clear the minimum threshold.",
+          "detail": "Expected net edge -3.07 bps is below 4.00 bps.",
+          "metrics": {
+            "expectedNetEdgeBps": -3.07,
+            "minNetEdgeBps": 4
+          }
+        }
+      ]
+    },
+    "reason": "consensus not execution eligible",
+    "normalizedSize": 0,
+    "response": {
+      "executionEligible": false
+    }
+  },
+  {
+    "id": "intent_1776404949679_g35wdc",
+    "createdAt": "2026-04-17T05:49:09.679Z",
+    "updatedAt": "2026-04-17T05:49:09.700Z",
+    "symbol": "BTC-EUR",
+    "timeframe": "30m",
+    "decision": "HOLD",
+    "confidence": 0.49,
+    "targetSize": 4.9,
+    "status": "hold",
+    "decisionSnapshot": {
+      "signal": "BUY",
+      "directionalSignal": "BUY",
+      "decision": "HOLD",
+      "confidence": 0.49,
+      "agreement": 0.392,
+      "executionEligible": false,
+      "decisionSource": "deterministic",
+      "expectedNetEdgeBps": -7.02,
+      "marketQualityScore": 0.948,
+      "riskFlags": [
+        "slippage_elevated"
+      ],
+      "featureSummary": {
+        "return3Bps": -7.7224,
+        "return10Bps": -53.5889,
+        "volatilityShortBps": 12.103,
+        "volatilityLongBps": 20.3928,
+        "spreadBps": 0.0158,
+        "buySlippageBps": 1.6561,
+        "sellSlippageBps": 0,
+        "orderBookImbalancePct": -91.8846,
+        "topBookPressurePct": -57.4463,
+        "volumeExpansion": 1.0541,
+        "distanceFromVwapBps": -7.9381,
+        "breakoutDistanceBps": -19.3307,
+        "compressionPct": 34.3501,
+        "maxExecutableBuyUsd": 9,
+        "maxExecutableSellUsd": 0
+      },
+      "rejectionReasons": [
+        {
+          "layer": "expected_value",
+          "code": "expected_net_edge_below_threshold",
+          "summary": "Expected net edge does not clear the minimum threshold.",
+          "detail": "Expected net edge -7.02 bps is below 4.00 bps.",
+          "metrics": {
+            "expectedNetEdgeBps": -7.02,
+            "minNetEdgeBps": 4
+          }
+        }
+      ]
+    },
+    "reason": "consensus not execution eligible",
+    "normalizedSize": 0,
+    "response": {
+      "executionEligible": false
+    }
+  },
+  {
+    "id": "intent_1776404886723_egpiil",
+    "createdAt": "2026-04-17T05:48:06.723Z",
+    "updatedAt": "2026-04-17T05:48:06.743Z",
+    "symbol": "BTC-EUR",
+    "timeframe": "30m",
+    "decision": "HOLD",
+    "confidence": 0.49,
+    "targetSize": 4.9,
+    "status": "hold",
+    "decisionSnapshot": {
+      "signal": "BUY",
+      "directionalSignal": "BUY",
+      "decision": "HOLD",
+      "confidence": 0.49,
+      "agreement": 0.52,
+      "executionEligible": false,
+      "decisionSource": "deterministic",
+      "expectedNetEdgeBps": -5.28,
+      "marketQualityScore": 0.948,
+      "riskFlags": [
+        "slippage_elevated"
+      ],
+      "featureSummary": {
+        "return3Bps": -7.7224,
+        "return10Bps": -53.5889,
+        "volatilityShortBps": 12.103,
+        "volatilityLongBps": 20.3928,
+        "spreadBps": 0.0158,
+        "buySlippageBps": 1.7034,
+        "sellSlippageBps": 0,
+        "orderBookImbalancePct": 48.0345,
+        "topBookPressurePct": -0.6046,
+        "volumeExpansion": 1.0541,
+        "distanceFromVwapBps": -7.9381,
+        "breakoutDistanceBps": -19.3307,
+        "compressionPct": 34.3501,
+        "maxExecutableBuyUsd": 9,
+        "maxExecutableSellUsd": 0
+      },
+      "rejectionReasons": [
+        {
+          "layer": "expected_value",
+          "code": "expected_net_edge_below_threshold",
+          "summary": "Expected net edge does not clear the minimum threshold.",
+          "detail": "Expected net edge -5.28 bps is below 4.00 bps.",
+          "metrics": {
+            "expectedNetEdgeBps": -5.28,
+            "minNetEdgeBps": 4
+          }
+        }
+      ]
+    },
+    "reason": "consensus not execution eligible",
+    "normalizedSize": 0,
+    "response": {
+      "executionEligible": false
+    }
+  },
+  {
     "id": "intent_1776404555379_yun8vo",
     "createdAt": "2026-04-17T05:42:35.378Z",
     "updatedAt": "2026-04-17T05:42:35.420Z",
