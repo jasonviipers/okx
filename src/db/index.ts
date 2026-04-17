@@ -33,18 +33,25 @@ const client = createClient({
 
 const db = drizzle(client, { schema });
 
-if (!existsSync(migrationJournalPath)) {
-  console.error(
-    `Migration assets missing at ${migrationJournalPath}. Copy src/db/migrations into the runtime image or set DB_MIGRATIONS_DIR.`,
-  );
-  process.exit(1);
-}
+// Skip migrations during `next build`. The build spawns many parallel workers
+// that all import this module at the same time, causing SQLITE_BUSY races.
+// Migrations run at server startup instead (when only one process is active).
+const isBuildPhase = process.env.NEXT_PHASE === "phase-production-build";
 
-// Auto-migrate on startup. Runs any pending migrations and no-ops if up to date.
-migrate(db, { migrationsFolder }).catch((err) => {
-  console.error("Migration failed:", err);
-  process.exit(1);
-});
+if (!isBuildPhase) {
+  if (!existsSync(migrationJournalPath)) {
+    console.error(
+      `Migration assets missing at ${migrationJournalPath}. Copy src/db/migrations into the runtime image or set DB_MIGRATIONS_DIR.`,
+    );
+    process.exit(1);
+  }
+
+  // Auto-migrate on startup. Runs any pending migrations and no-ops if up to date.
+  migrate(db, { migrationsFolder }).catch((err) => {
+    console.error("Migration failed:", err);
+    process.exit(1);
+  });
+}
 
 export default db;
 export { dbFilePath };
