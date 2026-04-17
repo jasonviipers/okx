@@ -90,12 +90,18 @@ export function computeConsensus(
     symbol: ctx.symbol,
     timeframe: ctx.timeframe,
     signal: finalSignal ?? "HOLD",
+    directionalSignal: finalSignal ?? "HOLD",
+    directionalConfidence: Number(confidence.toFixed(3)),
+    directionalAgreement: Number(agreement.toFixed(3)),
     confidence: Number(confidence.toFixed(3)),
     agreement: Number(agreement.toFixed(3)),
+    decision: finalSignal ?? "HOLD",
     votes,
     weightedScores,
     validatedAt: new Date().toISOString(),
     blocked: false,
+    executionEligible: (finalSignal ?? "HOLD") !== "HOLD",
+    rejectionReasons: [],
     researchSummary: buildResearchSummary(votes),
   };
 }

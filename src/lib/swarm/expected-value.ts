@@ -1,5 +1,9 @@
 import type { MarketContext } from "@/types/market";
-import type { ConsensusResult, ExpectedValueReport } from "@/types/swarm";
+import type { ConsensusResult, RejectionReason, ExpectedValueReport } from "@/types/swarm";
+import {
+  appendRejectionReason,
+  markConsensusBlocked,
+} from "@/lib/swarm/rejection-utils";
 
 const DEFAULT_EXPECTED_FEE_BPS = 10;
 const DEFAULT_MIN_NET_EDGE_BPS = 8;
@@ -51,10 +55,9 @@ export function applyExpectedValueGate(
 
   const notes: string[] = [];
   let tradeAllowed = true;
-  let nextSignal = consensus.signal;
   let nextConfidence = consensus.confidence;
-  let blocked = consensus.blocked;
-  let blockReason = consensus.blockReason;
+  let nextConsensus = consensus;
+  const rejectionReasons: RejectionReason[] = [];
 
   if (consensus.signal === "HOLD") {
     tradeAllowed = false;
@@ -64,21 +67,56 @@ export function applyExpectedValueGate(
   } else {
     if (netEdgeBps < minNetEdgeBps) {
       tradeAllowed = false;
+      rejectionReasons.push({
+        layer: "expected_value",
+        code: "net_edge_below_threshold",
+        summary: "Expected net edge does not clear the minimum threshold.",
+        detail: `Estimated net edge ${netEdgeBps.toFixed(2)} bps is below ${minNetEdgeBps.toFixed(2)} bps.`,
+        metrics: {
+          netEdgeBps: Number(netEdgeBps.toFixed(4)),
+          minNetEdgeBps: Number(minNetEdgeBps.toFixed(4)),
+          grossEdgeBps: Number(grossEdgeBps.toFixed(4)),
+          estimatedFeeBps: Number(estimatedFeeBps.toFixed(4)),
+          estimatedSlippageBps: Number(slippageBps.toFixed(4)),
+        },
+      });
       notes.push("Estimated net edge does not clear the minimum threshold.");
     }
     if (rewardRiskRatio < minRewardRisk) {
       tradeAllowed = false;
+      rejectionReasons.push({
+        layer: "expected_value",
+        code: "reward_risk_below_threshold",
+        summary: "Estimated reward-to-risk is not attractive enough.",
+        detail: `Reward-to-risk ${rewardRiskRatio.toFixed(2)} is below ${minRewardRisk.toFixed(2)}.`,
+        metrics: {
+          rewardRiskRatio: Number(rewardRiskRatio.toFixed(4)),
+          minRewardRisk: Number(minRewardRisk.toFixed(4)),
+        },
+      });
       notes.push("Estimated reward-to-risk is not attractive enough.");
     }
   }
 
+  for (const reason of rejectionReasons) {
+    nextConsensus = appendRejectionReason(nextConsensus, reason);
+  }
+
   if (!tradeAllowed && consensus.signal !== "HOLD") {
-    nextSignal = "HOLD";
     nextConfidence = Math.min(nextConfidence, 0.42);
-    blocked = true;
-    blockReason =
-      blockReason ??
-      "Expected-value gate rejected the setup after fees and slippage.";
+    nextConsensus = markConsensusBlocked(
+      nextConsensus,
+      {
+        layer: "expected_value",
+        code: "expected_value_rejected",
+        summary: "Expected-value gate rejected the setup after fees and slippage.",
+        detail:
+          "The setup failed one or more expected-value thresholds.",
+      },
+      {
+        confidence: nextConfidence,
+      },
+    );
   }
 
   const expectedValue: ExpectedValueReport = {
@@ -93,12 +131,8 @@ export function applyExpectedValueGate(
   };
 
   return {
-    ...consensus,
-    signal: nextSignal,
-    decision: nextSignal,
+    ...nextConsensus,
     confidence: Number(nextConfidence.toFixed(3)),
-    blocked,
-    blockReason,
     expectedValue,
   };
 }

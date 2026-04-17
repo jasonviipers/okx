@@ -1,0 +1,120 @@
+[
+  {
+    "id": "intent_1776389229308_pmusqz",
+    "createdAt": "2026-04-17T01:27:09.308Z",
+    "updatedAt": "2026-04-17T01:27:09.325Z",
+    "symbol": "BTC-USDT",
+    "timeframe": "1H",
+    "decision": "HOLD",
+    "confidence": 0.46,
+    "targetSize": 4.6,
+    "status": "hold",
+    "reason": "consensus not execution eligible",
+    "normalizedSize": 0,
+    "response": {
+      "executionEligible": false
+    }
+  },
+  {
+    "id": "intent_1776388484492_f1fvi8",
+    "createdAt": "2026-04-17T01:14:44.492Z",
+    "updatedAt": "2026-04-17T01:14:44.526Z",
+    "symbol": "BTC-USDT",
+    "timeframe": "1H",
+    "decision": "HOLD",
+    "confidence": 0.466,
+    "targetSize": 4.66,
+    "status": "hold",
+    "reason": "consensus hold",
+    "normalizedSize": 0,
+    "response": {
+      "signal": "HOLD"
+    }
+  },
+  {
+    "id": "intent_1776388393147_ju22ah",
+    "createdAt": "2026-04-17T01:13:13.147Z",
+    "updatedAt": "2026-04-17T01:13:13.169Z",
+    "symbol": "BTC-USDT",
+    "timeframe": "1H",
+    "decision": "HOLD",
+    "confidence": 0.604,
+    "targetSize": 6.04,
+    "status": "hold",
+    "reason": "consensus hold",
+    "normalizedSize": 0,
+    "response": {
+      "signal": "HOLD"
+    }
+  },
+  {
+    "id": "intent_1776387999457_uyept2",
+    "createdAt": "2026-04-17T01:06:39.457Z",
+    "updatedAt": "2026-04-17T01:06:39.475Z",
+    "symbol": "BTC-USDT",
+    "timeframe": "1H",
+    "decision": "HOLD",
+    "confidence": 0.661,
+    "targetSize": 6.61,
+    "status": "hold",
+    "reason": "consensus hold",
+    "normalizedSize": 0,
+    "response": {
+      "signal": "HOLD"
+    }
+  },
+  {
+    "id": "intent_1776387990309_agbii1",
+    "createdAt": "2026-04-17T01:06:30.309Z",
+    "updatedAt": "2026-04-17T01:06:30.477Z",
+    "symbol": "XRP-USDT",
+    "timeframe": "1H",
+    "decision": "BUY",
+    "confidence": 0.743,
+    "targetSize": 7.43,
+    "status": "hold",
+    "reason": "insufficient quote buying power for live buy",
+    "normalizedSize": 0,
+    "response": {
+      "availableQuote": 0,
+      "minTradeNotional": 5,
+      "quoteCurrency": "USDT"
+    }
+  },
+  {
+    "id": "intent_1776387379796_ffax81",
+    "createdAt": "2026-04-17T00:56:19.796Z",
+    "updatedAt": "2026-04-17T00:56:19.942Z",
+    "symbol": "ADA-USDT",
+    "timeframe": "1H",
+    "decision": "BUY",
+    "confidence": 0.653,
+    "targetSize": 6.53,
+    "status": "hold",
+    "reason": "insufficient quote buying power for live buy",
+    "normalizedSize": 0,
+    "response": {
+      "availableQuote": 0,
+      "minTradeNotional": 5,
+      "quoteCurrency": "USDT"
+    }
+  },
+  {
+    "id": "intent_1776387267732_kzhyg2",
+    "createdAt": "2026-04-17T00:54:27.732Z",
+    "updatedAt": "2026-04-17T00:54:27.961Z",
+    "symbol": "LINK-USDT",
+    "timeframe": "1H",
+    "decision": "BUY",
+    "confidence": 0.736,
+    "targetSize": 7.36,
+    "status": "hold",
+    "reason": "insufficient quote buying power for live buy",
+    "normalizedSize": 0,
+    "response": {
+      "availableQuote": 0,
+      "minTradeNotional": 5,
+      "quoteCurrency": "USDT"
+    }
+  }
+]

@@ -16,6 +16,7 @@ import { getHistory } from "@/lib/persistence/history";
 import type {
   ConsensusResult,
   ExecutionResult,
+  RejectionReason,
   TradeSignal,
 } from "@/types/swarm";
 
@@ -61,6 +62,66 @@ function confidencePercent(consensus: ConsensusResult): number {
 
 function deriveSize(confidence: number, maxPositionUsd: number): number {
   return Number(((confidence / 100) * maxPositionUsd).toFixed(8));
+}
+
+function mergeRejectionReasons(
+  base: RejectionReason[],
+  extra: RejectionReason[],
+): RejectionReason[] {
+  const seen = new Set<string>();
+
+  return [...base, ...extra].filter((reason) => {
+    const key = `${reason.layer}:${reason.code}`;
+    if (seen.has(key)) {
+      return false;
+    }
+    seen.add(key);
+    return true;
+  });
+}
+
+function buildHoldResult(input: {
+  timestamp: string;
+  symbol: string;
+  decision: TradeSignal;
+  size: number;
+  reason: string;
+  response?: Record<string, unknown>;
+  rejectionReasons?: RejectionReason[];
+}): ExecutionResult {
+  return {
+    status: "hold",
+    timestamp: input.timestamp,
+    symbol: input.symbol,
+    decision: input.decision,
+    size: input.size,
+    reason: input.reason,
+    response: input.response,
+    rejectionReasons: input.rejectionReasons,
+  };
+}
+
+function buildErrorResult(input: {
+  timestamp: string;
+  symbol: string;
+  decision: TradeSignal;
+  size: number;
+  error: string;
+  response?: Record<string, unknown>;
+  circuitOpen?: boolean;
+  rejectionReasons?: RejectionReason[];
+}): ExecutionResult {
+  return {
+    status: "error",
+    timestamp: input.timestamp,
+    symbol: input.symbol,
+    decision: input.decision,
+    size: input.size,
+    error: input.error,
+    response: input.response,
+    circuitOpen: input.circuitOpen,
+    rejectionReasons: input.rejectionReasons,
+  };
 }
 
 async function deriveExecutableSize(
@@ -263,6 +324,88 @@ function getConsensusKey(
   ].join(":");
 }
 
+function mapExecutionGuardReason(
+  reason: string | undefined,
+  response?: Record<string, unknown>,
+): RejectionReason[] {
+  switch (reason) {
+    case "daily trade limit reached":
+      return [
+        {
+          layer: "execution",
+          code: "daily_trade_limit_reached",
+          summary: "Daily trade limit reached.",
+          detail: "The execution guard rejected the trade due to daily limits.",
+          metrics: response,
+        },
+      ];
+    case "live trading budget exhausted":
+      return [
+        {
+          layer: "execution",
+          code: "live_budget_exhausted",
+          summary: "Live trading budget exhausted.",
+          detail: "The execution guard rejected the trade due to budget limits.",
+          metrics: response,
+        },
+      ];
+    case "existing same-direction position already open":
+      return [
+        {
+          layer: "execution",
+          code: "same_direction_position_exists",
+          summary: "A same-direction position is already open.",
+          detail:
+            "Execution was skipped to avoid stacking the same spot exposure.",
+          metrics: response,
+        },
+      ];
+    case "insufficient quote buying power for live buy":
+      return [
+        {
+          layer: "execution",
+          code: "insufficient_quote_buying_power",
+          summary: "Insufficient quote buying power for BUY.",
+          detail: "Available quote balance cannot support the target order.",
+          metrics: response,
+        },
+      ];
+    case "insufficient base inventory for live sell":
+      return [
+        {
+          layer: "execution",
+          code: "insufficient_base_inventory",
+          summary: "Insufficient base inventory for SELL.",
+          detail:
+            "Spot execution cannot sell more base inventory than is available.",
+          metrics: response,
+        },
+      ];
+    case "instrument rules rejected the order size":
+      return [
+        {
+          layer: "execution",
+          code: "instrument_rules_rejected_size",
+          summary: "Instrument rules rejected the order size.",
+          detail:
+            "Requested order size did not satisfy lot size, min size, or instrument state constraints.",
+          metrics: response,
+        },
+      ];
+    default:
+      return reason
+        ? [
+            {
+              layer: "execution",
+              code: "execution_guard_rejected",
+              summary: reason,
+              metrics: response,
+            },
+          ]
+        : [];
+  }
+}
+
 export async function autoExecuteConsensus(
   consensus: ConsensusResult,
 ): Promise<ExecutionResult> {
@@ -281,8 +424,9 @@ export async function autoExecuteConsensus(
     process.env.MIN_CONFIDENCE_THRESHOLD,
     DEFAULT_MIN_CONFIDENCE_THRESHOLD,
   );
+  const accountMode = getOkxAccountModeLabel();
   const cappedMaxPositionUsd =
-    getOkxAccountModeLabel() === "live" && liveTradingBudgetUsd > 0
+    accountMode === "live" && liveTradingBudgetUsd > 0
       ? Math.min(maxPositionUsd, liveTradingBudgetUsd)
       : maxPositionUsd;
   const targetNotionalUsd = deriveSize(confidence, cappedMaxPositionUsd);
@@ -302,18 +446,23 @@ export async function autoExecuteConsensus(
   }
 
   if (!parseBoolean(process.env.AUTO_EXECUTE_ENABLED, true)) {
-    const result: ExecutionResult = {
-      status: "hold",
+    const result = buildHoldResult({
       timestamp,
       symbol: consensus.symbol,
       decision,
       size: targetNotionalUsd,
       reason: "auto execution disabled",
       response: { autoExecuteEnabled: false },
-    };
-    console.log(
-      `[${timestamp}] [AutoExec] AUTO_EXECUTE_ENABLED=false for ${consensus.symbol} - no order placed`,
-    );
+      rejectionReasons: [
+        {
+          layer: "execution",
+          code: "auto_execute_disabled",
+          summary: "Auto execution is disabled.",
+          detail:
+            "AUTO_EXECUTE_ENABLED is false, so the decision was not routed.",
+        },
+      ],
+    });
     logResult(result);
     await finalizeExecutionIntent(executionIntent.id, result);
     executionResults.set(consensusKey, result);
@@ -321,34 +470,52 @@ export async function autoExecuteConsensus(
   }
 
   if (CIRCUIT_OPEN) {
-    const result: ExecutionResult = {
-      status: "error",
+    const result = buildErrorResult({
       timestamp,
       symbol: consensus.symbol,
       decision,
       size: targetNotionalUsd,
       error: "circuit breaker open",
-      circuitOpen: true,
       response: { circuitOpen: true },
-    };
+      circuitOpen: true,
+      rejectionReasons: [
+        {
+          layer: "execution",
+          code: "circuit_breaker_open",
+          summary: "Circuit breaker is open.",
+          detail:
+            "Execution errors exceeded the configured tolerance window.",
+        },
+      ],
+    });
     logResult(result);
     await finalizeExecutionIntent(executionIntent.id, result);
     return result;
   }
 
-  if (decision === "HOLD") {
-    const result: ExecutionResult = {
-      status: "hold",
+  if (!consensus.executionEligible || decision === "HOLD") {
+    const result = buildHoldResult({
       timestamp,
       symbol: consensus.symbol,
       decision,
       size: 0,
-      reason: "consensus hold",
-      response: { signal: "HOLD" },
-    };
-    console.log(
-      `[${timestamp}] [AutoExec] HOLD signal received for ${consensus.symbol} - no order placed`,
-    );
+      reason: "consensus not execution eligible",
+      response: {
+        executionEligible: consensus.executionEligible,
+      },
+      rejectionReasons:
+        consensus.rejectionReasons.length > 0
+          ? consensus.rejectionReasons
+          : [
+              {
+                layer: "execution",
+                code: "directional_hold",
+                summary: "The decision engine returned HOLD.",
+                detail:
+                  "No executable directional edge was available for this setup.",
+              },
+            ],
+    });
     logResult(result);
     await finalizeExecutionIntent(executionIntent.id, result);
     executionResults.set(consensusKey, result);
@@ -356,8 +523,7 @@ export async function autoExecuteConsensus(
   }
 
   if (confidence < minConfidenceThreshold) {
-    const result: ExecutionResult = {
-      status: "hold",
+    const result = buildHoldResult({
       timestamp,
       symbol: consensus.symbol,
       decision,
@@ -367,10 +533,21 @@ export async function autoExecuteConsensus(
         confidence,
         minConfidenceThreshold,
       },
-    };
-    console.log(
-      `[${timestamp}] [AutoExec] ${decision} skipped for ${consensus.symbol} due to confidence threshold`,
-    );
+      rejectionReasons: mergeRejectionReasons(consensus.rejectionReasons, [
+        {
+          layer: "execution",
+          code: "execution_confidence_below_min",
+          summary: "Execution confidence is below the minimum threshold.",
+          detail: `Confidence ${confidence.toFixed(2)} is below ${minConfidenceThreshold.toFixed(2)}.`,
+          metrics: {
+            confidence: Number(confidence.toFixed(4)),
+            minConfidenceThreshold: Number(
+              minConfidenceThreshold.toFixed(4),
+            ),
+          },
+        },
+      ]),
+    });
     logResult(result);
     await finalizeExecutionIntent(executionIntent.id, result);
     executionResults.set(consensusKey, result);
@@ -382,9 +559,43 @@ export async function autoExecuteConsensus(
       consensus.symbol,
       consensus.timeframe,
     );
+
+    if (accountMode === "live" && !marketSnapshot.status.realtime) {
+      const result = buildHoldResult({
+        timestamp,
+        symbol: consensus.symbol,
+        decision,
+        size: 0,
+        reason: "live trading requires realtime websocket market data",
+        response: {
+          marketStatus: marketSnapshot.status,
+        },
+        rejectionReasons: mergeRejectionReasons(consensus.rejectionReasons, [
+          {
+            layer: "market_data",
+            code: "realtime_market_data_required",
+            summary: "Live trading requires realtime websocket market data.",
+            detail:
+              "The execution path rejected the trade because market data was not realtime.",
+            metrics: {
+              realtime: marketSnapshot.status.realtime,
+              connectionState: marketSnapshot.status.connectionState,
+            },
+          },
+        ]),
+      });
+      logResult(result);
+      await finalizeExecutionIntent(executionIntent.id, result, {
+        response: {
+          marketStatus: marketSnapshot.status,
+        },
+      });
+      executionResults.set(consensusKey, result);
+      return result;
+    }
+
     if (!marketSnapshot.status.tradeable) {
-      const result: ExecutionResult = {
-        status: "hold",
+      const result = buildHoldResult({
         timestamp,
         symbol: consensus.symbol,
         decision,
@@ -393,7 +604,21 @@ export async function autoExecuteConsensus(
         response: {
           marketStatus: marketSnapshot.status,
         },
-      };
+        rejectionReasons: mergeRejectionReasons(consensus.rejectionReasons, [
+          {
+            layer: "market_data",
+            code: "market_not_tradeable",
+            summary: "Market data status is not tradeable.",
+            detail:
+              "The execution path rejected the trade because the market snapshot was not eligible for trading.",
+            metrics: {
+              realtime: marketSnapshot.status.realtime,
+              stale: marketSnapshot.status.stale,
+              connectionState: marketSnapshot.status.connectionState,
+            },
+          },
+        ]),
+      });
       logResult(result);
       await finalizeExecutionIntent(executionIntent.id, result, {
         response: {
@@ -406,15 +631,18 @@ export async function autoExecuteConsensus(
 
     const riskGuard = await checkExecutionRiskGuards(consensus, decision);
     if (!riskGuard.allowed) {
-      const result: ExecutionResult = {
-        status: "hold",
+      const result = buildHoldResult({
         timestamp,
         symbol: consensus.symbol,
         decision,
         size: 0,
-        reason: riskGuard.reason,
+        reason: riskGuard.reason ?? "execution risk guard rejected the trade",
         response: riskGuard.response,
-      };
+        rejectionReasons: mergeRejectionReasons(
+          consensus.rejectionReasons,
+          mapExecutionGuardReason(riskGuard.reason, riskGuard.response),
+        ),
+      });
       logResult(result);
       await finalizeExecutionIntent(executionIntent.id, result);
       executionResults.set(consensusKey, result);
@@ -427,15 +655,18 @@ export async function autoExecuteConsensus(
       targetNotionalUsd,
     );
     if (executionPlan.size <= 0) {
-      const result: ExecutionResult = {
-        status: "hold",
+      const result = buildHoldResult({
         timestamp,
         symbol: consensus.symbol,
         decision,
         size: 0,
         reason: executionPlan.reason ?? "no executable size available",
         response: executionPlan.response,
-      };
+        rejectionReasons: mergeRejectionReasons(
+          consensus.rejectionReasons,
+          mapExecutionGuardReason(executionPlan.reason, executionPlan.response),
+        ),
+      });
       logResult(result);
       await finalizeExecutionIntent(executionIntent.id, result);
       executionResults.set(consensusKey, result);
@@ -452,27 +683,30 @@ export async function autoExecuteConsensus(
       normalizedSize < instrumentRules.minSize ||
       normalizedSize <= 0
     ) {
-      const result: ExecutionResult = {
-        status: "hold",
+      const response = {
+        instrumentRules,
+        requestedSize: executionPlan.size,
+        normalizedSize,
+      };
+      const result = buildHoldResult({
         timestamp,
         symbol: consensus.symbol,
         decision,
         size: 0,
         reason: "instrument rules rejected the order size",
-        response: {
-          instrumentRules,
-          requestedSize: executionPlan.size,
-          normalizedSize,
-        },
-      };
+        response,
+        rejectionReasons: mergeRejectionReasons(
+          consensus.rejectionReasons,
+          mapExecutionGuardReason(
+            "instrument rules rejected the order size",
+            response,
+          ),
+        ),
+      });
       logResult(result);
       await finalizeExecutionIntent(executionIntent.id, result, {
         normalizedSize,
-        response: {
-          instrumentRules,
-          requestedSize: executionPlan.size,
-          normalizedSize,
-        },
+        response,
       });
       executionResults.set(consensusKey, result);
       return result;
@@ -515,8 +749,7 @@ export async function autoExecuteConsensus(
 
     if (!response.ok) {
       recordExecutionError(Date.now());
-      const result: ExecutionResult = {
-        status: "error",
+      const result = buildErrorResult({
         timestamp,
         symbol: consensus.symbol,
         decision,
@@ -529,7 +762,20 @@ export async function autoExecuteConsensus(
           payload,
         },
         circuitOpen: CIRCUIT_OPEN,
-      };
+        rejectionReasons: mergeRejectionReasons(consensus.rejectionReasons, [
+          {
+            layer: "execution",
+            code: "execution_request_failed",
+            summary: "Execution request failed.",
+            detail:
+              payload?.error ?? `Execution request failed: ${response.status}`,
+            metrics: {
+              status: response.status,
+              normalizedSize: Number(normalizedSize.toFixed(8)),
+            },
+          },
+        ]),
+      });
       console.error(
         `[${timestamp}] [AutoExec] execution error for ${decision} ${consensus.symbol}: ${JSON.stringify(payload)}`,
       );
@@ -579,8 +825,7 @@ export async function autoExecuteConsensus(
     return result;
   } catch (error) {
     recordExecutionError(Date.now());
-    const result: ExecutionResult = {
-      status: "error",
+    const result = buildErrorResult({
       timestamp,
       symbol: consensus.symbol,
       decision,
@@ -591,7 +836,16 @@ export async function autoExecuteConsensus(
           error instanceof Error ? error.message : "Unknown execution error",
       },
       circuitOpen: CIRCUIT_OPEN,
-    };
+      rejectionReasons: mergeRejectionReasons(consensus.rejectionReasons, [
+        {
+          layer: "execution",
+          code: "unexpected_execution_error",
+          summary: "Unexpected execution error.",
+          detail:
+            error instanceof Error ? error.message : "Unknown execution error",
+        },
+      ]),
+    });
     console.error(
       `[${timestamp}] [AutoExec] execution error for ${decision} ${consensus.symbol}:`,
       error,

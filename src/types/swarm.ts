@@ -4,6 +4,15 @@ import type { DecisionHarnessReport, MemorySummary } from "@/types/memory";
 import type { Order } from "@/types/trade";
 
 export type TradeSignal = "BUY" | "SELL" | "HOLD";
+export type RejectionLayer =
+  | "validator"
+  | "meta_selector"
+  | "expected_value"
+  | "reliability"
+  | "harness"
+  | "market_data"
+  | "execution"
+  | "autonomy";
 export type MarketRegime =
   | "trend"
   | "breakout"
@@ -104,10 +113,21 @@ export interface ReliabilityReport {
   generatedAt: string;
 }
 
+export interface RejectionReason {
+  layer: RejectionLayer;
+  code: string;
+  summary: string;
+  detail?: string;
+  metrics?: Record<string, unknown>;
+}
+
 export interface ConsensusResult {
   symbol: string;
   timeframe: Timeframe;
   signal: TradeSignal;
+  directionalSignal: TradeSignal;
+  directionalConfidence: number;
+  directionalAgreement: number;
   decision?: TradeSignal;
   confidence: number;
   agreement: number;
@@ -115,7 +135,9 @@ export interface ConsensusResult {
   weightedScores: Record<TradeSignal, number>;
   validatedAt: string;
   blocked: boolean;
+  executionEligible: boolean;
   blockReason?: string;
+  rejectionReasons: RejectionReason[];
   memory?: MemorySummary;
   harness?: DecisionHarnessReport;
   regime?: RegimeAnalysis;
@@ -139,6 +161,7 @@ export interface ExecutionResult {
   response?: unknown;
   error?: string;
   circuitOpen?: boolean;
+  rejectionReasons?: RejectionReason[];
 }
 
 export interface SwarmRunResult {
@@ -149,6 +172,7 @@ export interface SwarmRunResult {
 }
 
 export interface SwarmStreamEvent {
+  id?: string;
   type: "status" | "vote" | "consensus" | "heartbeat" | "error" | "pipeline";
   timestamp: string;
   symbol?: string;

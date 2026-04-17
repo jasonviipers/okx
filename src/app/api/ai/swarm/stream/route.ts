@@ -18,8 +18,19 @@ export async function GET(req: NextRequest) {
 
   const readable = new ReadableStream({
     async start(controller) {
+      let eventCounter = 0;
       const sendEvent = (data: SwarmStreamEvent) => {
-        controller.enqueue(encoder.encode(`data: ${JSON.stringify(data)}\n\n`));
+        eventCounter += 1;
+        controller.enqueue(
+          encoder.encode(
+            `data: ${JSON.stringify({
+              ...data,
+              id:
+                data.id ??
+                `${symbol}-${timeframe}-${Date.now()}-${eventCounter}-${data.type}`,
+            })}\n\n`,
+          ),
+        );
       };
 
       try {
@@ -138,6 +149,20 @@ export async function GET(req: NextRequest) {
               pipeline: {
                 stage,
                 detail,
+              },
+            });
+          }
+
+          for (const rejectionReason of consensus.rejectionReasons) {
+            sendEvent({
+              type: "pipeline",
+              timestamp: new Date().toISOString(),
+              symbol,
+              timeframe,
+              message: rejectionReason.summary,
+              pipeline: {
+                stage: rejectionReason.layer,
+                detail: rejectionReason.summary,
               },
             });
           }

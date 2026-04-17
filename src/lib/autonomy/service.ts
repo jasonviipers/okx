@@ -1,5 +1,6 @@
 import "server-only";
 
+import { getOkxAccountModeLabel } from "@/lib/configs/okx";
 import {
   getMarketSnapshot,
   getRealtimeMarketContext,
@@ -14,7 +15,7 @@ import {
 import { getHistory } from "@/lib/persistence/history";
 import { autoExecuteConsensus } from "@/lib/swarm/autoExecute";
 import { runSwarm } from "@/lib/swarm/orchestrator";
-import type { AutonomyStatus } from "@/types/api";
+import type { AutonomyCandidateScore, AutonomyStatus } from "@/types/api";
 import type { Timeframe } from "@/types/market";
 import type { ExecutionResult, SwarmRunResult } from "@/types/swarm";
 
@@ -103,6 +104,9 @@ function toAutonomyStatus(
     budgetUsd: state.budgetUsd ?? 0,
     budgetRemainingUsd,
     inFlight: state.inFlight,
+    lastCandidateScores: state.lastCandidateScores,
+    lastSelectedCandidate: state.lastSelectedCandidate,
+    lastRejectedReasons: state.lastRejectedReasons,
   };
 }
 
@@ -191,6 +195,32 @@ type AutonomySymbolEvaluation = {
   score: number;
 };
 
+function liveExecutionRequiresRealtime() {
+  return getOkxAccountModeLabel() === "live";
+}
+
+function toAutonomyCandidateScore(
+  evaluation: AutonomySymbolEvaluation,
+): AutonomyCandidateScore {
+  const { symbol, snapshot, result, score } = evaluation;
+  const consensus = result.consensus;
+
+  return {
+    symbol,
+    score,
+    tradeable: snapshot.status.tradeable,
+    realtime: snapshot.status.realtime,
+    blocked: consensus.blocked,
+    directionalSignal: consensus.signal,
+    decision: consensus.decision ?? consensus.signal,
+    confidence: consensus.confidence,
+    agreement: consensus.agreement,
+    expectedNetEdgeBps: consensus.expectedValue?.netEdgeBps,
+    marketQualityScore: consensus.harness?.marketQualityScore,
+    rejectionReasons: consensus.rejectionReasons,
+  };
+}
+
 function scoreAutonomyCandidate(
   evaluation: Omit<AutonomySymbolEvaluation, "score">,
 ): number {
@@ -205,13 +235,26 @@ function scoreAutonomyCandidate(
 
   if (
     !snapshot.status.tradeable ||
-    consensus.blocked ||
-    consensus.signal === "HOLD"
+    (liveExecutionRequiresRealtime() && !snapshot.status.realtime) ||
+    !consensus.executionEligible
   ) {
     return 0;
   }
 
-  return Number((confidence * 0.7 + agreement * 0.3).toFixed(6));
+  const expectedNetEdge =
+    consensus.expectedValue?.netEdgeBps !== undefined
+      ? Math.max(0, consensus.expectedValue.netEdgeBps)
+      : 0;
+  const marketQuality = consensus.harness?.marketQualityScore ?? 0.5;
+
+  return Number(
+    (
+      confidence * 0.45 +
+      agreement * 0.15 +
+      Math.min(expectedNetEdge / 25, 1) * 0.25 +
+      marketQuality * 0.15
+    ).toFixed(6),
+  );
 }
 
 async function resolveAutonomySymbols(
@@ -248,6 +291,7 @@ async function selectAutonomyRun(
   state: Awaited<ReturnType<typeof readAutonomyState>>,
 ) {
   const symbols = await resolveAutonomySymbols(state);
+  const evaluations: AutonomySymbolEvaluation[] = [];
   let best: AutonomySymbolEvaluation | undefined;
   const errors: string[] = [];
 
@@ -257,6 +301,7 @@ async function selectAutonomyRun(
         symbol,
         state.timeframe,
       );
+      evaluations.push(evaluation);
       if (!best || evaluation.score > best.score) {
         best = evaluation;
       }
@@ -275,7 +320,11 @@ async function selectAutonomyRun(
     );
   }
 
-  return { best, symbols, errors };
+  const candidateScores = evaluations
+    .map(toAutonomyCandidateScore)
+    .sort((left, right) => right.score - left.score);
+
+  return { best, symbols, errors, candidateScores };
 }
 
 export async function stopAutonomyLoop() {
@@ -342,40 +391,70 @@ export async function dispatchAutonomyWorker(options?: {
   let execution: ExecutionResult | undefined;
 
   try {
-    const { best, symbols, errors } = await selectAutonomyRun(leased);
+    const { best, symbols, errors, candidateScores } = await selectAutonomyRun(
+      leased,
+    );
     const snapshot = best.snapshot;
     const result = best.result;
+    const decision = result.consensus.decision ?? result.consensus.signal;
 
     const inCooldown =
       leased.lastTradeAt !== undefined &&
       Date.now() - leased.lastTradeAt < leased.cooldownMs;
 
-    if (inCooldown && result.consensus.signal !== "HOLD") {
+    if (inCooldown && decision !== "HOLD") {
       execution = {
         status: "hold",
         timestamp: new Date().toISOString(),
         symbol: result.consensus.symbol,
-        decision: result.consensus.signal,
+        decision,
         size: 0,
         reason: "autonomy cooldown active",
         response: {
           cooldownMs: leased.cooldownMs,
         },
+        rejectionReasons: [
+          {
+            layer: "autonomy",
+            code: "autonomy_cooldown_active",
+            summary: "Autonomy cooldown is active.",
+            detail:
+              "The worker skipped execution because the symbol is still cooling down after a recent trade.",
+            metrics: {
+              cooldownMs: leased.cooldownMs,
+            },
+          },
+        ],
       };
     } else if (
-      !snapshot.status.tradeable &&
-      result.consensus.signal !== "HOLD"
+      (!snapshot.status.tradeable ||
+        (liveExecutionRequiresRealtime() && !snapshot.status.realtime)) &&
+      decision !== "HOLD"
     ) {
       execution = {
         status: "hold",
         timestamp: new Date().toISOString(),
         symbol: result.consensus.symbol,
-        decision: result.consensus.signal,
+        decision,
         size: 0,
         reason: "market data not tradeable",
         response: {
           marketStatus: snapshot.status,
         },
+        rejectionReasons: [
+          {
+            layer: "market_data",
+            code: "autonomy_market_not_tradeable",
+            summary: "Autonomy rejected the candidate because market data was not tradeable.",
+            detail:
+              "The worker will not execute on stale or degraded market data.",
+            metrics: {
+              realtime: snapshot.status.realtime,
+              tradeable: snapshot.status.tradeable,
+              connectionState: snapshot.status.connectionState,
+            },
+          },
+        ],
       };
     } else {
       execution = await autoExecuteConsensus(result.consensus);
@@ -393,7 +472,7 @@ export async function dispatchAutonomyWorker(options?: {
       nextRunAt: current.running
         ? new Date(Date.now() + current.intervalMs).toISOString()
         : undefined,
-      lastDecision: result.consensus.signal,
+      lastDecision: decision,
       lastExecutionStatus: execution?.status,
       lastError: execution?.status === "error" ? execution.error : undefined,
       lastReason:
@@ -402,6 +481,11 @@ export async function dispatchAutonomyWorker(options?: {
         (errors.length > 0
           ? `Partial scan issues: ${errors.join("; ")}`
           : undefined),
+      lastCandidateScores: candidateScores,
+      lastSelectedCandidate: toAutonomyCandidateScore(best),
+      lastRejectedReasons:
+        execution?.rejectionReasons ??
+        result.consensus.rejectionReasons,
       iterationCount: current.iterationCount + 1,
       lastTradeAt:
         execution?.status === "success" ? Date.now() : current.lastTradeAt,

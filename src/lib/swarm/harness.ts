@@ -1,6 +1,7 @@
 import "server-only";
 
 import { clampConfidence } from "@/lib/agents/base-agent";
+import { markConsensusBlocked } from "@/lib/swarm/rejection-utils";
 import type { MarketContext } from "@/types/market";
 import type { DecisionHarnessReport, MemorySummary } from "@/types/memory";
 import type { ConsensusResult, TradeSignal } from "@/types/swarm";
@@ -107,16 +108,33 @@ export function applyDecisionHarness(
         : ["Harness found no material reason to adjust the raw consensus."],
   };
 
-  return {
+  let nextConsensus: ConsensusResult = {
     ...consensus,
     confidence: nextConfidence,
-    blocked: consensus.blocked || blockedByHarness,
-    blockReason:
-      consensus.blockReason ??
-      (blockedByHarness
-        ? "Decision harness suppressed the trade after memory and market-quality review."
-        : undefined),
     memory,
     harness,
   };
+
+  if (blockedByHarness) {
+    nextConsensus = markConsensusBlocked(nextConsensus, {
+      layer: "harness",
+      code: "harness_threshold_failed",
+      summary:
+        "Decision harness suppressed the trade after memory and market-quality review.",
+      detail:
+        "Harness confidence or memory-alignment thresholds were not satisfied.",
+      metrics: {
+        confidence: Number((nextConfidence * 100).toFixed(4)),
+        marketQualityScore: Number(
+          (harness.marketQualityScore * 100).toFixed(4),
+        ),
+        memoryAlignmentScore: Number(
+          (memoryAlignmentScore * 100).toFixed(4),
+        ),
+        blockedRatio: Number((memory.blockedRatio * 100).toFixed(4)),
+      },
+    });
+  }
+
+  return nextConsensus;
 }

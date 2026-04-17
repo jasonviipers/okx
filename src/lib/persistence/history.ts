@@ -2,6 +2,7 @@ import "server-only";
 
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { normalizeConsensusResult } from "@/lib/swarm/normalize-consensus";
 import type { StoredHistoryEntry } from "@/types/history";
 import type { SwarmRunResult } from "@/types/swarm";
 import type { Order } from "@/types/trade";
@@ -23,7 +24,15 @@ async function readHistory(): Promise<StoredHistoryEntry[]> {
   await ensureHistoryFile();
   const raw = await readFile(HISTORY_FILE, "utf8");
   try {
-    return JSON.parse(raw) as StoredHistoryEntry[];
+    const entries = JSON.parse(raw) as StoredHistoryEntry[];
+    return entries.map((entry) =>
+      entry.type === "swarm_run"
+        ? {
+            ...entry,
+            consensus: normalizeConsensusResult(entry.consensus),
+          }
+        : entry,
+    );
   } catch {
     return [];
   }

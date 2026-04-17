@@ -1,6 +1,7 @@
 import "server-only";
 
 import { getHistory } from "@/lib/persistence/history";
+import { markConsensusBlocked } from "@/lib/swarm/rejection-utils";
 import type { StoredSwarmRun } from "@/types/history";
 import type { ConsensusResult, ReliabilityReport } from "@/types/swarm";
 
@@ -58,9 +59,7 @@ export async function applyReliabilityWeighting(
   ];
 
   let nextConfidence = consensus.confidence;
-  let nextSignal = consensus.signal;
-  let blocked = consensus.blocked;
-  let blockReason = consensus.blockReason;
+  let nextConsensus = consensus;
 
   if (
     sampleSize >= 8 &&
@@ -68,12 +67,26 @@ export async function applyReliabilityWeighting(
     reliabilityScore < 0.35 &&
     consensus.signal !== "HOLD"
   ) {
-    nextSignal = "HOLD";
     nextConfidence = Math.min(nextConfidence, 0.4);
-    blocked = true;
-    blockReason =
-      blockReason ??
-      "Reliability weighting suppressed the setup due to weak historical fit.";
+    nextConsensus = markConsensusBlocked(
+      nextConsensus,
+      {
+        layer: "reliability",
+        code: "weak_historical_fit",
+        summary:
+          "Reliability weighting suppressed the setup due to weak historical fit.",
+        detail:
+          "Comparable historical runs do not provide enough evidence for live deployment.",
+        metrics: {
+          sampleSize,
+          reliabilityScore: Number(reliabilityScore.toFixed(4)),
+          blockedRate: Number((blockedRate * 100).toFixed(4)),
+        },
+      },
+      {
+        confidence: nextConfidence,
+      },
+    );
     notes.push("Historical reliability is too weak for live deployment.");
   } else if (
     sampleSize >= 8 &&
@@ -95,12 +108,8 @@ export async function applyReliabilityWeighting(
   };
 
   return {
-    ...consensus,
-    signal: nextSignal,
-    decision: nextSignal,
+    ...nextConsensus,
     confidence: Number(nextConfidence.toFixed(3)),
-    blocked,
-    blockReason,
     reliability,
   };
 }

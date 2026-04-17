@@ -1,6 +1,7 @@
 import "server-only";
 
 import { cacheGet, cacheSet } from "@/lib/redis/client";
+import { normalizeConsensusResult } from "@/lib/swarm/normalize-consensus";
 import type { Timeframe } from "@/types/market";
 import type { ConsensusResult } from "@/types/swarm";
 
@@ -15,7 +16,9 @@ export async function getCachedSwarmResult(
   timeframe: Timeframe,
 ): Promise<ConsensusResult | null> {
   const cached = await cacheGet(getSwarmKey(symbol, timeframe));
-  return cached ? (JSON.parse(cached) as ConsensusResult) : null;
+  return cached
+    ? normalizeConsensusResult(JSON.parse(cached) as ConsensusResult)
+    : null;
 }
 
 export async function setCachedSwarmResult(

@@ -2,7 +2,9 @@ import "server-only";
 
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
+import type { AutonomyCandidateScore } from "@/types/api";
 import type { Timeframe } from "@/types/market";
+import type { RejectionReason } from "@/types/swarm";
 
 export type AutonomySelectionMode = "fixed" | "auto";
 
@@ -24,6 +26,9 @@ export interface StoredAutonomyState {
   iterationCount: number;
   lastTradeAt?: number;
   inFlight: boolean;
+  lastCandidateScores?: AutonomyCandidateScore[];
+  lastSelectedCandidate?: AutonomyCandidateScore;
+  lastRejectedReasons?: RejectionReason[];
   leaseId?: string;
   leaseAcquiredAt?: string;
 }

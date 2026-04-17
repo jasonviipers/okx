@@ -4,6 +4,7 @@ import { buildStrategyEngineReports } from "@/lib/swarm/engines";
 import { applyExpectedValueGate } from "@/lib/swarm/expected-value";
 import { applyDecisionHarness } from "@/lib/swarm/harness";
 import { applyMetaSelection } from "@/lib/swarm/meta-selector";
+import { finalizeConsensusDecision } from "@/lib/swarm/rejection-utils";
 import { classifyMarketRegime } from "@/lib/swarm/regime";
 import { applyReliabilityWeighting } from "@/lib/swarm/reliability";
 import { validateConsensus } from "@/lib/swarm/validator";
@@ -31,16 +32,18 @@ export async function buildSwarmDecision(
     ),
   );
 
-  const consensus = applyDecisionHarness(
+  const consensus = finalizeConsensusDecision(
+    applyDecisionHarness(
     validateConsensus(reliabilityWeighted, ctx),
     ctx,
     resolvedMemorySummary,
+    ),
   );
 
   return {
     consensus: {
       ...consensus,
-      decision: consensus.signal,
+      decision: consensus.decision ?? consensus.signal,
     },
     memorySummary: resolvedMemorySummary,
   };

@@ -1,3 +1,5 @@
+import type { RejectionReason, TradeSignal } from "@/types/swarm";
+
 export type DataSource =
   | "okx"
   | "okx_private"
@@ -43,6 +45,21 @@ export interface MarketDataStatus {
   lastEventAt?: string;
 }
 
+export interface AutonomyCandidateScore {
+  symbol: string;
+  score: number;
+  tradeable: boolean;
+  realtime: boolean;
+  blocked: boolean;
+  directionalSignal: TradeSignal;
+  decision: TradeSignal;
+  confidence: number;
+  agreement: number;
+  expectedNetEdgeBps?: number;
+  marketQualityScore?: number;
+  rejectionReasons: RejectionReason[];
+}
+
 export interface AutonomyStatus {
   enabled: boolean;
   configured: boolean;
@@ -64,6 +81,9 @@ export interface AutonomyStatus {
   budgetUsd?: number;
   budgetRemainingUsd?: number;
   inFlight?: boolean;
+  lastCandidateScores?: AutonomyCandidateScore[];
+  lastSelectedCandidate?: AutonomyCandidateScore;
+  lastRejectedReasons?: RejectionReason[];
 }
 
 export interface RuntimeStatus {

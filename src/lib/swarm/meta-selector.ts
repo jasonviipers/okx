@@ -5,6 +5,7 @@ import type {
   StrategyEngine,
   TradeSignal,
 } from "@/types/swarm";
+import { markConsensusBlocked } from "@/lib/swarm/rejection-utils";
 
 const REGIME_ENGINE_PRIORITIES: Record<
   MarketRegime,
@@ -55,13 +56,13 @@ const EMPTY_ENGINE_SCORES: Record<StrategyEngine, number> = {
   none: 0,
 };
 
-function clamp01(value: number): number {
-  return Math.max(0, Math.min(1, value));
-}
-
 const HARD_BLOCK_SUITABILITY = 0.3;
 const MIN_SUPPORTIVE_CONFIDENCE = 0.55;
 const MIN_SUPPORTIVE_AGREEMENT = 0.67;
+
+function clamp01(value: number): number {
+  return Math.max(0, Math.min(1, value));
+}
 
 function determineActionBias(consensus: ConsensusResult): TradeSignal {
   const { BUY, SELL, HOLD } = consensus.weightedScores;
@@ -101,18 +102,25 @@ export function applyMetaSelection(
   const actionBias = determineActionBias(consensus);
   const notes: string[] = [];
 
-  let nextSignal = consensus.signal;
+  let nextDecision = consensus.decision ?? consensus.signal;
   let nextConfidence = consensus.confidence;
-  let blocked = consensus.blocked;
-  let blockReason = consensus.blockReason;
+  let nextConsensus = consensus;
 
   if (regime.regime === "stress" || regime.regime === "illiquid") {
-    nextSignal = "HOLD";
     nextConfidence = Math.min(nextConfidence, 0.35);
-    blocked = true;
-    blockReason =
-      blockReason ??
-      `Meta-selector suppressed trading in ${regime.regime} regime conditions.`;
+    nextConsensus = markConsensusBlocked(nextConsensus, {
+      layer: "meta_selector",
+      code: `regime_${regime.regime}`,
+      summary: `Meta-selector suppressed trading in ${regime.regime} conditions.`,
+      detail: "The active regime is hostile to reliable execution.",
+      metrics: {
+        regime: regime.regime,
+        regimeConfidence: Number((regime.confidence * 100).toFixed(4)),
+      },
+    }, {
+      confidence: nextConfidence,
+    });
+    nextDecision = "HOLD";
     notes.push("Trading disabled because the regime is hostile to execution.");
   } else if (regime.regime === "mean_reversion") {
     if (selectedEngine !== "microstructure") {
@@ -131,12 +139,28 @@ export function applyMetaSelection(
     (consensus.confidence < MIN_SUPPORTIVE_CONFIDENCE ||
       consensus.agreement < MIN_SUPPORTIVE_AGREEMENT)
   ) {
-    nextSignal = "HOLD";
     nextConfidence = Math.min(nextConfidence, 0.4);
-    blocked = true;
-    blockReason =
-      blockReason ??
-      "Meta-selector found weak alignment between the active regime and engine support.";
+    nextConsensus = markConsensusBlocked(
+      nextConsensus,
+      {
+        layer: "meta_selector",
+        code: "weak_regime_engine_alignment",
+        summary:
+          "Meta-selector found weak alignment between the active regime and engine support.",
+        detail:
+          "No strategy engine had enough regime fit to justify execution.",
+        metrics: {
+          suitability: Number((suitability * 100).toFixed(4)),
+          minSuitability: Number((HARD_BLOCK_SUITABILITY * 100).toFixed(4)),
+          confidence: Number((consensus.confidence * 100).toFixed(4)),
+          agreement: Number((consensus.agreement * 100).toFixed(4)),
+        },
+      },
+      {
+        confidence: nextConfidence,
+      },
+    );
+    nextDecision = "HOLD";
     notes.push(
       "No strategy engine has strong enough regime fit to justify a trade.",
     );
@@ -162,7 +186,7 @@ export function applyMetaSelection(
   const metaSelection: MetaSelectionReport = {
     selectedEngine,
     suitability: Number(suitability.toFixed(3)),
-    actionBias: nextSignal === "HOLD" ? "HOLD" : actionBias,
+    actionBias: nextDecision === "HOLD" ? "HOLD" : actionBias,
     engineScores: Object.fromEntries(
       Object.entries(engineScores).map(([key, value]) => [
         key,
@@ -174,12 +198,9 @@ export function applyMetaSelection(
   };
 
   return {
-    ...consensus,
-    signal: nextSignal,
-    decision: nextSignal,
+    ...nextConsensus,
+    decision: nextDecision,
     confidence: Number(nextConfidence.toFixed(3)),
-    blocked,
-    blockReason,
     metaSelection,
   };
 }

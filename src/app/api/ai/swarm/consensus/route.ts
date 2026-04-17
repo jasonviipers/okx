@@ -26,7 +26,7 @@ export async function GET(req: NextRequest) {
 
     if (consensus) {
       const execution =
-        modeConfig.autoExecute && !consensus.blocked
+        modeConfig.autoExecute && consensus.executionEligible
           ? await autoExecuteConsensus(consensus)
           : undefined;
       if (execution) {
@@ -45,7 +45,7 @@ export async function GET(req: NextRequest) {
     const ctx = await getRealtimeMarketContext(symbol, timeframe);
     const result = await runSwarm(ctx);
     const execution =
-      modeConfig.autoExecute && !result.consensus.blocked
+      modeConfig.autoExecute && result.consensus.executionEligible
         ? await autoExecuteConsensus(result.consensus)
         : undefined;
     if (execution) {
