@@ -1,18 +1,18 @@
 [
   {
-    "id": "swarm_1776451728588_y6pk1z",
+    "id": "swarm_1776451774578_b7tg3d",
     "type": "swarm_run",
-    "timestamp": "2026-04-17T18:48:48.588Z",
+    "timestamp": "2026-04-17T18:49:34.578Z",
     "symbol": "BTC-EUR",
     "timeframe": "5m",
     "cached": false,
-    "totalElapsedMs": 13120,
+    "totalElapsedMs": 13138,
     "consensus": {
       "symbol": "BTC-EUR",
       "timeframe": "5m",
       "signal": "SELL",
       "directionalSignal": "SELL",
-      "directionalConfidence": 0.718,
+      "directionalConfidence": 0.716,
       "directionalAgreement": 0.772,
       "decision": "HOLD",
       "confidence": 0.49,
@@ -24,9 +24,9 @@
         "volatilityShortBps": 6.3527,
         "volatilityLongBps": 9.7266,
         "spreadBps": 0.0152,
-        "buySlippageBps": 0.1981,
+        "buySlippageBps": 1.0055,
         "sellSlippageBps": 0,
-        "orderBookImbalancePct": 95.2065,
+        "orderBookImbalancePct": 95.2068,
         "topBookPressurePct": 0.3377,
         "volumeExpansion": 0.123,
         "distanceFromVwapBps": 2.2623,
@@ -55,7 +55,7 @@
           "signal": "HOLD",
           "confidence": 0.436,
           "reasoning": "Trend structure is mixed across the recent candle sequence.",
-          "elapsedMs": 13080,
+          "elapsedMs": 13098,
           "voteWeight": 1,
           "isVetoLayer": false,
           "researchTrace": {
@@ -71,7 +71,7 @@
           "modelRole": "signal_worker",
           "signal": "SELL",
           "confidence": 0.445,
-          "reasoning": "Downside velocity is supported by the latest volume profile. [Rate-limited: heuristic used] Memory: 7 samples | dominant SELL | blocked 100%",
+          "reasoning": "Downside velocity is supported by the latest volume profile. [Rate-limited: heuristic used] Memory: 11 samples | dominant SELL | blocked 100%",
           "elapsedMs": 32,
           "voteWeight": 0.9,
           "isVetoLayer": false,
@@ -85,9 +85,9 @@
           "model": "kimi-k2.5:cloud",
           "role": "sentiment_reader",
           "modelRole": "signal_worker",
-          "signal": "HOLD",
-          "confidence": 0.32,
-          "reasoning": "Order book pressure is balanced; no clear directional edge. [Rate-limited: heuristic used] Memory: 7 samples | dominant SELL | blocked 100%",
+          "signal": "BUY",
+          "confidence": 0.809,
+          "reasoning": "Bid depth dominates and aligns with the session bias. [Rate-limited: heuristic used] Memory: 11 samples | dominant SELL | blocked 100%",
           "elapsedMs": 32,
           "voteWeight": 0.85,
           "isVetoLayer": false,
@@ -103,7 +103,7 @@
           "modelRole": "validator",
           "signal": "HOLD",
           "confidence": 0.374,
-          "reasoning": "Execution conditions are adequate but no confirmed entry signal. [Rate-limited: heuristic used] Memory: 7 samples | dominant SELL | blocked 100%",
+          "reasoning": "Execution conditions are adequate but no confirmed entry signal. [Rate-limited: heuristic used] Memory: 11 samples | dominant SELL | blocked 100%",
           "elapsedMs": 32,
           "voteWeight": 0.8,
           "isVetoLayer": true,
@@ -119,7 +119,7 @@
           "modelRole": "risk",
           "signal": "HOLD",
           "confidence": 0.327,
-          "reasoning": "Market conditions are acceptable but no clear regime signal. [Rate-limited: heuristic used] Memory: 7 samples | dominant SELL | blocked 100%",
+          "reasoning": "Market conditions are acceptable but no clear regime signal. [Rate-limited: heuristic used] Memory: 11 samples | dominant SELL | blocked 100%",
           "elapsedMs": 32,
           "voteWeight": 0.8,
           "isVetoLayer": true,
@@ -135,7 +135,7 @@
         "SELL": 0.394,
         "HOLD": 0.61
       },
-      "validatedAt": "2026-04-17T18:48:48.560Z",
+      "validatedAt": "2026-04-17T18:49:34.568Z",
       "blocked": true,
       "executionEligible": false,
       "blockReason": "Spot account is flat, so the bearish setup resolves to HOLD.",
@@ -165,17 +165,728 @@
       "memory": {
         "symbol": "BTC-EUR",
         "timeframe": "5m",
-        "totalMemories": 7,
-        "effectiveSampleSize": 2.27,
+        "totalMemories": 11,
+        "effectiveSampleSize": 3.561,
         "blockedRatio": 1,
         "averageConfidence": 0.49,
         "directionalWeights": {
-          "BUY": 0.908,
-          "SELL": 1.362,
+          "BUY": 0.901,
+          "SELL": 2.66,
           "HOLD": 0
         },
         "dominantSignal": "SELL",
         "topRecalls": [
+          {
+            "id": 248,
+            "createdAt": "2026-04-17T18:49:05.134Z",
+            "signal": "SELL",
+            "confidence": 0.49,
+            "agreement": 0.52,
+            "blocked": true,
+            "summary": "SELL 49% | agree 52% | blocked: Spot account is flat, so the bearish setup resolves to HOLD. | lead momentum_analyst",
+            "ageHours": 0,
+            "decayWeight": 1,
+            "similarity": 0.979,
+            "weightedInfluence": 0.336
+          },
+          {
+            "id": 239,
+            "createdAt": "2026-04-17T18:48:48.561Z",
+            "signal": "SELL",
+            "confidence": 0.49,
+            "agreement": 0.52,
+            "blocked": true,
+            "summary": "SELL 49% | agree 52% | blocked: Spot account is flat, so the bearish setup resolves to HOLD. | lead momentum_analyst",
+            "ageHours": 0.01,
+            "decayWeight": 1,
+            "similarity": 0.98,
+            "weightedInfluence": 0.336
+          },
+          {
+            "id": 238,
+            "createdAt": "2026-04-17T18:48:33.777Z",
+            "signal": "SELL",
+            "confidence": 0.49,
+            "agreement": 0.52,
+            "blocked": true,
+            "summary": "SELL 49% | agree 52% | blocked: Spot account is flat, so the bearish setup resolves to HOLD. | lead momentum_analyst",
+            "ageHours": 0.01,
+            "decayWeight": 1,
+            "similarity": 0.98,
+            "weightedInfluence": 0.336
+          },
+          {
+            "id": 237,
+            "createdAt": "2026-04-17T18:48:19.108Z",
+            "signal": "SELL",
+            "confidence": 0.49,
+            "agreement": 0.52,
+            "blocked": true,
+            "summary": "SELL 49% | agree 52% | blocked: Spot account is flat, so the bearish setup resolves to HOLD. | lead momentum_analyst",
+            "ageHours": 0.02,
+            "decayWeight": 1,
+            "similarity": 0.979,
+            "weightedInfluence": 0.336
+          },
+          {
+            "id": 234,
+            "createdAt": "2026-04-17T18:47:56.614Z",
+            "signal": "SELL",
+            "confidence": 0.49,
+            "agreement": 0.52,
+            "blocked": true,
+            "summary": "SELL 49% | agree 52% | blocked: Spot account is flat, so the bearish setup resolves to HOLD. | lead momentum_analyst",
+            "ageHours": 0.02,
+            "decayWeight": 1,
+            "similarity": 0.979,
+            "weightedInfluence": 0.336
+          }
+        ],
+        "generatedAt": "2026-04-17T18:49:21.434Z"
+      },
+      "harness": {
+        "generatedAt": "2026-04-17T18:49:34.568Z",
+        "marketQualityScore": 0.984,
+        "liquidityScore": 0.999,
+        "volatilityPenalty": 0.245,
+        "memoryAlignmentScore": 0,
+        "confidenceAdjustment": -0.226,
+        "blockedByHarness": true,
+        "notes": [
+          "Execution quality 100.0%.",
+          "Selected engine mean_reversion."
+        ]
+      },
+      "regime": {
+        "regime": "mean_reversion",
+        "confidence": 0.75,
+        "trendScore": 0.224,
+        "breakoutScore": 0.599,
+        "meanReversionScore": 0.75,
+        "volatilityScore": 0.973,
+        "liquidityScore": 1,
+        "notes": [
+          "Directional strength is muted; rotational behavior is more likely."
+        ],
+        "generatedAt": "2026-04-17T18:49:34.568Z"
+      },
+      "engineReports": [
+        {
+          "engine": "trend_continuation",
+          "signal": "BUY",
+          "confidence": 0.109,
+          "supportScore": 0.109,
+          "reasons": [
+            "Return stack favors continuation (22.6 bps over 5 bars).",
+            "Distance from mean is 0.13%."
+          ],
+          "supportingRoles": []
+        },
+        {
+          "engine": "breakout",
+          "signal": "SELL",
+          "confidence": 1,
+          "supportScore": 1,
+          "reasons": [
+            "Compression score is 83%.",
+            "Breakout distance is 0.8 bps."
+          ],
+          "supportingRoles": []
+        },
+        {
+          "engine": "mean_reversion",
+          "signal": "SELL",
+          "confidence": 1,
+          "supportScore": 1,
+          "reasons": [
+            "Distance from VWAP is 2.3 bps.",
+            "Wick balance is 0.00."
+          ],
+          "supportingRoles": []
+        },
+        {
+          "engine": "microstructure",
+          "signal": "BUY",
+          "confidence": 0.48,
+          "supportScore": 0.48,
+          "reasons": [
+            "Order-book imbalance is 95.2%.",
+            "Top-book pressure is 0.3%."
+          ],
+          "supportingRoles": []
+        }
+      ],
+      "metaSelection": {
+        "selectedEngine": "mean_reversion",
+        "suitability": 1,
+        "actionBias": "SELL",
+        "engineScores": {
+          "trend_continuation": 0.109,
+          "breakout": 1,
+          "mean_reversion": 1,
+          "microstructure": 0.48,
+          "none": 0
+        },
+        "notes": [
+          "Deterministic engine selected mean_reversion from regime mean_reversion.",
+          "Adjusted directional edge is -0.396."
+        ],
+        "generatedAt": "2026-04-17T18:49:34.568Z"
+      },
+      "expectedValue": {
+        "grossEdgeBps": 3.3,
+        "estimatedFeeBps": 8,
+        "estimatedSlippageBps": 0,
+        "netEdgeBps": -4.7,
+        "rewardRiskRatio": 0.41,
+        "tradeAllowed": false,
+        "notes": [
+          "Execution quality 100.0%.",
+          "Risk penalty 24.5%."
+        ],
+        "generatedAt": "2026-04-17T18:49:34.568Z"
+      }
+    }
+  },
+  {
+    "id": "swarm_1776451759271_b6w27h",
+    "type": "swarm_run",
+    "timestamp": "2026-04-17T18:49:19.271Z",
+    "symbol": "BTC-EUR",
+    "timeframe": "5m",
+    "cached": false,
+    "totalElapsedMs": 12576,
+    "consensus": {
+      "symbol": "BTC-EUR",
+      "timeframe": "5m",
+      "signal": "SELL",
+      "directionalSignal": "SELL",
+      "directionalConfidence": 0.76,
+      "directionalAgreement": 0.953,
+      "decision": "HOLD",
+      "confidence": 0.49,
+      "agreement": 0.52,
+      "decisionSource": "deterministic",
+      "featureSummary": {
+        "return3Bps": 17.2143,
+        "return10Bps": -17.0945,
+        "volatilityShortBps": 6.3527,
+        "volatilityLongBps": 9.7266,
+        "spreadBps": 0.0152,
+        "buySlippageBps": 2.6204,
+        "sellSlippageBps": 0,
+        "orderBookImbalancePct": -32.9535,
+        "topBookPressurePct": 0.0679,
+        "volumeExpansion": 0.123,
+        "distanceFromVwapBps": 2.2623,
+        "breakoutDistanceBps": 0.8227,
+        "compressionPct": 82.6633,
+        "maxExecutableBuyUsd": 9,
+        "maxExecutableSellUsd": 0
+      },
+      "riskFlags": [
+        "slippage_elevated",
+        "candle_indecision",
+        "inventory_constrained"
+      ],
+      "directionalEdgeScore": -0.502,
+      "executionQualityScore": 1,
+      "riskPenaltyScore": 0.245,
+      "expectedNetEdgeBps": -3.81,
+      "marketQualityScore": 0.984,
+      "decisionCadenceMs": 7268,
+      "symbolThrottleMs": 10175,
+      "votes": [
+        {
+          "model": "deepseek-v3.2:cloud",
+          "role": "trend_follower",
+          "modelRole": "strategy",
+          "signal": "HOLD",
+          "confidence": 0.436,
+          "reasoning": "Trend structure is mixed across the recent candle sequence.",
+          "elapsedMs": 12535,
+          "voteWeight": 1,
+          "isVetoLayer": false,
+          "researchTrace": {
+            "status": "completed",
+            "searched": true,
+            "focus": "recent news, sentiment, macro catalysts, and exchange-specific developments",
+            "rationale": "Heuristic fallback requested research due to uncertainty or elevated market conditions."
+          }
+        },
+        {
+          "model": "gemma4:31b-cloud",
+          "role": "momentum_analyst",
+          "modelRole": "signal_worker",
+          "signal": "SELL",
+          "confidence": 0.445,
+          "reasoning": "Downside velocity is supported by the latest volume profile. [Rate-limited: heuristic used] Memory: 10 samples | dominant SELL | blocked 100%",
+          "elapsedMs": 32,
+          "voteWeight": 0.9,
+          "isVetoLayer": false,
+          "researchTrace": {
+            "status": "skipped",
+            "searched": false,
+            "rationale": "Agent rate-limited; heuristic vote returned without external research."
+          }
+        },
+        {
+          "model": "kimi-k2.5:cloud",
+          "role": "sentiment_reader",
+          "modelRole": "signal_worker",
+          "signal": "SELL",
+          "confidence": 0.895,
+          "reasoning": "Ask depth dominates and aligns with the session bias. [Rate-limited: heuristic used] Memory: 10 samples | dominant SELL | blocked 100%",
+          "elapsedMs": 32,
+          "voteWeight": 0.85,
+          "isVetoLayer": false,
+          "researchTrace": {
+            "status": "skipped",
+            "searched": false,
+            "rationale": "Agent rate-limited; heuristic vote returned without external research."
+          }
+        },
+        {
+          "model": "glm-5.1:cloud",
+          "role": "execution_tactician",
+          "modelRole": "validator",
+          "signal": "HOLD",
+          "confidence": 0.374,
+          "reasoning": "Execution conditions are adequate but no confirmed entry signal. [Rate-limited: heuristic used] Memory: 10 samples | dominant SELL | blocked 100%",
+          "elapsedMs": 32,
+          "voteWeight": 0.8,
+          "isVetoLayer": true,
+          "researchTrace": {
+            "status": "skipped",
+            "searched": false,
+            "rationale": "Agent rate-limited; heuristic vote returned without external research."
+          }
+        },
+        {
+          "model": "ministral-3:cloud",
+          "role": "macro_filter",
+          "modelRole": "risk",
+          "signal": "HOLD",
+          "confidence": 0.327,
+          "reasoning": "Market conditions are acceptable but no clear regime signal. [Rate-limited: heuristic used] Memory: 10 samples | dominant SELL | blocked 100%",
+          "elapsedMs": 32,
+          "voteWeight": 0.8,
+          "isVetoLayer": true,
+          "researchTrace": {
+            "status": "skipped",
+            "searched": false,
+            "rationale": "Agent rate-limited; heuristic vote returned without external research."
+          }
+        }
+      ],
+      "weightedScores": {
+        "BUY": 0,
+        "SELL": 0.5,
+        "HOLD": 0.504
+      },
+      "validatedAt": "2026-04-17T18:49:19.262Z",
+      "blocked": true,
+      "executionEligible": false,
+      "blockReason": "Spot account is flat, so the bearish setup resolves to HOLD.",
+      "rejectionReasons": [
+        {
+          "layer": "execution",
+          "code": "spot_shorting_not_available",
+          "summary": "Spot account is flat, so the bearish setup resolves to HOLD.",
+          "detail": "The engine detected a bearish setup, but there is no base inventory available and spot mode cannot open a synthetic short.",
+          "metrics": {
+            "maxExecutableSellUsd": 0,
+            "availableBaseUsd": 0,
+            "minimumTradeNotionalUsd": 5
+          }
+        },
+        {
+          "layer": "expected_value",
+          "code": "expected_net_edge_below_threshold",
+          "summary": "Expected net edge does not clear the minimum threshold.",
+          "detail": "Expected net edge -3.81 bps is below 4.00 bps.",
+          "metrics": {
+            "expectedNetEdgeBps": -3.81,
+            "minNetEdgeBps": 4
+          }
+        }
+      ],
+      "memory": {
+        "symbol": "BTC-EUR",
+        "timeframe": "5m",
+        "totalMemories": 10,
+        "effectiveSampleSize": 3.25,
+        "blockedRatio": 1,
+        "averageConfidence": 0.49,
+        "directionalWeights": {
+          "BUY": 0.9,
+          "SELL": 2.35,
+          "HOLD": 0
+        },
+        "dominantSignal": "SELL",
+        "topRecalls": [
+          {
+            "id": 240,
+            "createdAt": "2026-04-17T18:48:57.908Z",
+            "signal": "SELL",
+            "confidence": 0.49,
+            "agreement": 0.52,
+            "blocked": true,
+            "summary": "SELL 49% | agree 52% | blocked: Spot account is flat, so the bearish setup resolves to HOLD.",
+            "ageHours": 0,
+            "decayWeight": 1,
+            "similarity": 1,
+            "weightedInfluence": 0.343
+          },
+          {
+            "id": 214,
+            "createdAt": "2026-04-17T18:38:06.248Z",
+            "signal": "SELL",
+            "confidence": 0.49,
+            "agreement": 0.52,
+            "blocked": true,
+            "summary": "SELL 49% | agree 52% | blocked: Spot account is flat, so the bearish setup resolves to HOLD.",
+            "ageHours": 0.18,
+            "decayWeight": 0.998,
+            "similarity": 0.986,
+            "weightedInfluence": 0.337
+          },
+          {
+            "id": 248,
+            "createdAt": "2026-04-17T18:49:05.134Z",
+            "signal": "SELL",
+            "confidence": 0.49,
+            "agreement": 0.52,
+            "blocked": true,
+            "summary": "SELL 49% | agree 52% | blocked: Spot account is flat, so the bearish setup resolves to HOLD. | lead momentum_analyst",
+            "ageHours": 0,
+            "decayWeight": 1,
+            "similarity": 0.973,
+            "weightedInfluence": 0.334
+          },
+          {
+            "id": 239,
+            "createdAt": "2026-04-17T18:48:48.561Z",
+            "signal": "SELL",
+            "confidence": 0.49,
+            "agreement": 0.52,
+            "blocked": true,
+            "summary": "SELL 49% | agree 52% | blocked: Spot account is flat, so the bearish setup resolves to HOLD. | lead momentum_analyst",
+            "ageHours": 0.01,
+            "decayWeight": 1,
+            "similarity": 0.973,
+            "weightedInfluence": 0.334
+          },
+          {
+            "id": 238,
+            "createdAt": "2026-04-17T18:48:33.777Z",
+            "signal": "SELL",
+            "confidence": 0.49,
+            "agreement": 0.52,
+            "blocked": true,
+            "summary": "SELL 49% | agree 52% | blocked: Spot account is flat, so the bearish setup resolves to HOLD. | lead momentum_analyst",
+            "ageHours": 0.01,
+            "decayWeight": 1,
+            "similarity": 0.973,
+            "weightedInfluence": 0.334
+          }
+        ],
+        "generatedAt": "2026-04-17T18:49:06.688Z"
+      },
+      "harness": {
+        "generatedAt": "2026-04-17T18:49:19.262Z",
+        "marketQualityScore": 0.984,
+        "liquidityScore": 0.999,
+        "volatilityPenalty": 0.245,
+        "memoryAlignmentScore": 0,
+        "confidenceAdjustment": -0.27,
+        "blockedByHarness": true,
+        "notes": [
+          "Execution quality 100.0%.",
+          "Selected engine mean_reversion."
+        ]
+      },
+      "regime": {
+        "regime": "mean_reversion",
+        "confidence": 0.744,
+        "trendScore": 0.234,
+        "breakoutScore": 0.599,
+        "meanReversionScore": 0.744,
+        "volatilityScore": 0.973,
+        "liquidityScore": 1,
+        "notes": [
+          "Directional strength is muted; rotational behavior is more likely."
+        ],
+        "generatedAt": "2026-04-17T18:49:19.262Z"
+      },
+      "engineReports": [
+        {
+          "engine": "trend_continuation",
+          "signal": "BUY",
+          "confidence": 0.109,
+          "supportScore": 0.109,
+          "reasons": [
+            "Return stack favors continuation (22.6 bps over 5 bars).",
+            "Distance from mean is 0.13%."
+          ],
+          "supportingRoles": []
+        },
+        {
+          "engine": "breakout",
+          "signal": "SELL",
+          "confidence": 1,
+          "supportScore": 1,
+          "reasons": [
+            "Compression score is 83%.",
+            "Breakout distance is 0.8 bps."
+          ],
+          "supportingRoles": []
+        },
+        {
+          "engine": "mean_reversion",
+          "signal": "SELL",
+          "confidence": 1,
+          "supportScore": 1,
+          "reasons": [
+            "Distance from VWAP is 2.3 bps.",
+            "Wick balance is 0.00."
+          ],
+          "supportingRoles": []
+        },
+        {
+          "engine": "microstructure",
+          "signal": "SELL",
+          "confidence": 0.226,
+          "supportScore": 0.226,
+          "reasons": [
+            "Order-book imbalance is -33.0%.",
+            "Top-book pressure is 0.1%."
+          ],
+          "supportingRoles": []
+        }
+      ],
+      "metaSelection": {
+        "selectedEngine": "mean_reversion",
+        "suitability": 1,
+        "actionBias": "SELL",
+        "engineScores": {
+          "trend_continuation": 0.109,
+          "breakout": 1,
+          "mean_reversion": 1,
+          "microstructure": 0.226,
+          "none": 0
+        },
+        "notes": [
+          "Deterministic engine selected mean_reversion from regime mean_reversion.",
+          "Adjusted directional edge is -0.502."
+        ],
+        "generatedAt": "2026-04-17T18:49:19.262Z"
+      },
+      "expectedValue": {
+        "grossEdgeBps": 4.19,
+        "estimatedFeeBps": 8,
+        "estimatedSlippageBps": 0,
+        "netEdgeBps": -3.81,
+        "rewardRiskRatio": 0.52,
+        "tradeAllowed": false,
+        "notes": [
+          "Execution quality 100.0%.",
+          "Risk penalty 24.5%."
+        ],
+        "generatedAt": "2026-04-17T18:49:19.262Z"
+      }
+    }
+  },
+  {
+    "id": "swarm_1776451745149_00h7e7",
+    "type": "swarm_run",
+    "timestamp": "2026-04-17T18:49:05.149Z",
+    "symbol": "BTC-EUR",
+    "timeframe": "5m",
+    "cached": false,
+    "totalElapsedMs": 14704,
+    "consensus": {
+      "symbol": "BTC-EUR",
+      "timeframe": "5m",
+      "signal": "SELL",
+      "directionalSignal": "SELL",
+      "directionalConfidence": 0.725,
+      "directionalAgreement": 0.806,
+      "decision": "HOLD",
+      "confidence": 0.49,
+      "agreement": 0.52,
+      "decisionSource": "deterministic",
+      "featureSummary": {
+        "return3Bps": 17.2143,
+        "return10Bps": -17.0945,
+        "volatilityShortBps": 6.3527,
+        "volatilityLongBps": 9.7266,
+        "spreadBps": 0.0152,
+        "buySlippageBps": 2.6204,
+        "sellSlippageBps": 0,
+        "orderBookImbalancePct": 86.4146,
+        "topBookPressurePct": -19.2589,
+        "volumeExpansion": 0.123,
+        "distanceFromVwapBps": 2.2623,
+        "breakoutDistanceBps": 0.8227,
+        "compressionPct": 82.6633,
+        "maxExecutableBuyUsd": 9,
+        "maxExecutableSellUsd": 0
+      },
+      "riskFlags": [
+        "slippage_elevated",
+        "candle_indecision",
+        "inventory_constrained"
+      ],
+      "directionalEdgeScore": -0.412,
+      "executionQualityScore": 1,
+      "riskPenaltyScore": 0.245,
+      "expectedNetEdgeBps": -4.57,
+      "marketQualityScore": 0.984,
+      "decisionCadenceMs": 7268,
+      "symbolThrottleMs": 10175,
+      "votes": [
+        {
+          "model": "deepseek-v3.2:cloud",
+          "role": "trend_follower",
+          "modelRole": "strategy",
+          "signal": "HOLD",
+          "confidence": 0.436,
+          "reasoning": "Trend structure is mixed across the recent candle sequence.",
+          "elapsedMs": 14662,
+          "voteWeight": 1,
+          "isVetoLayer": false,
+          "researchTrace": {
+            "status": "completed",
+            "searched": true,
+            "focus": "recent news, sentiment, macro catalysts, and exchange-specific developments",
+            "rationale": "Heuristic fallback requested research due to uncertainty or elevated market conditions."
+          }
+        },
+        {
+          "model": "gemma4:31b-cloud",
+          "role": "momentum_analyst",
+          "modelRole": "signal_worker",
+          "signal": "SELL",
+          "confidence": 0.445,
+          "reasoning": "Downside velocity is supported by the latest volume profile. [Rate-limited: heuristic used] Memory: 8 samples | dominant SELL | blocked 100%",
+          "elapsedMs": 33,
+          "voteWeight": 0.9,
+          "isVetoLayer": false,
+          "researchTrace": {
+            "status": "skipped",
+            "searched": false,
+            "rationale": "Agent rate-limited; heuristic vote returned without external research."
+          }
+        },
+        {
+          "model": "kimi-k2.5:cloud",
+          "role": "sentiment_reader",
+          "modelRole": "signal_worker",
+          "signal": "HOLD",
+          "confidence": 0.311,
+          "reasoning": "Order book pressure is balanced; no clear directional edge. [Rate-limited: heuristic used] Memory: 8 samples | dominant SELL | blocked 100%",
+          "elapsedMs": 33,
+          "voteWeight": 0.85,
+          "isVetoLayer": false,
+          "researchTrace": {
+            "status": "skipped",
+            "searched": false,
+            "rationale": "Agent rate-limited; heuristic vote returned without external research."
+          }
+        },
+        {
+          "model": "glm-5.1:cloud",
+          "role": "execution_tactician",
+          "modelRole": "validator",
+          "signal": "HOLD",
+          "confidence": 0.374,
+          "reasoning": "Execution conditions are adequate but no confirmed entry signal. [Rate-limited: heuristic used] Memory: 8 samples | dominant SELL | blocked 100%",
+          "elapsedMs": 33,
+          "voteWeight": 0.8,
+          "isVetoLayer": true,
+          "researchTrace": {
+            "status": "skipped",
+            "searched": false,
+            "rationale": "Agent rate-limited; heuristic vote returned without external research."
+          }
+        },
+        {
+          "model": "ministral-3:cloud",
+          "role": "macro_filter",
+          "modelRole": "risk",
+          "signal": "HOLD",
+          "confidence": 0.327,
+          "reasoning": "Market conditions are acceptable but no clear regime signal. [Rate-limited: heuristic used] Memory: 8 samples | dominant SELL | blocked 100%",
+          "elapsedMs": 33,
+          "voteWeight": 0.8,
+          "isVetoLayer": true,
+          "researchTrace": {
+            "status": "skipped",
+            "searched": false,
+            "rationale": "Agent rate-limited; heuristic vote returned without external research."
+          }
+        }
+      ],
+      "weightedScores": {
+        "BUY": 0,
+        "SELL": 0.41,
+        "HOLD": 0.594
+      },
+      "validatedAt": "2026-04-17T18:49:05.134Z",
+      "blocked": true,
+      "executionEligible": false,
+      "blockReason": "Spot account is flat, so the bearish setup resolves to HOLD.",
+      "rejectionReasons": [
+        {
+          "layer": "execution",
+          "code": "spot_shorting_not_available",
+          "summary": "Spot account is flat, so the bearish setup resolves to HOLD.",
+          "detail": "The engine detected a bearish setup, but there is no base inventory available and spot mode cannot open a synthetic short.",
+          "metrics": {
+            "maxExecutableSellUsd": 0,
+            "availableBaseUsd": 0,
+            "minimumTradeNotionalUsd": 5
+          }
+        },
+        {
+          "layer": "expected_value",
+          "code": "expected_net_edge_below_threshold",
+          "summary": "Expected net edge does not clear the minimum threshold.",
+          "detail": "Expected net edge -4.57 bps is below 4.00 bps.",
+          "metrics": {
+            "expectedNetEdgeBps": -4.57,
+            "minNetEdgeBps": 4
+          }
+        }
+      ],
+      "memory": {
+        "symbol": "BTC-EUR",
+        "timeframe": "5m",
+        "totalMemories": 8,
+        "effectiveSampleSize": 2.613,
+        "blockedRatio": 1,
+        "averageConfidence": 0.49,
+        "directionalWeights": {
+          "BUY": 0.908,
+          "SELL": 1.705,
+          "HOLD": 0
+        },
+        "dominantSignal": "SELL",
+        "topRecalls": [
+          {
+            "id": 239,
+            "createdAt": "2026-04-17T18:48:48.561Z",
+            "signal": "SELL",
+            "confidence": 0.49,
+            "agreement": 0.52,
+            "blocked": true,
+            "summary": "SELL 49% | agree 52% | blocked: Spot account is flat, so the bearish setup resolves to HOLD. | lead momentum_analyst",
+            "ageHours": 0,
+            "decayWeight": 1,
+            "similarity": 1,
+            "weightedInfluence": 0.343
+          },
           {
             "id": 238,
             "createdAt": "2026-04-17T18:48:33.777Z",
@@ -197,7 +908,7 @@
             "agreement": 0.52,
             "blocked": true,
             "summary": "SELL 49% | agree 52% | blocked: Spot account is flat, so the bearish setup resolves to HOLD. | lead momentum_analyst",
-            "ageHours": 0,
+            "ageHours": 0.01,
             "decayWeight": 1,
             "similarity": 1,
             "weightedInfluence": 0.343
@@ -223,735 +934,24 @@
             "agreement": 0.52,
             "blocked": true,
             "summary": "BUY 49% | agree 52% | blocked: Expected net edge does not clear the minimum threshold.",
-            "ageHours": 0.07,
+            "ageHours": 0.08,
             "decayWeight": 0.999,
             "similarity": 0.995,
             "weightedInfluence": 0.341
-          },
-          {
-            "id": 214,
-            "createdAt": "2026-04-17T18:38:06.248Z",
-            "signal": "SELL",
-            "confidence": 0.49,
-            "agreement": 0.52,
-            "blocked": true,
-            "summary": "SELL 49% | agree 52% | blocked: Spot account is flat, so the bearish setup resolves to HOLD.",
-            "ageHours": 0.17,
-            "decayWeight": 0.998,
-            "similarity": 0.972,
-            "weightedInfluence": 0.333
           }
         ],
-        "generatedAt": "2026-04-17T18:48:35.442Z"
+        "generatedAt": "2026-04-17T18:48:50.436Z"
       },
       "harness": {
-        "generatedAt": "2026-04-17T18:48:48.560Z",
+        "generatedAt": "2026-04-17T18:49:05.134Z",
         "marketQualityScore": 0.984,
         "liquidityScore": 0.999,
         "volatilityPenalty": 0.245,
         "memoryAlignmentScore": 0,
-        "confidenceAdjustment": -0.228,
+        "confidenceAdjustment": -0.235,
         "blockedByHarness": true,
         "notes": [
           "Execution quality 100.0%.",
-          "Selected engine mean_reversion."
-        ]
-      },
-      "regime": {
-        "regime": "mean_reversion",
-        "confidence": 0.768,
-        "trendScore": 0.194,
-        "breakoutScore": 0.599,
-        "meanReversionScore": 0.768,
-        "volatilityScore": 0.973,
-        "liquidityScore": 1,
-        "notes": [
-          "Directional strength is muted; rotational behavior is more likely."
-        ],
-        "generatedAt": "2026-04-17T18:48:48.559Z"
-      },
-      "engineReports": [
-        {
-          "engine": "trend_continuation",
-          "signal": "BUY",
-          "confidence": 0.109,
-          "supportScore": 0.109,
-          "reasons": [
-            "Return stack favors continuation (22.6 bps over 5 bars).",
-            "Distance from mean is 0.13%."
-          ],
-          "supportingRoles": []
-        },
-        {
-          "engine": "breakout",
-          "signal": "SELL",
-          "confidence": 1,
-          "supportScore": 1,
-          "reasons": [
-            "Compression score is 83%.",
-            "Breakout distance is 0.8 bps."
-          ],
-          "supportingRoles": []
-        },
-        {
-          "engine": "mean_reversion",
-          "signal": "SELL",
-          "confidence": 1,
-          "supportScore": 1,
-          "reasons": [
-            "Distance from VWAP is 2.3 bps.",
-            "Wick balance is 0.00."
-          ],
-          "supportingRoles": []
-        },
-        {
-          "engine": "microstructure",
-          "signal": "BUY",
-          "confidence": 0.48,
-          "supportScore": 0.48,
-          "reasons": [
-            "Order-book imbalance is 95.2%.",
-            "Top-book pressure is 0.3%."
-          ],
-          "supportingRoles": []
-        }
-      ],
-      "metaSelection": {
-        "selectedEngine": "mean_reversion",
-        "suitability": 1,
-        "actionBias": "SELL",
-        "engineScores": {
-          "trend_continuation": 0.109,
-          "breakout": 1,
-          "mean_reversion": 1,
-          "microstructure": 0.48,
-          "none": 0
-        },
-        "notes": [
-          "Deterministic engine selected mean_reversion from regime mean_reversion.",
-          "Adjusted directional edge is -0.396."
-        ],
-        "generatedAt": "2026-04-17T18:48:48.560Z"
-      },
-      "expectedValue": {
-        "grossEdgeBps": 3.3,
-        "estimatedFeeBps": 8,
-        "estimatedSlippageBps": 0,
-        "netEdgeBps": -4.7,
-        "rewardRiskRatio": 0.41,
-        "tradeAllowed": false,
-        "notes": [
-          "Execution quality 100.0%.",
-          "Risk penalty 24.5%."
-        ],
-        "generatedAt": "2026-04-17T18:48:48.560Z"
-      }
-    }
-  },
-  {
-    "id": "swarm_1776451713789_xswcqq",
-    "type": "swarm_run",
-    "timestamp": "2026-04-17T18:48:33.789Z",
-    "symbol": "BTC-EUR",
-    "timeframe": "5m",
-    "cached": false,
-    "totalElapsedMs": 13119,
-    "consensus": {
-      "symbol": "BTC-EUR",
-      "timeframe": "5m",
-      "signal": "SELL",
-      "directionalSignal": "SELL",
-      "directionalConfidence": 0.718,
-      "directionalAgreement": 0.772,
-      "decision": "HOLD",
-      "confidence": 0.49,
-      "agreement": 0.52,
-      "decisionSource": "deterministic",
-      "featureSummary": {
-        "return3Bps": 17.2143,
-        "return10Bps": -17.0945,
-        "volatilityShortBps": 6.3527,
-        "volatilityLongBps": 9.7266,
-        "spreadBps": 0.0152,
-        "buySlippageBps": 0.1981,
-        "sellSlippageBps": 0,
-        "orderBookImbalancePct": 95.2065,
-        "topBookPressurePct": 0.3377,
-        "volumeExpansion": 0.123,
-        "distanceFromVwapBps": 2.2623,
-        "breakoutDistanceBps": 0.8227,
-        "compressionPct": 82.6633,
-        "maxExecutableBuyUsd": 9,
-        "maxExecutableSellUsd": 0
-      },
-      "riskFlags": [
-        "slippage_elevated",
-        "candle_indecision",
-        "inventory_constrained"
-      ],
-      "directionalEdgeScore": -0.396,
-      "executionQualityScore": 1,
-      "riskPenaltyScore": 0.245,
-      "expectedNetEdgeBps": -4.7,
-      "marketQualityScore": 0.984,
-      "decisionCadenceMs": 7268,
-      "symbolThrottleMs": 10175,
-      "votes": [
-        {
-          "model": "deepseek-v3.2:cloud",
-          "role": "trend_follower",
-          "modelRole": "strategy",
-          "signal": "HOLD",
-          "confidence": 0.436,
-          "reasoning": "Trend structure is mixed across the recent candle sequence.",
-          "elapsedMs": 13070,
-          "voteWeight": 1,
-          "isVetoLayer": false,
-          "researchTrace": {
-            "status": "completed",
-            "searched": true,
-            "focus": "recent news, sentiment, macro catalysts, and exchange-specific developments",
-            "rationale": "Heuristic fallback requested research due to uncertainty or elevated market conditions."
-          }
-        },
-        {
-          "model": "gemma4:31b-cloud",
-          "role": "momentum_analyst",
-          "modelRole": "signal_worker",
-          "signal": "SELL",
-          "confidence": 0.445,
-          "reasoning": "Downside velocity is supported by the latest volume profile. [Rate-limited: heuristic used] Memory: 6 samples | dominant SELL | blocked 100%",
-          "elapsedMs": 30,
-          "voteWeight": 0.9,
-          "isVetoLayer": false,
-          "researchTrace": {
-            "status": "skipped",
-            "searched": false,
-            "rationale": "Agent rate-limited; heuristic vote returned without external research."
-          }
-        },
-        {
-          "model": "kimi-k2.5:cloud",
-          "role": "sentiment_reader",
-          "modelRole": "signal_worker",
-          "signal": "HOLD",
-          "confidence": 0.32,
-          "reasoning": "Order book pressure is balanced; no clear directional edge. [Rate-limited: heuristic used] Memory: 6 samples | dominant SELL | blocked 100%",
-          "elapsedMs": 30,
-          "voteWeight": 0.85,
-          "isVetoLayer": false,
-          "researchTrace": {
-            "status": "skipped",
-            "searched": false,
-            "rationale": "Agent rate-limited; heuristic vote returned without external research."
-          }
-        },
-        {
-          "model": "glm-5.1:cloud",
-          "role": "execution_tactician",
-          "modelRole": "validator",
-          "signal": "HOLD",
-          "confidence": 0.374,
-          "reasoning": "Execution conditions are adequate but no confirmed entry signal. [Rate-limited: heuristic used] Memory: 6 samples | dominant SELL | blocked 100%",
-          "elapsedMs": 30,
-          "voteWeight": 0.8,
-          "isVetoLayer": true,
-          "researchTrace": {
-            "status": "skipped",
-            "searched": false,
-            "rationale": "Agent rate-limited; heuristic vote returned without external research."
-          }
-        },
-        {
-          "model": "ministral-3:cloud",
-          "role": "macro_filter",
-          "modelRole": "risk",
-          "signal": "HOLD",
-          "confidence": 0.327,
-          "reasoning": "Market conditions are acceptable but no clear regime signal. [Rate-limited: heuristic used] Memory: 6 samples | dominant SELL | blocked 100%",
-          "elapsedMs": 30,
-          "voteWeight": 0.8,
-          "isVetoLayer": true,
-          "researchTrace": {
-            "status": "skipped",
-            "searched": false,
-            "rationale": "Agent rate-limited; heuristic vote returned without external research."
-          }
-        }
-      ],
-      "weightedScores": {
-        "BUY": 0,
-        "SELL": 0.394,
-        "HOLD": 0.61
-      },
-      "validatedAt": "2026-04-17T18:48:33.776Z",
-      "blocked": true,
-      "executionEligible": false,
-      "blockReason": "Spot account is flat, so the bearish setup resolves to HOLD.",
-      "rejectionReasons": [
-        {
-          "layer": "execution",
-          "code": "spot_shorting_not_available",
-          "summary": "Spot account is flat, so the bearish setup resolves to HOLD.",
-          "detail": "The engine detected a bearish setup, but there is no base inventory available and spot mode cannot open a synthetic short.",
-          "metrics": {
-            "maxExecutableSellUsd": 0,
-            "availableBaseUsd": 0,
-            "minimumTradeNotionalUsd": 5
-          }
-        },
-        {
-          "layer": "expected_value",
-          "code": "expected_net_edge_below_threshold",
-          "summary": "Expected net edge does not clear the minimum threshold.",
-          "detail": "Expected net edge -4.70 bps is below 4.00 bps.",
-          "metrics": {
-            "expectedNetEdgeBps": -4.7,
-            "minNetEdgeBps": 4
-          }
-        }
-      ],
-      "memory": {
-        "symbol": "BTC-EUR",
-        "timeframe": "5m",
-        "totalMemories": 6,
-        "effectiveSampleSize": 1.927,
-        "blockedRatio": 1,
-        "averageConfidence": 0.49,
-        "directionalWeights": {
-          "BUY": 0.908,
-          "SELL": 1.019,
-          "HOLD": 0
-        },
-        "dominantSignal": "SELL",
-        "topRecalls": [
-          {
-            "id": 237,
-            "createdAt": "2026-04-17T18:48:19.108Z",
-            "signal": "SELL",
-            "confidence": 0.49,
-            "agreement": 0.52,
-            "blocked": true,
-            "summary": "SELL 49% | agree 52% | blocked: Spot account is flat, so the bearish setup resolves to HOLD. | lead momentum_analyst",
-            "ageHours": 0,
-            "decayWeight": 1,
-            "similarity": 1,
-            "weightedInfluence": 0.343
-          },
-          {
-            "id": 234,
-            "createdAt": "2026-04-17T18:47:56.614Z",
-            "signal": "SELL",
-            "confidence": 0.49,
-            "agreement": 0.52,
-            "blocked": true,
-            "summary": "SELL 49% | agree 52% | blocked: Spot account is flat, so the bearish setup resolves to HOLD. | lead momentum_analyst",
-            "ageHours": 0.01,
-            "decayWeight": 1,
-            "similarity": 1,
-            "weightedInfluence": 0.343
-          },
-          {
-            "id": 218,
-            "createdAt": "2026-04-17T18:44:07.676Z",
-            "signal": "BUY",
-            "confidence": 0.49,
-            "agreement": 0.52,
-            "blocked": true,
-            "summary": "BUY 49% | agree 52% | blocked: Expected net edge does not clear the minimum threshold.",
-            "ageHours": 0.07,
-            "decayWeight": 0.999,
-            "similarity": 0.995,
-            "weightedInfluence": 0.341
-          },
-          {
-            "id": 214,
-            "createdAt": "2026-04-17T18:38:06.248Z",
-            "signal": "SELL",
-            "confidence": 0.49,
-            "agreement": 0.52,
-            "blocked": true,
-            "summary": "SELL 49% | agree 52% | blocked: Spot account is flat, so the bearish setup resolves to HOLD.",
-            "ageHours": 0.17,
-            "decayWeight": 0.998,
-            "similarity": 0.972,
-            "weightedInfluence": 0.333
-          },
-          {
-            "id": 226,
-            "createdAt": "2026-04-17T18:45:11.361Z",
-            "signal": "BUY",
-            "confidence": 0.49,
-            "agreement": 0.52,
-            "blocked": true,
-            "summary": "BUY 49% | agree 52% | blocked: Expected net edge does not clear the minimum threshold.",
-            "ageHours": 0.05,
-            "decayWeight": 0.999,
-            "similarity": 0.913,
-            "weightedInfluence": 0.313
-          }
-        ],
-        "generatedAt": "2026-04-17T18:48:20.665Z"
-      },
-      "harness": {
-        "generatedAt": "2026-04-17T18:48:33.776Z",
-        "marketQualityScore": 0.984,
-        "liquidityScore": 0.999,
-        "volatilityPenalty": 0.245,
-        "memoryAlignmentScore": 0,
-        "confidenceAdjustment": -0.228,
-        "blockedByHarness": true,
-        "notes": [
-          "Execution quality 100.0%.",
-          "Selected engine mean_reversion."
-        ]
-      },
-      "regime": {
-        "regime": "mean_reversion",
-        "confidence": 0.768,
-        "trendScore": 0.194,
-        "breakoutScore": 0.599,
-        "meanReversionScore": 0.768,
-        "volatilityScore": 0.973,
-        "liquidityScore": 1,
-        "notes": [
-          "Directional strength is muted; rotational behavior is more likely."
-        ],
-        "generatedAt": "2026-04-17T18:48:33.775Z"
-      },
-      "engineReports": [
-        {
-          "engine": "trend_continuation",
-          "signal": "BUY",
-          "confidence": 0.109,
-          "supportScore": 0.109,
-          "reasons": [
-            "Return stack favors continuation (22.6 bps over 5 bars).",
-            "Distance from mean is 0.13%."
-          ],
-          "supportingRoles": []
-        },
-        {
-          "engine": "breakout",
-          "signal": "SELL",
-          "confidence": 1,
-          "supportScore": 1,
-          "reasons": [
-            "Compression score is 83%.",
-            "Breakout distance is 0.8 bps."
-          ],
-          "supportingRoles": []
-        },
-        {
-          "engine": "mean_reversion",
-          "signal": "SELL",
-          "confidence": 1,
-          "supportScore": 1,
-          "reasons": [
-            "Distance from VWAP is 2.3 bps.",
-            "Wick balance is 0.00."
-          ],
-          "supportingRoles": []
-        },
-        {
-          "engine": "microstructure",
-          "signal": "BUY",
-          "confidence": 0.48,
-          "supportScore": 0.48,
-          "reasons": [
-            "Order-book imbalance is 95.2%.",
-            "Top-book pressure is 0.3%."
-          ],
-          "supportingRoles": []
-        }
-      ],
-      "metaSelection": {
-        "selectedEngine": "mean_reversion",
-        "suitability": 1,
-        "actionBias": "SELL",
-        "engineScores": {
-          "trend_continuation": 0.109,
-          "breakout": 1,
-          "mean_reversion": 1,
-          "microstructure": 0.48,
-          "none": 0
-        },
-        "notes": [
-          "Deterministic engine selected mean_reversion from regime mean_reversion.",
-          "Adjusted directional edge is -0.396."
-        ],
-        "generatedAt": "2026-04-17T18:48:33.775Z"
-      },
-      "expectedValue": {
-        "grossEdgeBps": 3.3,
-        "estimatedFeeBps": 8,
-        "estimatedSlippageBps": 0,
-        "netEdgeBps": -4.7,
-        "rewardRiskRatio": 0.41,
-        "tradeAllowed": false,
-        "notes": [
-          "Execution quality 100.0%.",
-          "Risk penalty 24.5%."
-        ],
-        "generatedAt": "2026-04-17T18:48:33.776Z"
-      }
-    }
-  },
-  {
-    "id": "swarm_1776451699129_12n1u5",
-    "type": "swarm_run",
-    "timestamp": "2026-04-17T18:48:19.129Z",
-    "symbol": "BTC-EUR",
-    "timeframe": "5m",
-    "cached": false,
-    "totalElapsedMs": 20858,
-    "consensus": {
-      "symbol": "BTC-EUR",
-      "timeframe": "5m",
-      "signal": "SELL",
-      "directionalSignal": "SELL",
-      "directionalConfidence": 0.711,
-      "directionalAgreement": 0.788,
-      "decision": "HOLD",
-      "confidence": 0.49,
-      "agreement": 0.52,
-      "decisionSource": "deterministic",
-      "featureSummary": {
-        "return3Bps": 17.2143,
-        "return10Bps": -17.0945,
-        "volatilityShortBps": 6.3527,
-        "volatilityLongBps": 9.7266,
-        "spreadBps": 0.0152,
-        "buySlippageBps": 0,
-        "sellSlippageBps": 1.752,
-        "orderBookImbalancePct": 86.4195,
-        "topBookPressurePct": 0,
-        "volumeExpansion": 0.123,
-        "distanceFromVwapBps": 2.2623,
-        "breakoutDistanceBps": 0.8227,
-        "compressionPct": 82.6633,
-        "maxExecutableBuyUsd": 9,
-        "maxExecutableSellUsd": 0
-      },
-      "riskFlags": [
-        "slippage_elevated",
-        "candle_indecision",
-        "inventory_constrained"
-      ],
-      "directionalEdgeScore": -0.391,
-      "executionQualityScore": 0.969,
-      "riskPenaltyScore": 0.245,
-      "expectedNetEdgeBps": -6.49,
-      "marketQualityScore": 0.964,
-      "decisionCadenceMs": 7268,
-      "symbolThrottleMs": 10175,
-      "votes": [
-        {
-          "model": "deepseek-v3.2:cloud",
-          "role": "trend_follower",
-          "modelRole": "strategy",
-          "signal": "HOLD",
-          "confidence": 0.436,
-          "reasoning": "Trend structure is mixed across the recent candle sequence.",
-          "elapsedMs": 20786,
-          "voteWeight": 1,
-          "isVetoLayer": false,
-          "researchTrace": {
-            "status": "completed",
-            "searched": true,
-            "focus": "recent news, sentiment, macro catalysts, and exchange-specific developments",
-            "rationale": "Heuristic fallback requested research due to uncertainty or elevated market conditions."
-          }
-        },
-        {
-          "model": "gemma4:31b-cloud",
-          "role": "momentum_analyst",
-          "modelRole": "signal_worker",
-          "signal": "SELL",
-          "confidence": 0.445,
-          "reasoning": "Downside velocity is supported by the latest volume profile. [Rate-limited: heuristic used] Memory: 5 samples | dominant BUY | blocked 100%",
-          "elapsedMs": 31,
-          "voteWeight": 0.9,
-          "isVetoLayer": false,
-          "researchTrace": {
-            "status": "skipped",
-            "searched": false,
-            "rationale": "Agent rate-limited; heuristic vote returned without external research."
-          }
-        },
-        {
-          "model": "kimi-k2.5:cloud",
-          "role": "sentiment_reader",
-          "modelRole": "signal_worker",
-          "signal": "HOLD",
-          "confidence": 0.311,
-          "reasoning": "Order book pressure is balanced; no clear directional edge. [Rate-limited: heuristic used] Memory: 5 samples | dominant BUY | blocked 100%",
-          "elapsedMs": 31,
-          "voteWeight": 0.85,
-          "isVetoLayer": false,
-          "researchTrace": {
-            "status": "skipped",
-            "searched": false,
-            "rationale": "Agent rate-limited; heuristic vote returned without external research."
-          }
-        },
-        {
-          "model": "glm-5.1:cloud",
-          "role": "execution_tactician",
-          "modelRole": "validator",
-          "signal": "HOLD",
-          "confidence": 0.374,
-          "reasoning": "Execution conditions are adequate but no confirmed entry signal. [Rate-limited: heuristic used] Memory: 5 samples | dominant BUY | blocked 100%",
-          "elapsedMs": 31,
-          "voteWeight": 0.8,
-          "isVetoLayer": true,
-          "researchTrace": {
-            "status": "skipped",
-            "searched": false,
-            "rationale": "Agent rate-limited; heuristic vote returned without external research."
-          }
-        },
-        {
-          "model": "ministral-3:cloud",
-          "role": "macro_filter",
-          "modelRole": "risk",
-          "signal": "HOLD",
-          "confidence": 0.327,
-          "reasoning": "Market conditions are acceptable but no clear regime signal. [Rate-limited: heuristic used] Memory: 5 samples | dominant BUY | blocked 100%",
-          "elapsedMs": 31,
-          "voteWeight": 0.8,
-          "isVetoLayer": true,
-          "researchTrace": {
-            "status": "skipped",
-            "searched": false,
-            "rationale": "Agent rate-limited; heuristic vote returned without external research."
-          }
-        }
-      ],
-      "weightedScores": {
-        "BUY": 0,
-        "SELL": 0.387,
-        "HOLD": 0.622
-      },
-      "validatedAt": "2026-04-17T18:48:19.107Z",
-      "blocked": true,
-      "executionEligible": false,
-      "blockReason": "Spot account is flat, so the bearish setup resolves to HOLD.",
-      "rejectionReasons": [
-        {
-          "layer": "execution",
-          "code": "spot_shorting_not_available",
-          "summary": "Spot account is flat, so the bearish setup resolves to HOLD.",
-          "detail": "The engine detected a bearish setup, but there is no base inventory available and spot mode cannot open a synthetic short.",
-          "metrics": {
-            "maxExecutableSellUsd": 0,
-            "availableBaseUsd": 0,
-            "minimumTradeNotionalUsd": 5
-          }
-        },
-        {
-          "layer": "expected_value",
-          "code": "expected_net_edge_below_threshold",
-          "summary": "Expected net edge does not clear the minimum threshold.",
-          "detail": "Expected net edge -6.49 bps is below 4.00 bps.",
-          "metrics": {
-            "expectedNetEdgeBps": -6.49,
-            "minNetEdgeBps": 4
-          }
-        }
-      ],
-      "memory": {
-        "symbol": "BTC-EUR",
-        "timeframe": "5m",
-        "totalMemories": 5,
-        "effectiveSampleSize": 1.584,
-        "blockedRatio": 1,
-        "averageConfidence": 0.49,
-        "directionalWeights": {
-          "BUY": 0.908,
-          "SELL": 0.676,
-          "HOLD": 0
-        },
-        "dominantSignal": "BUY",
-        "topRecalls": [
-          {
-            "id": 234,
-            "createdAt": "2026-04-17T18:47:56.614Z",
-            "signal": "SELL",
-            "confidence": 0.49,
-            "agreement": 0.52,
-            "blocked": true,
-            "summary": "SELL 49% | agree 52% | blocked: Spot account is flat, so the bearish setup resolves to HOLD. | lead momentum_analyst",
-            "ageHours": 0,
-            "decayWeight": 1,
-            "similarity": 1,
-            "weightedInfluence": 0.343
-          },
-          {
-            "id": 218,
-            "createdAt": "2026-04-17T18:44:07.676Z",
-            "signal": "BUY",
-            "confidence": 0.49,
-            "agreement": 0.52,
-            "blocked": true,
-            "summary": "BUY 49% | agree 52% | blocked: Expected net edge does not clear the minimum threshold.",
-            "ageHours": 0.06,
-            "decayWeight": 0.999,
-            "similarity": 0.995,
-            "weightedInfluence": 0.341
-          },
-          {
-            "id": 214,
-            "createdAt": "2026-04-17T18:38:06.248Z",
-            "signal": "SELL",
-            "confidence": 0.49,
-            "agreement": 0.52,
-            "blocked": true,
-            "summary": "SELL 49% | agree 52% | blocked: Spot account is flat, so the bearish setup resolves to HOLD.",
-            "ageHours": 0.16,
-            "decayWeight": 0.998,
-            "similarity": 0.972,
-            "weightedInfluence": 0.333
-          },
-          {
-            "id": 226,
-            "createdAt": "2026-04-17T18:45:11.361Z",
-            "signal": "BUY",
-            "confidence": 0.49,
-            "agreement": 0.52,
-            "blocked": true,
-            "summary": "BUY 49% | agree 52% | blocked: Expected net edge does not clear the minimum threshold.",
-            "ageHours": 0.05,
-            "decayWeight": 1,
-            "similarity": 0.913,
-            "weightedInfluence": 0.313
-          },
-          {
-            "id": 197,
-            "createdAt": "2026-04-17T07:37:30.608Z",
-            "signal": "BUY",
-            "confidence": 0.49,
-            "agreement": 0.52,
-            "blocked": true,
-            "summary": "BUY 49% | agree 52% | blocked: Expected net edge does not clear the minimum threshold.",
-            "ageHours": 11.17,
-            "decayWeight": 0.898,
-            "similarity": 0.826,
-            "weightedInfluence": 0.254
-          }
-        ],
-        "generatedAt": "2026-04-17T18:47:58.280Z"
-      },
-      "harness": {
-        "generatedAt": "2026-04-17T18:48:19.107Z",
-        "marketQualityScore": 0.964,
-        "liquidityScore": 0.999,
-        "volatilityPenalty": 0.245,
-        "memoryAlignmentScore": 0,
-        "confidenceAdjustment": -0.221,
-        "blockedByHarness": true,
-        "notes": [
-          "Execution quality 96.9%.",
           "Selected engine mean_reversion."
         ]
       },
@@ -966,7 +966,7 @@
         "notes": [
           "Directional strength is muted; rotational behavior is more likely."
         ],
-        "generatedAt": "2026-04-17T18:48:19.107Z"
+        "generatedAt": "2026-04-17T18:49:05.134Z"
       },
       "engineReports": [
         {
@@ -1005,11 +1005,11 @@
         {
           "engine": "microstructure",
           "signal": "BUY",
-          "confidence": 0.43,
-          "supportScore": 0.43,
+          "confidence": 0.373,
+          "supportScore": 0.373,
           "reasons": [
             "Order-book imbalance is 86.4%.",
-            "Top-book pressure is 0.0%."
+            "Top-book pressure is -19.3%."
           ],
           "supportingRoles": []
         }
@@ -1022,2004 +1022,27 @@
           "trend_continuation": 0.109,
           "breakout": 1,
           "mean_reversion": 1,
-          "microstructure": 0.43,
+          "microstructure": 0.373,
           "none": 0
         },
         "notes": [
           "Deterministic engine selected mean_reversion from regime mean_reversion.",
-          "Adjusted directional edge is -0.391."
+          "Adjusted directional edge is -0.412."
         ],
-        "generatedAt": "2026-04-17T18:48:19.107Z"
+        "generatedAt": "2026-04-17T18:49:05.134Z"
       },
       "expectedValue": {
-        "grossEdgeBps": 3.26,
-        "estimatedFeeBps": 8,
-        "estimatedSlippageBps": 1.75,
-        "netEdgeBps": -6.49,
-        "rewardRiskRatio": 0.33,
-        "tradeAllowed": false,
-        "notes": [
-          "Execution quality 96.9%.",
-          "Risk penalty 24.5%."
-        ],
-        "generatedAt": "2026-04-17T18:48:19.107Z"
-      }
-    }
-  },
-  {
-    "id": "swarm_1776451677019_m4i5ig",
-    "type": "swarm_run",
-    "timestamp": "2026-04-17T18:47:57.019Z",
-    "symbol": "ETH-EUR",
-    "timeframe": "5m",
-    "cached": false,
-    "totalElapsedMs": 34,
-    "consensus": {
-      "symbol": "ETH-EUR",
-      "timeframe": "5m",
-      "signal": "SELL",
-      "directionalSignal": "SELL",
-      "directionalConfidence": 0.669,
-      "directionalAgreement": 0.912,
-      "decision": "HOLD",
-      "confidence": 0.49,
-      "agreement": 0.52,
-      "decisionSource": "deterministic",
-      "featureSummary": {
-        "return3Bps": 41.532,
-        "return10Bps": -37.1487,
-        "volatilityShortBps": 14.6942,
-        "volatilityLongBps": 19.2188,
-        "spreadBps": 0.0485,
-        "buySlippageBps": 0,
-        "sellSlippageBps": 6.4926,
-        "orderBookImbalancePct": 0.23,
-        "topBookPressurePct": 1.8539,
-        "volumeExpansion": 0.1392,
-        "distanceFromVwapBps": 31.493,
-        "breakoutDistanceBps": 10.5573,
-        "compressionPct": 84.6367,
-        "maxExecutableBuyUsd": 9,
-        "maxExecutableSellUsd": 0
-      },
-      "riskFlags": [
-        "slippage_elevated",
-        "candle_indecision",
-        "inventory_constrained"
-      ],
-      "directionalEdgeScore": -0.376,
-      "executionQualityScore": 0.885,
-      "riskPenaltyScore": 0.309,
-      "expectedNetEdgeBps": -10.07,
-      "marketQualityScore": 0.894,
-      "decisionCadenceMs": 7268,
-      "symbolThrottleMs": 10175,
-      "votes": [],
-      "weightedScores": {
-        "BUY": 0,
-        "SELL": 0.364,
-        "HOLD": 0.661
-      },
-      "validatedAt": "2026-04-17T18:47:56.983Z",
-      "blocked": true,
-      "executionEligible": false,
-      "blockReason": "Spot account is flat, so the bearish setup resolves to HOLD.",
-      "rejectionReasons": [
-        {
-          "layer": "execution",
-          "code": "spot_shorting_not_available",
-          "summary": "Spot account is flat, so the bearish setup resolves to HOLD.",
-          "detail": "The engine detected a bearish setup, but there is no base inventory available and spot mode cannot open a synthetic short.",
-          "metrics": {
-            "maxExecutableSellUsd": 0,
-            "availableBaseUsd": 0,
-            "minimumTradeNotionalUsd": 5
-          }
-        },
-        {
-          "layer": "expected_value",
-          "code": "expected_net_edge_below_threshold",
-          "summary": "Expected net edge does not clear the minimum threshold.",
-          "detail": "Expected net edge -10.07 bps is below 4.00 bps.",
-          "metrics": {
-            "expectedNetEdgeBps": -10.07,
-            "minNetEdgeBps": 4
-          }
-        }
-      ],
-      "memory": {
-        "symbol": "ETH-EUR",
-        "timeframe": "5m",
-        "totalMemories": 3,
-        "effectiveSampleSize": 0.911,
-        "blockedRatio": 1,
-        "averageConfidence": 0.49,
-        "directionalWeights": {
-          "BUY": 0.911,
-          "SELL": 0,
-          "HOLD": 0
-        },
-        "dominantSignal": "BUY",
-        "topRecalls": [
-          {
-            "id": 228,
-            "createdAt": "2026-04-17T18:45:11.391Z",
-            "signal": "BUY",
-            "confidence": 0.49,
-            "agreement": 0.52,
-            "blocked": true,
-            "summary": "BUY 49% | agree 52% | blocked: Expected net edge does not clear the minimum threshold.",
-            "ageHours": 0.05,
-            "decayWeight": 1,
-            "similarity": 0.979,
-            "weightedInfluence": 0.336
-          },
-          {
-            "id": 223,
-            "createdAt": "2026-04-17T18:44:08.868Z",
-            "signal": "BUY",
-            "confidence": 0.49,
-            "agreement": 0.52,
-            "blocked": true,
-            "summary": "BUY 49% | agree 52% | blocked: Expected net edge does not clear the minimum threshold.",
-            "ageHours": 0.06,
-            "decayWeight": 0.999,
-            "similarity": 0.933,
-            "weightedInfluence": 0.32
-          },
-          {
-            "id": 193,
-            "createdAt": "2026-04-17T07:37:30.387Z",
-            "signal": "BUY",
-            "confidence": 0.49,
-            "agreement": 0.52,
-            "blocked": true,
-            "summary": "BUY 49% | agree 52% | blocked: Expected net edge does not clear the minimum threshold.",
-            "ageHours": 11.17,
-            "decayWeight": 0.898,
-            "similarity": 0.827,
-            "weightedInfluence": 0.255
-          }
-        ],
-        "generatedAt": "2026-04-17T18:47:56.983Z"
-      },
-      "harness": {
-        "generatedAt": "2026-04-17T18:47:56.983Z",
-        "marketQualityScore": 0.894,
-        "liquidityScore": 0.997,
-        "volatilityPenalty": 0.309,
-        "memoryAlignmentScore": 0,
-        "confidenceAdjustment": -0.179,
-        "blockedByHarness": true,
-        "notes": [
-          "Execution quality 88.5%.",
-          "Selected engine mean_reversion."
-        ]
-      },
-      "regime": {
-        "regime": "mean_reversion",
-        "confidence": 0.595,
-        "trendScore": 0.337,
-        "breakoutScore": 0.718,
-        "meanReversionScore": 0.595,
-        "volatilityScore": 0.956,
-        "liquidityScore": 0.999,
-        "notes": [
-          "Directional strength is muted; rotational behavior is more likely."
-        ],
-        "generatedAt": "2026-04-17T18:47:56.983Z"
-      },
-      "engineReports": [
-        {
-          "engine": "trend_continuation",
-          "signal": "BUY",
-          "confidence": 0.194,
-          "supportScore": 0.194,
-          "reasons": [
-            "Return stack favors continuation (37.4 bps over 5 bars).",
-            "Distance from mean is 0.22%."
-          ],
-          "supportingRoles": []
-        },
-        {
-          "engine": "breakout",
-          "signal": "SELL",
-          "confidence": 1,
-          "supportScore": 1,
-          "reasons": [
-            "Compression score is 85%.",
-            "Breakout distance is 10.6 bps."
-          ],
-          "supportingRoles": []
-        },
-        {
-          "engine": "mean_reversion",
-          "signal": "SELL",
-          "confidence": 1,
-          "supportScore": 1,
-          "reasons": [
-            "Distance from VWAP is 31.5 bps.",
-            "Wick balance is 0.00."
-          ],
-          "supportingRoles": []
-        },
-        {
-          "engine": "microstructure",
-          "signal": "HOLD",
-          "confidence": 0.038,
-          "supportScore": 0.038,
-          "reasons": [
-            "Order-book imbalance is 0.2%.",
-            "Top-book pressure is 1.9%."
-          ],
-          "supportingRoles": []
-        }
-      ],
-      "metaSelection": {
-        "selectedEngine": "mean_reversion",
-        "suitability": 1,
-        "actionBias": "SELL",
-        "engineScores": {
-          "trend_continuation": 0.194,
-          "breakout": 1,
-          "mean_reversion": 1,
-          "microstructure": 0.038,
-          "none": 0
-        },
-        "notes": [
-          "Deterministic engine selected mean_reversion from regime mean_reversion.",
-          "Adjusted directional edge is -0.376."
-        ],
-        "generatedAt": "2026-04-17T18:47:56.983Z"
-      },
-      "expectedValue": {
-        "grossEdgeBps": 4.43,
-        "estimatedFeeBps": 8,
-        "estimatedSlippageBps": 6.49,
-        "netEdgeBps": -10.07,
-        "rewardRiskRatio": 0.31,
-        "tradeAllowed": false,
-        "notes": [
-          "Execution quality 88.5%.",
-          "Risk penalty 30.9%."
-        ],
-        "generatedAt": "2026-04-17T18:47:56.983Z"
-      }
-    }
-  },
-  {
-    "id": "swarm_1776451676938_nioemx",
-    "type": "swarm_run",
-    "timestamp": "2026-04-17T18:47:56.938Z",
-    "symbol": "ORDI-EUR",
-    "timeframe": "5m",
-    "cached": false,
-    "totalElapsedMs": 54,
-    "consensus": {
-      "symbol": "ORDI-EUR",
-      "timeframe": "5m",
-      "signal": "BUY",
-      "directionalSignal": "BUY",
-      "directionalConfidence": 0.46,
-      "directionalAgreement": 0.333,
-      "decision": "HOLD",
-      "confidence": 0.46,
-      "agreement": 0.333,
-      "decisionSource": "deterministic",
-      "featureSummary": {
-        "return3Bps": 209.1183,
-        "return10Bps": 151.7422,
-        "volatilityShortBps": 99.0903,
-        "volatilityLongBps": 87.4415,
-        "spreadBps": 9.2268,
-        "buySlippageBps": 31.9032,
-        "sellSlippageBps": 39.0754,
-        "orderBookImbalancePct": -0.0877,
-        "topBookPressurePct": -0.0001,
-        "volumeExpansion": 0.0608,
-        "distanceFromVwapBps": 176.4738,
-        "breakoutDistanceBps": 55.669,
-        "compressionPct": 0,
-        "maxExecutableBuyUsd": 9,
-        "maxExecutableSellUsd": 0
-      },
-      "riskFlags": [
-        "slippage_elevated",
-        "market_quality_soft"
-      ],
-      "directionalEdgeScore": 0.036,
-      "executionQualityScore": 0.249,
-      "riskPenaltyScore": 0.715,
-      "expectedNetEdgeBps": -36.56,
-      "marketQualityScore": 0.303,
-      "decisionCadenceMs": 12600,
-      "symbolThrottleMs": 23940,
-      "votes": [],
-      "weightedScores": {
-        "BUY": 0.028,
-        "SELL": 0,
-        "HOLD": 1
-      },
-      "validatedAt": "2026-04-17T18:47:56.904Z",
-      "blocked": true,
-      "executionEligible": false,
-      "blockReason": "Directional edge is below the minimum executable threshold.",
-      "rejectionReasons": [
-        {
-          "layer": "expected_value",
-          "code": "directional_edge_below_threshold",
-          "summary": "Directional edge is below the minimum executable threshold.",
-          "detail": "Directional edge 0.036 is below 0.100.",
-          "metrics": {
-            "directionalEdge": 0.036,
-            "minDirectionalEdge": 0.1
-          }
-        },
-        {
-          "layer": "validator",
-          "code": "deterministic_confidence_below_min",
-          "summary": "Deterministic confidence is below the minimum threshold.",
-          "detail": "Confidence 46.00% is below 55.00%.",
-          "metrics": {
-            "confidence": 46,
-            "minConfidence": 55
-          }
-        },
-        {
-          "layer": "market_data",
-          "code": "market_quality_below_threshold",
-          "summary": "Market quality is below the minimum threshold.",
-          "detail": "Market quality 30.30% is below 50.00%.",
-          "metrics": {
-            "marketQualityScore": 30.3,
-            "minMarketQuality": 50
-          }
-        },
-        {
-          "layer": "expected_value",
-          "code": "expected_net_edge_below_threshold",
-          "summary": "Expected net edge does not clear the minimum threshold.",
-          "detail": "Expected net edge -36.56 bps is below 4.00 bps.",
-          "metrics": {
-            "expectedNetEdgeBps": -36.56,
-            "minNetEdgeBps": 4
-          }
-        }
-      ],
-      "memory": {
-        "symbol": "ORDI-EUR",
-        "timeframe": "5m",
-        "totalMemories": 3,
-        "effectiveSampleSize": 0.679,
-        "blockedRatio": 1,
-        "averageConfidence": 0.478,
-        "directionalWeights": {
-          "BUY": 0.543,
-          "SELL": 0.136,
-          "HOLD": 0
-        },
-        "dominantSignal": "BUY",
-        "topRecalls": [
-          {
-            "id": 230,
-            "createdAt": "2026-04-17T18:45:11.401Z",
-            "signal": "BUY",
-            "confidence": 0.461,
-            "agreement": 0.52,
-            "blocked": true,
-            "summary": "BUY 46% | agree 52% | blocked: Directional edge is below the minimum executable threshold.",
-            "ageHours": 0.05,
-            "decayWeight": 1,
-            "similarity": 0.885,
-            "weightedInfluence": 0.285
-          },
-          {
-            "id": 222,
-            "createdAt": "2026-04-17T18:44:08.848Z",
-            "signal": "BUY",
-            "confidence": 0.49,
-            "agreement": 0.52,
-            "blocked": true,
-            "summary": "BUY 49% | agree 52% | blocked: Deterministic confidence is below the minimum threshold.",
-            "ageHours": 0.06,
-            "decayWeight": 0.999,
-            "similarity": 0.754,
-            "weightedInfluence": 0.258
-          },
-          {
-            "id": 198,
-            "createdAt": "2026-04-17T07:37:30.664Z",
-            "signal": "SELL",
-            "confidence": 0.49,
-            "agreement": 0.52,
-            "blocked": true,
-            "summary": "SELL 49% | agree 52% | blocked: Spot account is flat, so the bearish setup resolves to HOLD.",
-            "ageHours": 11.17,
-            "decayWeight": 0.898,
-            "similarity": 0.443,
-            "weightedInfluence": 0.136
-          }
-        ],
-        "generatedAt": "2026-04-17T18:47:56.899Z"
-      },
-      "harness": {
-        "generatedAt": "2026-04-17T18:47:56.904Z",
-        "marketQualityScore": 0.303,
-        "liquidityScore": 0.487,
-        "volatilityPenalty": 0.715,
-        "memoryAlignmentScore": 0,
-        "confidenceAdjustment": 0,
-        "blockedByHarness": true,
-        "notes": [
-          "Execution quality 24.9%.",
-          "Selected engine trend_continuation."
-        ]
-      },
-      "regime": {
-        "regime": "trend",
-        "confidence": 1,
-        "trendScore": 1,
-        "breakoutScore": 1,
-        "meanReversionScore": 0,
-        "volatilityScore": 0.907,
-        "liquidityScore": 0.846,
-        "notes": [
-          "Directional move and order book alignment favor trend continuation."
-        ],
-        "generatedAt": "2026-04-17T18:47:56.902Z"
-      },
-      "engineReports": [
-        {
-          "engine": "trend_continuation",
-          "signal": "BUY",
-          "confidence": 1,
-          "supportScore": 1,
-          "reasons": [
-            "Return stack favors continuation (138.4 bps over 5 bars).",
-            "Distance from mean is 1.37%."
-          ],
-          "supportingRoles": []
-        },
-        {
-          "engine": "breakout",
-          "signal": "SELL",
-          "confidence": 1,
-          "supportScore": 1,
-          "reasons": [
-            "Compression score is 0%.",
-            "Breakout distance is 55.7 bps."
-          ],
-          "supportingRoles": []
-        },
-        {
-          "engine": "mean_reversion",
-          "signal": "SELL",
-          "confidence": 1,
-          "supportScore": 1,
-          "reasons": [
-            "Distance from VWAP is 176.5 bps.",
-            "Wick balance is -0.78."
-          ],
-          "supportingRoles": []
-        },
-        {
-          "engine": "microstructure",
-          "signal": "HOLD",
-          "confidence": 0.033,
-          "supportScore": 0.033,
-          "reasons": [
-            "Order-book imbalance is -0.1%.",
-            "Top-book pressure is -0.0%."
-          ],
-          "supportingRoles": []
-        }
-      ],
-      "metaSelection": {
-        "selectedEngine": "trend_continuation",
-        "suitability": 1,
-        "actionBias": "BUY",
-        "engineScores": {
-          "trend_continuation": 1,
-          "breakout": 1,
-          "mean_reversion": 1,
-          "microstructure": 0.033,
-          "none": 0
-        },
-        "notes": [
-          "Deterministic engine selected trend_continuation from regime trend.",
-          "Adjusted directional edge is 0.036."
-        ],
-        "generatedAt": "2026-04-17T18:47:56.904Z"
-      },
-      "expectedValue": {
-        "grossEdgeBps": 3.35,
-        "estimatedFeeBps": 8,
-        "estimatedSlippageBps": 31.9,
-        "netEdgeBps": -36.56,
-        "rewardRiskRatio": 0.08,
-        "tradeAllowed": false,
-        "notes": [
-          "Execution quality 24.9%.",
-          "Risk penalty 71.5%."
-        ],
-        "generatedAt": "2026-04-17T18:47:56.904Z"
-      }
-    }
-  },
-  {
-    "id": "swarm_1776451676667_1brskb",
-    "type": "swarm_run",
-    "timestamp": "2026-04-17T18:47:56.667Z",
-    "symbol": "BTC-EUR",
-    "timeframe": "5m",
-    "cached": false,
-    "totalElapsedMs": 413,
-    "consensus": {
-      "symbol": "BTC-EUR",
-      "timeframe": "5m",
-      "signal": "SELL",
-      "directionalSignal": "SELL",
-      "directionalConfidence": 0.711,
-      "directionalAgreement": 0.788,
-      "decision": "HOLD",
-      "confidence": 0.49,
-      "agreement": 0.52,
-      "decisionSource": "deterministic",
-      "featureSummary": {
-        "return3Bps": 17.2143,
-        "return10Bps": -17.0945,
-        "volatilityShortBps": 6.3527,
-        "volatilityLongBps": 9.7266,
-        "spreadBps": 0.0152,
-        "buySlippageBps": 0,
-        "sellSlippageBps": 1.752,
-        "orderBookImbalancePct": 86.4195,
-        "topBookPressurePct": 0,
-        "volumeExpansion": 0.123,
-        "distanceFromVwapBps": 2.2623,
-        "breakoutDistanceBps": 0.8227,
-        "compressionPct": 82.6633,
-        "maxExecutableBuyUsd": 9,
-        "maxExecutableSellUsd": 0
-      },
-      "riskFlags": [
-        "slippage_elevated",
-        "candle_indecision",
-        "inventory_constrained"
-      ],
-      "directionalEdgeScore": -0.391,
-      "executionQualityScore": 0.969,
-      "riskPenaltyScore": 0.245,
-      "expectedNetEdgeBps": -6.49,
-      "marketQualityScore": 0.964,
-      "decisionCadenceMs": 7268,
-      "symbolThrottleMs": 10175,
-      "votes": [
-        {
-          "model": "deepseek-v3.2:cloud",
-          "role": "trend_follower",
-          "modelRole": "strategy",
-          "signal": "HOLD",
-          "confidence": 0.386,
-          "reasoning": "Trend structure is mixed across the recent candle sequence. [Rate-limited: heuristic used] Memory: 4 samples | dominant BUY | blocked 100%",
-          "elapsedMs": 51,
-          "voteWeight": 1,
-          "isVetoLayer": false,
-          "researchTrace": {
-            "status": "skipped",
-            "searched": false,
-            "rationale": "Agent rate-limited; heuristic vote returned without external research."
-          }
-        },
-        {
-          "model": "gemma4:31b-cloud",
-          "role": "momentum_analyst",
-          "modelRole": "signal_worker",
-          "signal": "SELL",
-          "confidence": 0.445,
-          "reasoning": "Downside velocity is supported by the latest volume profile. [Rate-limited: heuristic used] Memory: 4 samples | dominant BUY | blocked 100%",
-          "elapsedMs": 74,
-          "voteWeight": 0.9,
-          "isVetoLayer": false,
-          "researchTrace": {
-            "status": "skipped",
-            "searched": false,
-            "rationale": "Agent rate-limited; heuristic vote returned without external research."
-          }
-        },
-        {
-          "model": "kimi-k2.5:cloud",
-          "role": "sentiment_reader",
-          "modelRole": "signal_worker",
-          "signal": "HOLD",
-          "confidence": 0.311,
-          "reasoning": "Order book pressure is balanced; no clear directional edge. [Rate-limited: heuristic used] Memory: 4 samples | dominant BUY | blocked 100%",
-          "elapsedMs": 73,
-          "voteWeight": 0.85,
-          "isVetoLayer": false,
-          "researchTrace": {
-            "status": "skipped",
-            "searched": false,
-            "rationale": "Agent rate-limited; heuristic vote returned without external research."
-          }
-        },
-        {
-          "model": "glm-5.1:cloud",
-          "role": "execution_tactician",
-          "modelRole": "validator",
-          "signal": "HOLD",
-          "confidence": 0.374,
-          "reasoning": "Execution conditions are adequate but no confirmed entry signal. [Rate-limited: heuristic used] Memory: 4 samples | dominant BUY | blocked 100%",
-          "elapsedMs": 73,
-          "voteWeight": 0.8,
-          "isVetoLayer": true,
-          "researchTrace": {
-            "status": "skipped",
-            "searched": false,
-            "rationale": "Agent rate-limited; heuristic vote returned without external research."
-          }
-        },
-        {
-          "model": "ministral-3:cloud",
-          "role": "macro_filter",
-          "modelRole": "risk",
-          "signal": "HOLD",
-          "confidence": 0.327,
-          "reasoning": "Market conditions are acceptable but no clear regime signal. [Rate-limited: heuristic used] Memory: 4 samples | dominant BUY | blocked 100%",
-          "elapsedMs": 73,
-          "voteWeight": 0.8,
-          "isVetoLayer": true,
-          "researchTrace": {
-            "status": "skipped",
-            "searched": false,
-            "rationale": "Agent rate-limited; heuristic vote returned without external research."
-          }
-        }
-      ],
-      "weightedScores": {
-        "BUY": 0,
-        "SELL": 0.387,
-        "HOLD": 0.622
-      },
-      "validatedAt": "2026-04-17T18:47:56.612Z",
-      "blocked": true,
-      "executionEligible": false,
-      "blockReason": "Spot account is flat, so the bearish setup resolves to HOLD.",
-      "rejectionReasons": [
-        {
-          "layer": "execution",
-          "code": "spot_shorting_not_available",
-          "summary": "Spot account is flat, so the bearish setup resolves to HOLD.",
-          "detail": "The engine detected a bearish setup, but there is no base inventory available and spot mode cannot open a synthetic short.",
-          "metrics": {
-            "maxExecutableSellUsd": 0,
-            "availableBaseUsd": 0,
-            "minimumTradeNotionalUsd": 5
-          }
-        },
-        {
-          "layer": "expected_value",
-          "code": "expected_net_edge_below_threshold",
-          "summary": "Expected net edge does not clear the minimum threshold.",
-          "detail": "Expected net edge -6.49 bps is below 4.00 bps.",
-          "metrics": {
-            "expectedNetEdgeBps": -6.49,
-            "minNetEdgeBps": 4
-          }
-        }
-      ],
-      "memory": {
-        "symbol": "BTC-EUR",
-        "timeframe": "5m",
-        "totalMemories": 4,
-        "effectiveSampleSize": 1.241,
-        "blockedRatio": 1,
-        "averageConfidence": 0.49,
-        "directionalWeights": {
-          "BUY": 0.908,
-          "SELL": 0.333,
-          "HOLD": 0
-        },
-        "dominantSignal": "BUY",
-        "topRecalls": [
-          {
-            "id": 218,
-            "createdAt": "2026-04-17T18:44:07.676Z",
-            "signal": "BUY",
-            "confidence": 0.49,
-            "agreement": 0.52,
-            "blocked": true,
-            "summary": "BUY 49% | agree 52% | blocked: Expected net edge does not clear the minimum threshold.",
-            "ageHours": 0.06,
-            "decayWeight": 0.999,
-            "similarity": 0.995,
-            "weightedInfluence": 0.341
-          },
-          {
-            "id": 214,
-            "createdAt": "2026-04-17T18:38:06.248Z",
-            "signal": "SELL",
-            "confidence": 0.49,
-            "agreement": 0.52,
-            "blocked": true,
-            "summary": "SELL 49% | agree 52% | blocked: Spot account is flat, so the bearish setup resolves to HOLD.",
-            "ageHours": 0.16,
-            "decayWeight": 0.998,
-            "similarity": 0.972,
-            "weightedInfluence": 0.333
-          },
-          {
-            "id": 226,
-            "createdAt": "2026-04-17T18:45:11.361Z",
-            "signal": "BUY",
-            "confidence": 0.49,
-            "agreement": 0.52,
-            "blocked": true,
-            "summary": "BUY 49% | agree 52% | blocked: Expected net edge does not clear the minimum threshold.",
-            "ageHours": 0.05,
-            "decayWeight": 1,
-            "similarity": 0.913,
-            "weightedInfluence": 0.313
-          },
-          {
-            "id": 197,
-            "createdAt": "2026-04-17T07:37:30.608Z",
-            "signal": "BUY",
-            "confidence": 0.49,
-            "agreement": 0.52,
-            "blocked": true,
-            "summary": "BUY 49% | agree 52% | blocked: Expected net edge does not clear the minimum threshold.",
-            "ageHours": 11.17,
-            "decayWeight": 0.898,
-            "similarity": 0.826,
-            "weightedInfluence": 0.254
-          }
-        ],
-        "generatedAt": "2026-04-17T18:47:56.534Z"
-      },
-      "harness": {
-        "generatedAt": "2026-04-17T18:47:56.612Z",
-        "marketQualityScore": 0.964,
-        "liquidityScore": 0.999,
-        "volatilityPenalty": 0.245,
-        "memoryAlignmentScore": 0,
-        "confidenceAdjustment": -0.221,
-        "blockedByHarness": true,
-        "notes": [
-          "Execution quality 96.9%.",
-          "Selected engine mean_reversion."
-        ]
-      },
-      "regime": {
-        "regime": "mean_reversion",
-        "confidence": 0.768,
-        "trendScore": 0.193,
-        "breakoutScore": 0.599,
-        "meanReversionScore": 0.768,
-        "volatilityScore": 0.973,
-        "liquidityScore": 1,
-        "notes": [
-          "Directional strength is muted; rotational behavior is more likely."
-        ],
-        "generatedAt": "2026-04-17T18:47:56.610Z"
-      },
-      "engineReports": [
-        {
-          "engine": "trend_continuation",
-          "signal": "BUY",
-          "confidence": 0.109,
-          "supportScore": 0.109,
-          "reasons": [
-            "Return stack favors continuation (22.6 bps over 5 bars).",
-            "Distance from mean is 0.13%."
-          ],
-          "supportingRoles": []
-        },
-        {
-          "engine": "breakout",
-          "signal": "SELL",
-          "confidence": 1,
-          "supportScore": 1,
-          "reasons": [
-            "Compression score is 83%.",
-            "Breakout distance is 0.8 bps."
-          ],
-          "supportingRoles": []
-        },
-        {
-          "engine": "mean_reversion",
-          "signal": "SELL",
-          "confidence": 1,
-          "supportScore": 1,
-          "reasons": [
-            "Distance from VWAP is 2.3 bps.",
-            "Wick balance is 0.00."
-          ],
-          "supportingRoles": []
-        },
-        {
-          "engine": "microstructure",
-          "signal": "BUY",
-          "confidence": 0.43,
-          "supportScore": 0.43,
-          "reasons": [
-            "Order-book imbalance is 86.4%.",
-            "Top-book pressure is 0.0%."
-          ],
-          "supportingRoles": []
-        }
-      ],
-      "metaSelection": {
-        "selectedEngine": "mean_reversion",
-        "suitability": 1,
-        "actionBias": "SELL",
-        "engineScores": {
-          "trend_continuation": 0.109,
-          "breakout": 1,
-          "mean_reversion": 1,
-          "microstructure": 0.43,
-          "none": 0
-        },
-        "notes": [
-          "Deterministic engine selected mean_reversion from regime mean_reversion.",
-          "Adjusted directional edge is -0.391."
-        ],
-        "generatedAt": "2026-04-17T18:47:56.612Z"
-      },
-      "expectedValue": {
-        "grossEdgeBps": 3.26,
-        "estimatedFeeBps": 8,
-        "estimatedSlippageBps": 1.75,
-        "netEdgeBps": -6.49,
-        "rewardRiskRatio": 0.33,
-        "tradeAllowed": false,
-        "notes": [
-          "Execution quality 96.9%.",
-          "Risk penalty 24.5%."
-        ],
-        "generatedAt": "2026-04-17T18:47:56.612Z"
-      }
-    }
-  },
-  {
-    "id": "swarm_1776451511378_1hirz9",
-    "type": "swarm_run",
-    "timestamp": "2026-04-17T18:45:11.378Z",
-    "symbol": "PEPE-EUR",
-    "timeframe": "5m",
-    "cached": false,
-    "totalElapsedMs": 43,
-    "consensus": {
-      "symbol": "PEPE-EUR",
-      "timeframe": "5m",
-      "signal": "SELL",
-      "directionalSignal": "SELL",
-      "directionalConfidence": 0.457,
-      "directionalAgreement": 0.322,
-      "decision": "HOLD",
-      "confidence": 0.457,
-      "agreement": 0.322,
-      "decisionSource": "deterministic",
-      "featureSummary": {
-        "return3Bps": 81.3244,
-        "return10Bps": 40.4975,
-        "volatilityShortBps": 19.5638,
-        "volatilityLongBps": 34.5177,
-        "spreadBps": 8.643,
-        "buySlippageBps": 26.9026,
-        "sellSlippageBps": 48.4315,
-        "orderBookImbalancePct": -0.0577,
-        "topBookPressurePct": 70.346,
-        "volumeExpansion": 0.5797,
-        "distanceFromVwapBps": 65.5363,
-        "breakoutDistanceBps": 79.8606,
-        "compressionPct": 49.6472,
-        "maxExecutableBuyUsd": 9,
-        "maxExecutableSellUsd": 0
-      },
-      "riskFlags": [
-        "slippage_elevated",
-        "inventory_constrained",
-        "market_quality_soft"
-      ],
-      "directionalEdgeScore": -0.074,
-      "executionQualityScore": 0.242,
-      "riskPenaltyScore": 0.298,
-      "expectedNetEdgeBps": -54.72,
-      "marketQualityScore": 0.387,
-      "decisionCadenceMs": 11970,
-      "symbolThrottleMs": 22743,
-      "votes": [],
-      "weightedScores": {
-        "BUY": 0,
-        "SELL": 0.06,
-        "HOLD": 1
-      },
-      "validatedAt": "2026-04-17T18:45:11.335Z",
-      "blocked": true,
-      "executionEligible": false,
-      "blockReason": "Spot account is flat, so the bearish setup resolves to HOLD.",
-      "rejectionReasons": [
-        {
-          "layer": "execution",
-          "code": "spot_shorting_not_available",
-          "summary": "Spot account is flat, so the bearish setup resolves to HOLD.",
-          "detail": "The engine detected a bearish setup, but there is no base inventory available and spot mode cannot open a synthetic short.",
-          "metrics": {
-            "maxExecutableSellUsd": 0,
-            "availableBaseUsd": 0,
-            "minimumTradeNotionalUsd": 5
-          }
-        },
-        {
-          "layer": "expected_value",
-          "code": "directional_edge_below_threshold",
-          "summary": "Directional edge is below the minimum executable threshold.",
-          "detail": "Directional edge 0.074 is below 0.100.",
-          "metrics": {
-            "directionalEdge": 0.074,
-            "minDirectionalEdge": 0.1
-          }
-        },
-        {
-          "layer": "validator",
-          "code": "deterministic_confidence_below_min",
-          "summary": "Deterministic confidence is below the minimum threshold.",
-          "detail": "Confidence 45.70% is below 55.00%.",
-          "metrics": {
-            "confidence": 45.7,
-            "minConfidence": 55
-          }
-        },
-        {
-          "layer": "market_data",
-          "code": "market_quality_below_threshold",
-          "summary": "Market quality is below the minimum threshold.",
-          "detail": "Market quality 38.70% is below 50.00%.",
-          "metrics": {
-            "marketQualityScore": 38.7,
-            "minMarketQuality": 50
-          }
-        },
-        {
-          "layer": "expected_value",
-          "code": "expected_net_edge_below_threshold",
-          "summary": "Expected net edge does not clear the minimum threshold.",
-          "detail": "Expected net edge -54.72 bps is below 4.00 bps.",
-          "metrics": {
-            "expectedNetEdgeBps": -54.72,
-            "minNetEdgeBps": 4
-          }
-        }
-      ],
-      "memory": {
-        "symbol": "PEPE-EUR",
-        "timeframe": "5m",
-        "totalMemories": 3,
-        "effectiveSampleSize": 0.806,
-        "blockedRatio": 1,
-        "averageConfidence": 0.488,
-        "directionalWeights": {
-          "BUY": 0,
-          "SELL": 0.806,
-          "HOLD": 0
-        },
-        "dominantSignal": "SELL",
-        "topRecalls": [
-          {
-            "id": 220,
-            "createdAt": "2026-04-17T18:44:08.755Z",
-            "signal": "SELL",
-            "confidence": 0.484,
-            "agreement": 0.339,
-            "blocked": true,
-            "summary": "SELL 48% | agree 34% | blocked: Spot account is flat, so the bearish setup resolves to HOLD.",
-            "ageHours": 0.02,
-            "decayWeight": 1,
-            "similarity": 0.959,
-            "weightedInfluence": 0.325
-          },
-          {
-            "id": 217,
-            "createdAt": "2026-04-17T18:38:06.640Z",
-            "signal": "SELL",
-            "confidence": 0.49,
-            "agreement": 0.52,
-            "blocked": true,
-            "summary": "SELL 49% | agree 52% | blocked: Spot account is flat, so the bearish setup resolves to HOLD.",
-            "ageHours": 0.12,
-            "decayWeight": 0.999,
-            "similarity": 0.78,
-            "weightedInfluence": 0.267
-          },
-          {
-            "id": 200,
-            "createdAt": "2026-04-17T07:37:30.746Z",
-            "signal": "SELL",
-            "confidence": 0.49,
-            "agreement": 0.52,
-            "blocked": true,
-            "summary": "SELL 49% | agree 52% | blocked: Spot account is flat, so the bearish setup resolves to HOLD.",
-            "ageHours": 11.13,
-            "decayWeight": 0.898,
-            "similarity": 0.695,
-            "weightedInfluence": 0.214
-          }
-        ],
-        "generatedAt": "2026-04-17T18:45:11.334Z"
-      },
-      "harness": {
-        "generatedAt": "2026-04-17T18:45:11.335Z",
-        "marketQualityScore": 0.387,
-        "liquidityScore": 0.52,
-        "volatilityPenalty": 0.298,
-        "memoryAlignmentScore": 0,
-        "confidenceAdjustment": 0,
-        "blockedByHarness": true,
-        "notes": [
-          "Execution quality 24.2%.",
-          "Selected engine breakout."
-        ]
-      },
-      "regime": {
-        "regime": "breakout",
-        "confidence": 0.856,
-        "trendScore": 0.8,
-        "breakoutScore": 0.856,
-        "meanReversionScore": 0.12,
-        "volatilityScore": 0.946,
-        "liquidityScore": 0.856,
-        "notes": [
-          "Range compression plus directional expansion favors breakout logic."
-        ],
-        "generatedAt": "2026-04-17T18:45:11.335Z"
-      },
-      "engineReports": [
-        {
-          "engine": "trend_continuation",
-          "signal": "BUY",
-          "confidence": 0.772,
-          "supportScore": 0.772,
-          "reasons": [
-            "Return stack favors continuation (101.9 bps over 5 bars).",
-            "Distance from mean is 0.82%."
-          ],
-          "supportingRoles": []
-        },
-        {
-          "engine": "breakout",
-          "signal": "SELL",
-          "confidence": 1,
-          "supportScore": 1,
-          "reasons": [
-            "Compression score is 50%.",
-            "Breakout distance is 79.9 bps."
-          ],
-          "supportingRoles": []
-        },
-        {
-          "engine": "mean_reversion",
-          "signal": "BUY",
-          "confidence": 1,
-          "supportScore": 1,
-          "reasons": [
-            "Distance from VWAP is 65.5 bps.",
-            "Wick balance is 0.00."
-          ],
-          "supportingRoles": []
-        },
-        {
-          "engine": "microstructure",
-          "signal": "BUY",
-          "confidence": 0.331,
-          "supportScore": 0.331,
-          "reasons": [
-            "Order-book imbalance is -0.1%.",
-            "Top-book pressure is 70.3%."
-          ],
-          "supportingRoles": []
-        }
-      ],
-      "metaSelection": {
-        "selectedEngine": "breakout",
-        "suitability": 1,
-        "actionBias": "SELL",
-        "engineScores": {
-          "trend_continuation": 0.772,
-          "breakout": 1,
-          "mean_reversion": 1,
-          "microstructure": 0.331,
-          "none": 0
-        },
-        "notes": [
-          "Deterministic engine selected breakout from regime breakout.",
-          "Adjusted directional edge is -0.074."
-        ],
-        "generatedAt": "2026-04-17T18:45:11.335Z"
-      },
-      "expectedValue": {
-        "grossEdgeBps": 1.72,
-        "estimatedFeeBps": 8,
-        "estimatedSlippageBps": 48.43,
-        "netEdgeBps": -54.72,
-        "rewardRiskRatio": 0.03,
-        "tradeAllowed": false,
-        "notes": [
-          "Execution quality 24.2%.",
-          "Risk penalty 29.8%."
-        ],
-        "generatedAt": "2026-04-17T18:45:11.335Z"
-      }
-    }
-  },
-  {
-    "id": "swarm_1776451511358_g4klhf",
-    "type": "swarm_run",
-    "timestamp": "2026-04-17T18:45:11.358Z",
-    "symbol": "BTC-EUR",
-    "timeframe": "5m",
-    "cached": false,
-    "totalElapsedMs": 46,
-    "consensus": {
-      "symbol": "BTC-EUR",
-      "timeframe": "5m",
-      "signal": "BUY",
-      "directionalSignal": "BUY",
-      "directionalConfidence": 0.711,
-      "directionalAgreement": 0.62,
-      "decision": "HOLD",
-      "confidence": 0.49,
-      "agreement": 0.52,
-      "decisionSource": "deterministic",
-      "featureSummary": {
-        "return3Bps": 16.919,
-        "return10Bps": -18.85,
-        "volatilityShortBps": 5.8599,
-        "volatilityLongBps": 10.5836,
-        "spreadBps": 0.0152,
-        "buySlippageBps": 3.2441,
-        "sellSlippageBps": 0,
-        "orderBookImbalancePct": 83.6927,
-        "topBookPressurePct": -20.001,
-        "volumeExpansion": 0.1156,
-        "distanceFromVwapBps": 1.757,
-        "breakoutDistanceBps": 0.495,
-        "compressionPct": 74.4646,
-        "maxExecutableBuyUsd": 9,
-        "maxExecutableSellUsd": 0
-      },
-      "riskFlags": [
-        "slippage_elevated"
-      ],
-      "directionalEdgeScore": 0.411,
-      "executionQualityScore": 0.943,
-      "riskPenaltyScore": 0.1,
-      "expectedNetEdgeBps": -7.82,
-      "marketQualityScore": 0.946,
-      "decisionCadenceMs": 7268,
-      "symbolThrottleMs": 10175,
-      "votes": [],
-      "weightedScores": {
-        "BUY": 0.404,
-        "SELL": 0,
-        "HOLD": 0.608
-      },
-      "validatedAt": "2026-04-17T18:45:11.325Z",
-      "blocked": true,
-      "executionEligible": false,
-      "blockReason": "Expected net edge does not clear the minimum threshold.",
-      "rejectionReasons": [
-        {
-          "layer": "expected_value",
-          "code": "expected_net_edge_below_threshold",
-          "summary": "Expected net edge does not clear the minimum threshold.",
-          "detail": "Expected net edge -7.82 bps is below 4.00 bps.",
-          "metrics": {
-            "expectedNetEdgeBps": -7.82,
-            "minNetEdgeBps": 4
-          }
-        }
-      ],
-      "memory": {
-        "symbol": "BTC-EUR",
-        "timeframe": "5m",
-        "totalMemories": 3,
-        "effectiveSampleSize": 0.86,
-        "blockedRatio": 1,
-        "averageConfidence": 0.49,
-        "directionalWeights": {
-          "BUY": 0.543,
-          "SELL": 0.317,
-          "HOLD": 0
-        },
-        "dominantSignal": "BUY",
-        "topRecalls": [
-          {
-            "id": 214,
-            "createdAt": "2026-04-17T18:38:06.248Z",
-            "signal": "SELL",
-            "confidence": 0.49,
-            "agreement": 0.52,
-            "blocked": true,
-            "summary": "SELL 49% | agree 52% | blocked: Spot account is flat, so the bearish setup resolves to HOLD.",
-            "ageHours": 0.12,
-            "decayWeight": 0.999,
-            "similarity": 0.926,
-            "weightedInfluence": 0.317
-          },
-          {
-            "id": 218,
-            "createdAt": "2026-04-17T18:44:07.676Z",
-            "signal": "BUY",
-            "confidence": 0.49,
-            "agreement": 0.52,
-            "blocked": true,
-            "summary": "BUY 49% | agree 52% | blocked: Expected net edge does not clear the minimum threshold.",
-            "ageHours": 0.02,
-            "decayWeight": 1,
-            "similarity": 0.917,
-            "weightedInfluence": 0.315
-          },
-          {
-            "id": 197,
-            "createdAt": "2026-04-17T07:37:30.608Z",
-            "signal": "BUY",
-            "confidence": 0.49,
-            "agreement": 0.52,
-            "blocked": true,
-            "summary": "BUY 49% | agree 52% | blocked: Expected net edge does not clear the minimum threshold.",
-            "ageHours": 11.13,
-            "decayWeight": 0.898,
-            "similarity": 0.741,
-            "weightedInfluence": 0.228
-          }
-        ],
-        "generatedAt": "2026-04-17T18:45:11.324Z"
-      },
-      "harness": {
-        "generatedAt": "2026-04-17T18:45:11.325Z",
-        "marketQualityScore": 0.946,
-        "liquidityScore": 0.999,
-        "volatilityPenalty": 0.1,
-        "memoryAlignmentScore": 0,
-        "confidenceAdjustment": -0.221,
-        "blockedByHarness": true,
-        "notes": [
-          "Execution quality 94.3%.",
-          "Selected engine mean_reversion."
-        ]
-      },
-      "regime": {
-        "regime": "mean_reversion",
-        "confidence": 0.741,
-        "trendScore": 0.277,
-        "breakoutScore": 0.525,
-        "meanReversionScore": 0.741,
-        "volatilityScore": 0.965,
-        "liquidityScore": 1,
-        "notes": [
-          "Directional strength is muted; rotational behavior is more likely."
-        ],
-        "generatedAt": "2026-04-17T18:45:11.324Z"
-      },
-      "engineReports": [
-        {
-          "engine": "trend_continuation",
-          "signal": "BUY",
-          "confidence": 0.115,
-          "supportScore": 0.115,
-          "reasons": [
-            "Return stack favors continuation (25.0 bps over 5 bars).",
-            "Distance from mean is 0.14%."
-          ],
-          "supportingRoles": []
-        },
-        {
-          "engine": "breakout",
-          "signal": "SELL",
-          "confidence": 1,
-          "supportScore": 1,
-          "reasons": [
-            "Compression score is 74%.",
-            "Breakout distance is 0.5 bps."
-          ],
-          "supportingRoles": []
-        },
-        {
-          "engine": "mean_reversion",
-          "signal": "BUY",
-          "confidence": 1,
-          "supportScore": 1,
-          "reasons": [
-            "Distance from VWAP is 1.8 bps.",
-            "Wick balance is -0.00."
-          ],
-          "supportingRoles": []
-        },
-        {
-          "engine": "microstructure",
-          "signal": "BUY",
-          "confidence": 0.52,
-          "supportScore": 0.52,
-          "reasons": [
-            "Order-book imbalance is 83.7%.",
-            "Top-book pressure is -20.0%."
-          ],
-          "supportingRoles": []
-        }
-      ],
-      "metaSelection": {
-        "selectedEngine": "mean_reversion",
-        "suitability": 1,
-        "actionBias": "BUY",
-        "engineScores": {
-          "trend_continuation": 0.115,
-          "breakout": 1,
-          "mean_reversion": 1,
-          "microstructure": 0.52,
-          "none": 0
-        },
-        "notes": [
-          "Deterministic engine selected mean_reversion from regime mean_reversion.",
-          "Adjusted directional edge is 0.411."
-        ],
-        "generatedAt": "2026-04-17T18:45:11.325Z"
-      },
-      "expectedValue": {
-        "grossEdgeBps": 3.42,
-        "estimatedFeeBps": 8,
-        "estimatedSlippageBps": 3.24,
-        "netEdgeBps": -7.82,
-        "rewardRiskRatio": 0.3,
-        "tradeAllowed": false,
-        "notes": [
-          "Execution quality 94.3%.",
-          "Risk penalty 10.0%."
-        ],
-        "generatedAt": "2026-04-17T18:45:11.325Z"
-      }
-    }
-  },
-  {
-    "id": "swarm_1776451448936_g4im9h",
-    "type": "swarm_run",
-    "timestamp": "2026-04-17T18:44:08.936Z",
-    "symbol": "USDC-EUR",
-    "timeframe": "5m",
-    "cached": false,
-    "totalElapsedMs": 45,
-    "consensus": {
-      "symbol": "USDC-EUR",
-      "timeframe": "5m",
-      "signal": "SELL",
-      "directionalSignal": "SELL",
-      "directionalConfidence": 0.623,
-      "directionalAgreement": 0.357,
-      "decision": "HOLD",
-      "confidence": 0.49,
-      "agreement": 0.357,
-      "decisionSource": "deterministic",
-      "featureSummary": {
-        "return3Bps": 1.1792,
-        "return10Bps": -1.179,
-        "volatilityShortBps": 1.4147,
-        "volatilityLongBps": 1.3719,
-        "spreadBps": 1.1791,
-        "buySlippageBps": 1.1791,
-        "sellSlippageBps": 0,
-        "orderBookImbalancePct": 99.3515,
-        "topBookPressurePct": 99.2952,
-        "volumeExpansion": 0.0093,
-        "distanceFromVwapBps": -1.7394,
-        "breakoutDistanceBps": -2.3577,
-        "compressionPct": 19.9802,
-        "maxExecutableBuyUsd": 9,
-        "maxExecutableSellUsd": 0
-      },
-      "riskFlags": [
-        "candle_indecision",
-        "inventory_constrained"
-      ],
-      "directionalEdgeScore": -0.157,
-      "executionQualityScore": 0.971,
-      "riskPenaltyScore": 0.195,
-      "expectedNetEdgeBps": -6.72,
-      "marketQualityScore": 0.97,
-      "decisionCadenceMs": 8479,
-      "symbolThrottleMs": 11871,
-      "votes": [],
-      "weightedScores": {
-        "BUY": 0,
-        "SELL": 0.156,
-        "HOLD": 0.853
-      },
-      "validatedAt": "2026-04-17T18:44:08.814Z",
-      "blocked": true,
-      "executionEligible": false,
-      "blockReason": "Spot account is flat, so the bearish setup resolves to HOLD.",
-      "rejectionReasons": [
-        {
-          "layer": "execution",
-          "code": "spot_shorting_not_available",
-          "summary": "Spot account is flat, so the bearish setup resolves to HOLD.",
-          "detail": "The engine detected a bearish setup, but there is no base inventory available and spot mode cannot open a synthetic short.",
-          "metrics": {
-            "maxExecutableSellUsd": 0,
-            "availableBaseUsd": 0,
-            "minimumTradeNotionalUsd": 5
-          }
-        },
-        {
-          "layer": "expected_value",
-          "code": "expected_net_edge_below_threshold",
-          "summary": "Expected net edge does not clear the minimum threshold.",
-          "detail": "Expected net edge -6.72 bps is below 4.00 bps.",
-          "metrics": {
-            "expectedNetEdgeBps": -6.72,
-            "minNetEdgeBps": 4
-          }
-        }
-      ],
-      "memory": {
-        "symbol": "USDC-EUR",
-        "timeframe": "5m",
-        "totalMemories": 2,
-        "effectiveSampleSize": 0.541,
-        "blockedRatio": 1,
-        "averageConfidence": 0.49,
-        "directionalWeights": {
-          "BUY": 0,
-          "SELL": 0.541,
-          "HOLD": 0
-        },
-        "dominantSignal": "SELL",
-        "topRecalls": [
-          {
-            "id": 216,
-            "createdAt": "2026-04-17T18:38:06.512Z",
-            "signal": "SELL",
-            "confidence": 0.49,
-            "agreement": 0.361,
-            "blocked": true,
-            "summary": "SELL 49% | agree 36% | blocked: Spot account is flat, so the bearish setup resolves to HOLD.",
-            "ageHours": 0.1,
-            "decayWeight": 0.999,
-            "similarity": 0.835,
-            "weightedInfluence": 0.286
-          },
-          {
-            "id": 195,
-            "createdAt": "2026-04-17T07:37:30.568Z",
-            "signal": "SELL",
-            "confidence": 0.49,
-            "agreement": 0.52,
-            "blocked": true,
-            "summary": "SELL 49% | agree 52% | blocked: Spot account is flat, so the bearish setup resolves to HOLD.",
-            "ageHours": 11.11,
-            "decayWeight": 0.899,
-            "similarity": 0.826,
-            "weightedInfluence": 0.255
-          }
-        ],
-        "generatedAt": "2026-04-17T18:44:08.813Z"
-      },
-      "harness": {
-        "generatedAt": "2026-04-17T18:44:08.814Z",
-        "marketQualityScore": 0.97,
-        "liquidityScore": 0.934,
-        "volatilityPenalty": 0.195,
-        "memoryAlignmentScore": 0,
-        "confidenceAdjustment": -0.133,
-        "blockedByHarness": true,
-        "notes": [
-          "Execution quality 97.1%.",
-          "Selected engine mean_reversion."
-        ]
-      },
-      "regime": {
-        "regime": "mean_reversion",
-        "confidence": 0.85,
-        "trendScore": 0.249,
-        "breakoutScore": 0.11,
-        "meanReversionScore": 0.85,
-        "volatilityScore": 0.995,
-        "liquidityScore": 0.98,
-        "notes": [
-          "Directional strength is muted; rotational behavior is more likely."
-        ],
-        "generatedAt": "2026-04-17T18:44:08.814Z"
-      },
-      "engineReports": [
-        {
-          "engine": "trend_continuation",
-          "signal": "HOLD",
-          "confidence": 0.013,
-          "supportScore": 0.013,
-          "reasons": [
-            "Return stack favors continuation (-3.5 bps over 5 bars).",
-            "Distance from mean is -0.00%."
-          ],
-          "supportingRoles": []
-        },
-        {
-          "engine": "breakout",
-          "signal": "BUY",
-          "confidence": 1,
-          "supportScore": 1,
-          "reasons": [
-            "Compression score is 20%.",
-            "Breakout distance is -2.4 bps."
-          ],
-          "supportingRoles": []
-        },
-        {
-          "engine": "mean_reversion",
-          "signal": "SELL",
-          "confidence": 1,
-          "supportScore": 1,
-          "reasons": [
-            "Distance from VWAP is -1.7 bps.",
-            "Wick balance is 0.00."
-          ],
-          "supportingRoles": []
-        },
-        {
-          "engine": "microstructure",
-          "signal": "BUY",
-          "confidence": 0.799,
-          "supportScore": 0.799,
-          "reasons": [
-            "Order-book imbalance is 99.4%.",
-            "Top-book pressure is 99.3%."
-          ],
-          "supportingRoles": []
-        }
-      ],
-      "metaSelection": {
-        "selectedEngine": "mean_reversion",
-        "suitability": 1,
-        "actionBias": "SELL",
-        "engineScores": {
-          "trend_continuation": 0.013,
-          "breakout": 1,
-          "mean_reversion": 1,
-          "microstructure": 0.799,
-          "none": 0
-        },
-        "notes": [
-          "Deterministic engine selected mean_reversion from regime mean_reversion.",
-          "Adjusted directional edge is -0.157."
-        ],
-        "generatedAt": "2026-04-17T18:44:08.814Z"
-      },
-      "expectedValue": {
-        "grossEdgeBps": 1.28,
+        "grossEdgeBps": 3.43,
         "estimatedFeeBps": 8,
         "estimatedSlippageBps": 0,
-        "netEdgeBps": -6.72,
-        "rewardRiskRatio": 0.16,
-        "tradeAllowed": false,
-        "notes": [
-          "Execution quality 97.1%.",
-          "Risk penalty 19.5%."
-        ],
-        "generatedAt": "2026-04-17T18:44:08.814Z"
-      }
-    }
-  },
-  {
-    "id": "swarm_1776451448863_qbbah0",
-    "type": "swarm_run",
-    "timestamp": "2026-04-17T18:44:08.863Z",
-    "symbol": "DOGE-EUR",
-    "timeframe": "5m",
-    "cached": false,
-    "totalElapsedMs": 40,
-    "consensus": {
-      "symbol": "DOGE-EUR",
-      "timeframe": "5m",
-      "signal": "BUY",
-      "directionalSignal": "BUY",
-      "directionalConfidence": 0.634,
-      "directionalAgreement": 0.418,
-      "decision": "HOLD",
-      "confidence": 0.49,
-      "agreement": 0.418,
-      "decisionSource": "deterministic",
-      "featureSummary": {
-        "return3Bps": 34.1337,
-        "return10Bps": -53.6694,
-        "volatilityShortBps": 24.0514,
-        "volatilityLongBps": 22.509,
-        "spreadBps": 1.173,
-        "buySlippageBps": 2.8522,
-        "sellSlippageBps": 3.137,
-        "orderBookImbalancePct": -82.2999,
-        "topBookPressurePct": -20.0004,
-        "volumeExpansion": 0.2512,
-        "distanceFromVwapBps": -18.3487,
-        "breakoutDistanceBps": -8.7899,
-        "compressionPct": 11.4514,
-        "maxExecutableBuyUsd": 9,
-        "maxExecutableSellUsd": 0
-      },
-      "riskFlags": [
-        "slippage_elevated"
-      ],
-      "directionalEdgeScore": 0.236,
-      "executionQualityScore": 0.921,
-      "riskPenaltyScore": 0.149,
-      "expectedNetEdgeBps": -6.22,
-      "marketQualityScore": 0.904,
-      "decisionCadenceMs": 8479,
-      "symbolThrottleMs": 11871,
-      "votes": [],
-      "weightedScores": {
-        "BUY": 0.229,
-        "SELL": 0,
-        "HOLD": 0.798
-      },
-      "validatedAt": "2026-04-17T18:44:08.777Z",
-      "blocked": true,
-      "executionEligible": false,
-      "blockReason": "Expected net edge does not clear the minimum threshold.",
-      "rejectionReasons": [
-        {
-          "layer": "expected_value",
-          "code": "expected_net_edge_below_threshold",
-          "summary": "Expected net edge does not clear the minimum threshold.",
-          "detail": "Expected net edge -6.22 bps is below 4.00 bps.",
-          "metrics": {
-            "expectedNetEdgeBps": -6.22,
-            "minNetEdgeBps": 4
-          }
-        }
-      ],
-      "memory": {
-        "symbol": "DOGE-EUR",
-        "timeframe": "5m",
-        "totalMemories": 1,
-        "effectiveSampleSize": 0.204,
-        "blockedRatio": 1,
-        "averageConfidence": 0.476,
-        "directionalWeights": {
-          "BUY": 0,
-          "SELL": 0.204,
-          "HOLD": 0
-        },
-        "dominantSignal": "SELL",
-        "topRecalls": [
-          {
-            "id": 194,
-            "createdAt": "2026-04-17T07:37:30.519Z",
-            "signal": "SELL",
-            "confidence": 0.476,
-            "agreement": 0.377,
-            "blocked": true,
-            "summary": "SELL 48% | agree 38% | blocked: Spot account is flat, so the bearish setup resolves to HOLD.",
-            "ageHours": 11.11,
-            "decayWeight": 0.899,
-            "similarity": 0.683,
-            "weightedInfluence": 0.204
-          }
-        ],
-        "generatedAt": "2026-04-17T18:44:08.777Z"
-      },
-      "harness": {
-        "generatedAt": "2026-04-17T18:44:08.777Z",
-        "marketQualityScore": 0.904,
-        "liquidityScore": 0.935,
-        "volatilityPenalty": 0.149,
-        "memoryAlignmentScore": 0,
-        "confidenceAdjustment": -0.144,
-        "blockedByHarness": true,
-        "notes": [
-          "Execution quality 92.1%.",
-          "Selected engine mean_reversion."
-        ]
-      },
-      "regime": {
-        "regime": "mean_reversion",
-        "confidence": 0.743,
-        "trendScore": 0.319,
-        "breakoutScore": 0.145,
-        "meanReversionScore": 0.743,
-        "volatilityScore": 0.963,
-        "liquidityScore": 0.98,
-        "notes": [
-          "Directional strength is muted; rotational behavior is more likely."
-        ],
-        "generatedAt": "2026-04-17T18:44:08.777Z"
-      },
-      "engineReports": [
-        {
-          "engine": "trend_continuation",
-          "signal": "HOLD",
-          "confidence": 0.076,
-          "supportScore": 0.076,
-          "reasons": [
-            "Return stack favors continuation (24.7 bps over 5 bars).",
-            "Distance from mean is 0.08%."
-          ],
-          "supportingRoles": []
-        },
-        {
-          "engine": "breakout",
-          "signal": "SELL",
-          "confidence": 1,
-          "supportScore": 1,
-          "reasons": [
-            "Compression score is 11%.",
-            "Breakout distance is -8.8 bps."
-          ],
-          "supportingRoles": []
-        },
-        {
-          "engine": "mean_reversion",
-          "signal": "BUY",
-          "confidence": 1,
-          "supportScore": 1,
-          "reasons": [
-            "Distance from VWAP is -18.3 bps.",
-            "Wick balance is 0.00."
-          ],
-          "supportingRoles": []
-        },
-        {
-          "engine": "microstructure",
-          "signal": "SELL",
-          "confidence": 0.393,
-          "supportScore": 0.393,
-          "reasons": [
-            "Order-book imbalance is -82.3%.",
-            "Top-book pressure is -20.0%."
-          ],
-          "supportingRoles": []
-        }
-      ],
-      "metaSelection": {
-        "selectedEngine": "mean_reversion",
-        "suitability": 1,
-        "actionBias": "BUY",
-        "engineScores": {
-          "trend_continuation": 0.076,
-          "breakout": 1,
-          "mean_reversion": 1,
-          "microstructure": 0.393,
-          "none": 0
-        },
-        "notes": [
-          "Deterministic engine selected mean_reversion from regime mean_reversion.",
-          "Adjusted directional edge is 0.236."
-        ],
-        "generatedAt": "2026-04-17T18:44:08.777Z"
-      },
-      "expectedValue": {
-        "grossEdgeBps": 4.64,
-        "estimatedFeeBps": 8,
-        "estimatedSlippageBps": 2.85,
-        "netEdgeBps": -6.22,
+        "netEdgeBps": -4.57,
         "rewardRiskRatio": 0.43,
         "tradeAllowed": false,
         "notes": [
-          "Execution quality 92.1%.",
-          "Risk penalty 14.9%."
+          "Execution quality 100.0%.",
+          "Risk penalty 24.5%."
         ],
-        "generatedAt": "2026-04-17T18:44:08.777Z"
-      }
-    }
-  },
-  {
-    "id": "swarm_1776451448819_lymj20",
-    "type": "swarm_run",
-    "timestamp": "2026-04-17T18:44:08.819Z",
-    "symbol": "ORDI-EUR",
-    "timeframe": "5m",
-    "cached": false,
-    "totalElapsedMs": 37,
-    "consensus": {
-      "symbol": "ORDI-EUR",
-      "timeframe": "5m",
-      "signal": "BUY",
-      "directionalSignal": "BUY",
-      "directionalConfidence": 0.535,
-      "directionalAgreement": 0.678,
-      "decision": "HOLD",
-      "confidence": 0.49,
-      "agreement": 0.52,
-      "decisionSource": "deterministic",
-      "featureSummary": {
-        "return3Bps": -16.7007,
-        "return10Bps": 189.3939,
-        "volatilityShortBps": 97.8366,
-        "volatilityLongBps": 87.2045,
-        "spreadBps": 5.5762,
-        "buySlippageBps": 96.211,
-        "sellSlippageBps": 0,
-        "orderBookImbalancePct": 97.9187,
-        "topBookPressurePct": 0,
-        "volumeExpansion": 36.5986,
-        "distanceFromVwapBps": 111.1335,
-        "breakoutDistanceBps": 92.8618,
-        "compressionPct": 0,
-        "maxExecutableBuyUsd": 9,
-        "maxExecutableSellUsd": 0
-      },
-      "riskFlags": [
-        "slippage_elevated",
-        "candle_indecision",
-        "market_quality_soft"
-      ],
-      "directionalEdgeScore": 0.103,
-      "executionQualityScore": 0.511,
-      "riskPenaltyScore": 0.687,
-      "expectedNetEdgeBps": -89.9,
-      "marketQualityScore": 0.501,
-      "decisionCadenceMs": 10500,
-      "symbolThrottleMs": 19950,
-      "votes": [],
-      "weightedScores": {
-        "BUY": 0.088,
-        "SELL": 0,
-        "HOLD": 1
-      },
-      "validatedAt": "2026-04-17T18:44:08.754Z",
-      "blocked": true,
-      "executionEligible": false,
-      "blockReason": "Deterministic confidence is below the minimum threshold.",
-      "rejectionReasons": [
-        {
-          "layer": "validator",
-          "code": "deterministic_confidence_below_min",
-          "summary": "Deterministic confidence is below the minimum threshold.",
-          "detail": "Confidence 53.50% is below 55.00%.",
-          "metrics": {
-            "confidence": 53.5,
-            "minConfidence": 55
-          }
-        },
-        {
-          "layer": "expected_value",
-          "code": "expected_net_edge_below_threshold",
-          "summary": "Expected net edge does not clear the minimum threshold.",
-          "detail": "Expected net edge -89.90 bps is below 4.00 bps.",
-          "metrics": {
-            "expectedNetEdgeBps": -89.9,
-            "minNetEdgeBps": 4
-          }
-        }
-      ],
-      "memory": {
-        "symbol": "ORDI-EUR",
-        "timeframe": "5m",
-        "totalMemories": 1,
-        "effectiveSampleSize": 0.194,
-        "blockedRatio": 1,
-        "averageConfidence": 0.49,
-        "directionalWeights": {
-          "BUY": 0,
-          "SELL": 0.194,
-          "HOLD": 0
-        },
-        "dominantSignal": "SELL",
-        "topRecalls": [
-          {
-            "id": 198,
-            "createdAt": "2026-04-17T07:37:30.664Z",
-            "signal": "SELL",
-            "confidence": 0.49,
-            "agreement": 0.52,
-            "blocked": true,
-            "summary": "SELL 49% | agree 52% | blocked: Spot account is flat, so the bearish setup resolves to HOLD.",
-            "ageHours": 11.11,
-            "decayWeight": 0.899,
-            "similarity": 0.63,
-            "weightedInfluence": 0.194
-          }
-        ],
-        "generatedAt": "2026-04-17T18:44:08.753Z"
-      },
-      "harness": {
-        "generatedAt": "2026-04-17T18:44:08.754Z",
-        "marketQualityScore": 0.501,
-        "liquidityScore": 0.69,
-        "volatilityPenalty": 0.687,
-        "memoryAlignmentScore": 0,
-        "confidenceAdjustment": -0.045,
-        "blockedByHarness": true,
-        "notes": [
-          "Execution quality 51.1%.",
-          "Selected engine trend_continuation."
-        ]
-      },
-      "regime": {
-        "regime": "trend",
-        "confidence": 1,
-        "trendScore": 1,
-        "breakoutScore": 0.812,
-        "meanReversionScore": 0,
-        "volatilityScore": 0.949,
-        "liquidityScore": 0.907,
-        "notes": [
-          "Directional move and order book alignment favor trend continuation."
-        ],
-        "generatedAt": "2026-04-17T18:44:08.753Z"
-      },
-      "engineReports": [
-        {
-          "engine": "trend_continuation",
-          "signal": "BUY",
-          "confidence": 0.612,
-          "supportScore": 0.612,
-          "reasons": [
-            "Return stack favors continuation (42.9 bps over 5 bars).",
-            "Distance from mean is 0.79%."
-          ],
-          "supportingRoles": []
-        },
-        {
-          "engine": "breakout",
-          "signal": "BUY",
-          "confidence": 1,
-          "supportScore": 1,
-          "reasons": [
-            "Compression score is 0%.",
-            "Breakout distance is 92.9 bps."
-          ],
-          "supportingRoles": []
-        },
-        {
-          "engine": "mean_reversion",
-          "signal": "SELL",
-          "confidence": 1,
-          "supportScore": 1,
-          "reasons": [
-            "Distance from VWAP is 111.1 bps.",
-            "Wick balance is 0.00."
-          ],
-          "supportingRoles": []
-        },
-        {
-          "engine": "microstructure",
-          "signal": "BUY",
-          "confidence": 0.494,
-          "supportScore": 0.494,
-          "reasons": [
-            "Order-book imbalance is 97.9%.",
-            "Top-book pressure is -0.0%."
-          ],
-          "supportingRoles": []
-        }
-      ],
-      "metaSelection": {
-        "selectedEngine": "trend_continuation",
-        "suitability": 0.612,
-        "actionBias": "BUY",
-        "engineScores": {
-          "trend_continuation": 0.612,
-          "breakout": 1,
-          "mean_reversion": 1,
-          "microstructure": 0.494,
-          "none": 0
-        },
-        "notes": [
-          "Deterministic engine selected trend_continuation from regime trend.",
-          "Adjusted directional edge is 0.103."
-        ],
-        "generatedAt": "2026-04-17T18:44:08.754Z"
-      },
-      "expectedValue": {
-        "grossEdgeBps": 14.31,
-        "estimatedFeeBps": 8,
-        "estimatedSlippageBps": 96.21,
-        "netEdgeBps": -89.9,
-        "rewardRiskRatio": 0.14,
-        "tradeAllowed": false,
-        "notes": [
-          "Execution quality 51.1%.",
-          "Risk penalty 68.7%."
-        ],
-        "generatedAt": "2026-04-17T18:44:08.754Z"
+        "generatedAt": "2026-04-17T18:49:05.134Z"
       }
     }
   }

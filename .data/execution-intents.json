@@ -1,5 +1,77 @@
 [
   {
+    "id": "intent_1776451738375_tuop0b",
+    "createdAt": "2026-04-17T18:48:58.375Z",
+    "updatedAt": "2026-04-17T18:48:58.458Z",
+    "symbol": "BTC-EUR",
+    "timeframe": "5m",
+    "decision": "HOLD",
+    "confidence": 0.49,
+    "targetSize": 4.9,
+    "status": "hold",
+    "decisionSnapshot": {
+      "signal": "SELL",
+      "directionalSignal": "SELL",
+      "decision": "HOLD",
+      "confidence": 0.49,
+      "agreement": 0.52,
+      "executionEligible": false,
+      "decisionSource": "deterministic",
+      "expectedNetEdgeBps": -3.81,
+      "marketQualityScore": 0.984,
+      "riskFlags": [
+        "slippage_elevated",
+        "candle_indecision",
+        "inventory_constrained"
+      ],
+      "featureSummary": {
+        "return3Bps": 17.2143,
+        "return10Bps": -17.0945,
+        "volatilityShortBps": 6.3527,
+        "volatilityLongBps": 9.7266,
+        "spreadBps": 0.0152,
+        "buySlippageBps": 2.6204,
+        "sellSlippageBps": 0,
+        "orderBookImbalancePct": -32.9535,
+        "topBookPressurePct": 0.0679,
+        "volumeExpansion": 0.123,
+        "distanceFromVwapBps": 2.2623,
+        "breakoutDistanceBps": 0.8227,
+        "compressionPct": 82.6633,
+        "maxExecutableBuyUsd": 9,
+        "maxExecutableSellUsd": 0
+      },
+      "rejectionReasons": [
+        {
+          "layer": "execution",
+          "code": "spot_shorting_not_available",
+          "summary": "Spot account is flat, so the bearish setup resolves to HOLD.",
+          "detail": "The engine detected a bearish setup, but there is no base inventory available and spot mode cannot open a synthetic short.",
+          "metrics": {
+            "maxExecutableSellUsd": 0,
+            "availableBaseUsd": 0,
+            "minimumTradeNotionalUsd": 5
+          }
+        },
+        {
+          "layer": "expected_value",
+          "code": "expected_net_edge_below_threshold",
+          "summary": "Expected net edge does not clear the minimum threshold.",
+          "detail": "Expected net edge -3.81 bps is below 4.00 bps.",
+          "metrics": {
+            "expectedNetEdgeBps": -3.81,
+            "minNetEdgeBps": 4
+          }
+        }
+      ]
+    },
+    "reason": "consensus not execution eligible",
+    "normalizedSize": 0,
+    "response": {
+      "executionEligible": false
+    }
+  },
+  {
     "id": "intent_1776451677034_dplks2",
     "createdAt": "2026-04-17T18:47:57.034Z",
     "updatedAt": "2026-04-17T18:47:57.058Z",
