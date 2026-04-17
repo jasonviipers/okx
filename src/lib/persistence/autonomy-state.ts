@@ -57,7 +57,7 @@ function parseSymbolList(value: string | undefined): string[] | undefined {
 
 export function getDefaultAutonomyState(): StoredAutonomyState {
   return {
-    running: false,
+    running: true,
     symbol: process.env.AUTONOMOUS_SYMBOL || "BTC-USDT",
     selectionMode: parseSelectionMode(process.env.AUTONOMOUS_SYMBOL_SELECTION),
     candidateSymbols: parseSymbolList(process.env.AUTONOMOUS_SYMBOLS),

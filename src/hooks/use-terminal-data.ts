@@ -15,6 +15,7 @@ import {
   getAccount,
   getAutonomyStatus,
   getConsensus,
+  getExecutionIntents,
   getMemoryRecent,
   getMemorySummaryForSymbol,
   getPositions,
@@ -24,7 +25,11 @@ import {
   getWatchlist,
 } from "@/lib/api/client";
 import type { AutonomyStatus, RuntimeStatus } from "@/types/api";
-import type { StoredSwarmRun, StoredTradeExecution } from "@/types/history";
+import type {
+  StoredExecutionIntent,
+  StoredSwarmRun,
+  StoredTradeExecution,
+} from "@/types/history";
 import type { MarketFeedStatus, OKXTicker } from "@/types/market";
 import type { MemoryRecord, MemorySummary } from "@/types/memory";
 import type {
@@ -583,6 +588,15 @@ export function useTradeHistory(limit = 25) {
   const fetcher = useCallback(() => getTradeHistory(limit), [limit]);
   return useSwr<{ entries: StoredTradeExecution[]; count: number }>(
     `trade-history:${limit}`,
+    fetcher,
+    15_000,
+  );
+}
+
+export function useExecutionIntents(limit = 25) {
+  const fetcher = useCallback(() => getExecutionIntents(limit), [limit]);
+  return useSwr<{ entries: StoredExecutionIntent[]; count: number }>(
+    `execution-intents:${limit}`,
     fetcher,
     15_000,
   );
