@@ -9,14 +9,31 @@ import { makeSourceHealth } from "@/lib/observability/source-health";
 import { OkxRequestError } from "@/lib/okx/client";
 import { placeOrder } from "@/lib/okx/orders";
 import { recordTradeExecution } from "@/lib/persistence/history";
+import { tradeExecutionRequestSchema } from "@/lib/schemas/trade";
 import {
   incrementCounter,
   observeHistogram,
   withTelemetrySpan,
 } from "@/lib/telemetry/server";
-import type { TradeExecutionRequest } from "@/types/trade";
 
 export const dynamic = "force-dynamic";
+
+function recordRequestOutcome(
+  status: number,
+  result: string,
+  extra?: Record<string, string | number | boolean | null | undefined>,
+) {
+  incrementCounter(
+    "trade_execute_requests_total",
+    "Total /api/ai/trade/execute requests.",
+    1,
+    {
+      status,
+      result,
+      ...extra,
+    },
+  );
+}
 
 export async function POST(req: NextRequest) {
   return withTelemetrySpan(
@@ -28,7 +45,31 @@ export async function POST(req: NextRequest) {
       const startedAt = performance.now();
 
       try {
-        const body: TradeExecutionRequest = await req.json();
+        let body: unknown;
+        try {
+          body = await req.json();
+        } catch {
+          recordRequestOutcome(400, "invalid_json");
+          return NextResponse.json(
+            { error: "Invalid JSON body." },
+            { status: 400 },
+          );
+        }
+
+        const parsed = tradeExecutionRequestSchema.safeParse(body);
+        if (!parsed.success) {
+          recordRequestOutcome(400, "invalid_request", {
+            issues: parsed.error.issues.length,
+          });
+          return NextResponse.json(
+            {
+              error: "Invalid trade execution payload.",
+              issues: parsed.error.flatten(),
+            },
+            { status: 400 },
+          );
+        }
+
         const {
           signal,
           symbol,
@@ -38,7 +79,7 @@ export async function POST(req: NextRequest) {
           confirmed,
           decisionSnapshot,
           executionContext,
-        } = body;
+        } = parsed.data;
 
         span.addAttributes({
           signal,
@@ -48,33 +89,9 @@ export async function POST(req: NextRequest) {
           confirmed: confirmed ?? false,
         });
 
-        if (!signal || !symbol || !size || !mode) {
-          incrementCounter(
-            "trade_execute_requests_total",
-            "Total /api/ai/trade/execute requests.",
-            1,
-            {
-              status: 400,
-              result: "invalid_request",
-            },
-          );
-          return NextResponse.json(
-            { error: "Missing required fields: signal, symbol, size, mode" },
-            { status: 400 },
-          );
-        }
-
         const modeConfig = AI_MODE_CONFIGS[mode];
         if (!modeConfig) {
-          incrementCounter(
-            "trade_execute_requests_total",
-            "Total /api/ai/trade/execute requests.",
-            1,
-            {
-              status: 400,
-              result: "invalid_mode",
-            },
-          );
+          recordRequestOutcome(400, "invalid_mode", { signal });
           return NextResponse.json(
             { error: `Invalid AI mode: ${mode}` },
             { status: 400 },
@@ -82,15 +99,10 @@ export async function POST(req: NextRequest) {
         }
 
         if (!modeConfig.autoExecute && !confirmed) {
-          incrementCounter(
-            "trade_execute_requests_total",
-            "Total /api/ai/trade/execute requests.",
-            1,
-            {
-              status: 403,
-              result: "confirmation_required",
-            },
-          );
+          recordRequestOutcome(403, "confirmation_required", {
+            signal,
+            mode,
+          });
           return NextResponse.json(
             {
               success: false,
@@ -102,15 +114,7 @@ export async function POST(req: NextRequest) {
         }
 
         if (signal === "HOLD") {
-          incrementCounter(
-            "trade_execute_requests_total",
-            "Total /api/ai/trade/execute requests.",
-            1,
-            {
-              status: 400,
-              result: "hold_rejected",
-            },
-          );
+          recordRequestOutcome(400, "hold_rejected", { signal, mode });
           return NextResponse.json(
             {
               success: false,
@@ -146,16 +150,7 @@ export async function POST(req: NextRequest) {
             },
           },
         );
-        incrementCounter(
-          "trade_execute_requests_total",
-          "Total /api/ai/trade/execute requests.",
-          1,
-          {
-            status: 200,
-            result: "success",
-            signal,
-          },
-        );
+        recordRequestOutcome(200, "success", { signal, mode });
 
         return NextResponse.json({
           data: {
@@ -172,14 +167,9 @@ export async function POST(req: NextRequest) {
         });
       } catch (error) {
         console.error("[API] /api/trade/execute error:", error);
-        incrementCounter(
-          "trade_execute_requests_total",
-          "Total /api/ai/trade/execute requests.",
-          1,
-          {
-            status: error instanceof OkxRequestError ? 502 : 500,
-            result: "error",
-          },
+        recordRequestOutcome(
+          error instanceof OkxRequestError ? 502 : 500,
+          "error",
         );
 
         if (error instanceof OkxRequestError) {

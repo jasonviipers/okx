@@ -2,7 +2,14 @@ import "server-only";
 
 import { AsyncLocalStorage } from "node:async_hooks";
 import crypto from "node:crypto";
-import { appendFile, mkdir, readFile } from "node:fs/promises";
+import {
+  appendFile,
+  mkdir,
+  open,
+  rename,
+  stat,
+  unlink,
+} from "node:fs/promises";
 import path from "node:path";
 import { monitorEventLoopDelay, performance } from "node:perf_hooks";
 import type { Instrumentation } from "next";
@@ -16,6 +23,7 @@ import type {
   TelemetrySpanRecord,
   TelemetrySpanStatus,
 } from "@/lib/telemetry/types";
+import { nowIso } from "../swarm/autoExecute";
 
 type TelemetryLabels = Record<
   string,
@@ -57,6 +65,9 @@ export interface TelemetrySpanHandle {
 const TELEMETRY_DIR = path.join(process.cwd(), ".data", "telemetry");
 const EVENTS_FILE = path.join(TELEMETRY_DIR, "events.ndjson");
 const SPANS_FILE = path.join(TELEMETRY_DIR, "spans.ndjson");
+const TELEMETRY_FILE_MAX_BYTES = 1_048_576;
+const TELEMETRY_FILE_ROTATION_COUNT = 4;
+const TELEMETRY_TAIL_CHUNK_BYTES = 65_536;
 const MAX_BUFFERED_EVENTS = 400;
 const MAX_BUFFERED_SPANS = 400;
 const DEFAULT_HISTOGRAM_BUCKETS = [
@@ -75,6 +86,7 @@ const gaugeValues = new Map<string, Map<string, number>>();
 const histogramValues = new Map<string, Map<string, HistogramState>>();
 
 let telemetryBooted = false;
+let telemetryPersistenceEnabled = true;
 let telemetryDirReady: Promise<void> | null = null;
 let writeQueue: Promise<void> = Promise.resolve();
 
@@ -82,11 +94,11 @@ function makeId(prefix: string): string {
   return `${prefix}_${crypto.randomUUID().replace(/-/g, "")}`;
 }
 
-function nowIso(): string {
-  return new Date().toISOString();
-}
-
 function ensureTelemetryDir(): Promise<void> {
+  if (!telemetryPersistenceEnabled) {
+    return Promise.resolve();
+  }
+
   if (!telemetryDirReady) {
     telemetryDirReady = mkdir(TELEMETRY_DIR, { recursive: true }).then(
       () => undefined,
@@ -96,13 +108,72 @@ function ensureTelemetryDir(): Promise<void> {
   return telemetryDirReady;
 }
 
+async function statIfExists(target: string) {
+  try {
+    return await stat(target);
+  } catch {
+    return null;
+  }
+}
+
+async function renameIfExists(source: string, destination: string) {
+  try {
+    await rename(source, destination);
+  } catch (caughtError) {
+    const error = caughtError as NodeJS.ErrnoException;
+    if (error.code !== "ENOENT") {
+      throw caughtError;
+    }
+  }
+}
+
+async function unlinkIfExists(target: string) {
+  try {
+    await unlink(target);
+  } catch (caughtError) {
+    const error = caughtError as NodeJS.ErrnoException;
+    if (error.code !== "ENOENT") {
+      throw caughtError;
+    }
+  }
+}
+
+async function rotateTelemetryFileIfNeeded(
+  target: string,
+  incomingBytes: number,
+) {
+  const fileStat = await statIfExists(target);
+  if (!fileStat || fileStat.size + incomingBytes <= TELEMETRY_FILE_MAX_BYTES) {
+    return;
+  }
+
+  await unlinkIfExists(`${target}.${TELEMETRY_FILE_ROTATION_COUNT}`);
+  for (let index = TELEMETRY_FILE_ROTATION_COUNT - 1; index >= 1; index -= 1) {
+    await renameIfExists(`${target}.${index}`, `${target}.${index + 1}`);
+  }
+  await renameIfExists(target, `${target}.1`);
+}
+
 function enqueueWrite(target: string, payload: string) {
+  if (!telemetryPersistenceEnabled) {
+    return;
+  }
+
+  const serializedPayload = `${payload}\n`;
+  const payloadBytes = Buffer.byteLength(serializedPayload, "utf8");
   writeQueue = writeQueue
     .then(async () => {
+      if (!telemetryPersistenceEnabled) {
+        return;
+      }
+
       await ensureTelemetryDir();
-      await appendFile(target, `${payload}\n`, "utf8");
+      await rotateTelemetryFileIfNeeded(target, payloadBytes);
+      await appendFile(target, serializedPayload, "utf8");
     })
     .catch((error) => {
+      telemetryPersistenceEnabled = false;
+      telemetryDirReady = null;
       console.error("[Telemetry] Failed to persist telemetry payload.", error);
     });
 }
@@ -216,6 +287,53 @@ function sanitizeAttributes(
       ]),
     ),
   );
+}
+
+function stripQueryStringFromUrl(url?: string | URL) {
+  if (!url) {
+    return undefined;
+  }
+
+  try {
+    return new URL(String(url)).pathname;
+  } catch {
+    return String(url).split("?")[0];
+  }
+}
+
+function summarizeTelemetryRequest(request: {
+  method?: string;
+  url?: string | URL;
+}) {
+  return sanitizeAttributes({
+    method: request.method,
+    path: stripQueryStringFromUrl(request.url),
+  });
+}
+
+function summarizeTelemetryRequestContext(
+  context: Record<string, unknown> & {
+    routeType?: unknown;
+    routerKind?: unknown;
+  },
+) {
+  return sanitizeAttributes({
+    routeType:
+      typeof context.routeType === "string" ? context.routeType : undefined,
+    routerKind:
+      typeof context.routerKind === "string" ? context.routerKind : undefined,
+    routePath:
+      typeof context.routePath === "string"
+        ? context.routePath
+        : undefined,
+    renderSource:
+      typeof context.renderSource === "string"
+        ? context.renderSource
+        : undefined,
+    route: typeof context.route === "string" ? context.route : undefined,
+    handler:
+      typeof context.handler === "string" ? context.handler : undefined,
+  });
 }
 
 function getLabelKey(labels?: TelemetryLabels): string {
@@ -420,23 +538,104 @@ function emitSpanRecord(entry: TelemetrySpanRecord) {
   enqueueWrite(SPANS_FILE, JSON.stringify(entry));
 }
 
-async function readNdjsonFile<T>(target: string, limit: number): Promise<T[]> {
-  try {
-    const raw = await readFile(target, "utf8");
-    const rows = raw
-      .split("\n")
-      .map((line) => line.trim())
-      .filter(Boolean)
-      .map((line) => JSON.parse(line) as T);
+function getTelemetryReadTargets(target: string) {
+  return [
+    target,
+    ...Array.from(
+      { length: TELEMETRY_FILE_ROTATION_COUNT },
+      (_, index) => `${target}.${index + 1}`,
+    ),
+  ];
+}
 
-    return rows.slice(-limit).reverse();
+async function readNdjsonTailLines(target: string, limit: number) {
+  if (limit <= 0) {
+    return [];
+  }
+
+  try {
+    const handle = await open(target, "r");
+    try {
+      const fileStat = await handle.stat();
+      if (fileStat.size <= 0) {
+        return [];
+      }
+
+      const rows: string[] = [];
+      let remainder = "";
+      let position = fileStat.size;
+
+      while (position > 0 && rows.length < limit) {
+        const bytesToRead = Math.min(TELEMETRY_TAIL_CHUNK_BYTES, position);
+        position -= bytesToRead;
+
+        const buffer = Buffer.allocUnsafe(bytesToRead);
+        const { bytesRead } = await handle.read(
+          buffer,
+          0,
+          bytesToRead,
+          position,
+        );
+        const chunk = buffer.toString("utf8", 0, bytesRead);
+        const combined = chunk + remainder;
+        const segments = combined.split("\n");
+        remainder = segments.shift() ?? "";
+
+        for (
+          let index = segments.length - 1;
+          index >= 0 && rows.length < limit;
+          index -= 1
+        ) {
+          const line = segments[index]?.trim();
+          if (line) {
+            rows.push(line);
+          }
+        }
+      }
+
+      const firstLine = remainder.trim();
+      if (firstLine && rows.length < limit) {
+        rows.push(firstLine);
+      }
+
+      return rows;
+    } finally {
+      await handle.close();
+    }
   } catch {
     return [];
   }
 }
 
+async function readNdjsonFile<T>(target: string, limit: number): Promise<T[]> {
+  const rows: string[] = [];
+  for (const candidate of getTelemetryReadTargets(target)) {
+    if (rows.length >= limit) {
+      break;
+    }
+
+    rows.push(...(await readNdjsonTailLines(candidate, limit - rows.length)));
+  }
+
+  return rows.flatMap((line) => {
+    try {
+      return [JSON.parse(line) as T];
+    } catch {
+      return [];
+    }
+  });
+}
+
 export async function initTelemetry() {
-  await ensureTelemetryDir();
+  try {
+    await ensureTelemetryDir();
+  } catch (caughtError) {
+    telemetryPersistenceEnabled = false;
+    telemetryDirReady = null;
+    warn("telemetry", "Telemetry directory initialization failed", {
+      error: caughtError,
+    });
+  }
 
   if (telemetryBooted) {
     return;
@@ -559,7 +758,7 @@ export async function withTelemetrySpan<T>(
   },
   fn: (span: TelemetrySpanHandle) => Promise<T> | T,
 ): Promise<T> {
-  void ensureTelemetryDir();
+  void ensureTelemetryDir().catch(() => undefined);
 
   const parent = asyncTelemetryContext.getStore();
   const traceId = parent?.traceId ?? makeId("trace");
@@ -737,8 +936,8 @@ export const onTelemetryRequestError: Instrumentation.onRequestError = async (
   error("next.request", "Next.js request error captured", {
     digest: requestError.digest,
     error: requestError,
-    request,
-    context,
+    request: summarizeTelemetryRequest(request),
+    context: summarizeTelemetryRequestContext(context),
   });
   incrementCounter(
     "next_request_errors_total",

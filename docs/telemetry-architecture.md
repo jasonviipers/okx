@@ -1,389 +1,151 @@
 # Telemetry Architecture
 
-This document outlines the integration of telemetry into the autonomous trading platform.
+This document describes the current telemetry implementation for the autonomous
+trading platform.
 
 ## Overview
 
-Telemetry provides observability into the trading system's behavior, performance, and decision-making processes. All tools used are free, open source, and self-hosted - no external services, API keys, or paid tools required.
+Telemetry is implemented with a local, dependency-free core in
+`src/lib/telemetry/server.ts`.
 
-## Implementation Note
+The current implementation:
 
-The codebase implementation now uses a dependency-free local telemetry core in `src/lib/telemetry/server.ts` rather than the draft `prom-client` / `pino` / `@opentelemetry/sdk-node` stack described below.
+- records structured events and spans in memory and on disk
+- exposes Prometheus-compatible metrics
+- surfaces recent logs, traces, and execution history through protected API
+  routes
+- provides an operator dashboard at `/telemetry`
+- keeps telemetry best-effort so trading and autonomy can still boot if local
+  persistence is unavailable
 
-That implementation persists structured logs and spans to `.data/telemetry/*.ndjson`, exposes Prometheus-compatible metrics at `/api/telemetry/metrics`, exposes recent logs and traces at `/api/telemetry/logs` and `/api/telemetry/traces`, and provides an operator dashboard at `/telemetry`.
+## Current Implementation
 
-The current telemetry is instrumented around the actual execution bottlenecks in this repo:
-
-- `src/lib/autonomy/service.ts`
-- `src/lib/swarm/autoExecute.ts`
-- `src/lib/swarm/orchestrator.ts`
-- `src/lib/swarm/pipeline.ts`
-- `src/lib/market-data/service.ts`
-- `src/lib/okx/client.ts`
-- `src/lib/okx/ws-client.ts`
-- `src/app/api/ai/trade/execute/route.ts`
-
-## Telemetry Stack
-
-| Category | Technology | Purpose |
-|----------|------------|---------|
-| Metrics | prom-client | Collect and expose metrics via HTTP |
-| Tracing | @opentelemetry/sdk-node | Distributed tracing |
-| Logging | pino + pino-http | Structured logging to file + HTTP request logging |
-| Dashboard | Built-in Next.js page | View metrics and traces locally |
+| Category | Implementation | Notes |
+| --- | --- | --- |
+| Metrics | In-process counters, gauges, and histograms | Exported through `getPrometheusMetrics()` |
+| Logs | Structured event records | Buffered in memory and persisted to `.data/telemetry/events.ndjson` |
+| Traces | Lightweight spans with async context propagation | Buffered in memory and persisted to `.data/telemetry/spans.ndjson` |
+| Persistence | Rotated NDJSON files | Current file plus retained rotations |
+| APIs | `/api/telemetry/metrics`, `/logs`, `/traces`, `/summary` | Protected by bearer auth |
+| UI | `/telemetry` | Operator dashboard for recent state and blockers |
 
 ## Architecture
 
+```text
++----------------------------- Application -----------------------------+
+|                                                                      |
+|  autonomy/service.ts      swarm/autoExecute.ts      swarm/orchestrator.ts
+|  market-data/service.ts   okx/client.ts             api/trade/execute |
+|                                                                      |
++-------------------------------+--------------------------------------+
+                                |
+                                v
+                    +---------------------------+
+                    | telemetry/server.ts       |
+                    | - spans                   |
+                    | - events                  |
+                    | - metrics                 |
+                    | - async trace context     |
+                    | - file rotation / tail    |
+                    +------------+--------------+
+                                 |
+               +-----------------+------------------+
+               |                                    |
+               v                                    v
+    .data/telemetry/*.ndjson            /api/telemetry/*
+               |                                    |
+               +-----------------+------------------+
+                                 |
+                                 v
+                          /telemetry dashboard
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                     Application                              │
-├─────────────────────────────────────────────────────────────┤
-│  ┌─────────┐  ┌─────────┐  ┌─────────┐                     │
-│  │ Metrics│  │ Traces  │  │  Logs   │                     │
-│  └────┬────┘  └────┬────┘  └────┬────┘                     │
-│       │            │            │                           │
-│  /metrics    console.log   logs/                           │
-└─────────────────────────────────────────────────────────────┘
-         │                │            │
-         ▼                ▼            ▼
-    ┌─────────────────────────────────────────┐
-    │         Internal Dashboard             │
-    │           /telemetry                     │
-    └─────────────────────────────────────────┘
-```
-
-All data stays local - no external services needed.
-
-## Implementation
-
-### 1. Install Dependencies
-
-```bash
-pnpm add prom-client pino pino-http @opentelemetry/sdk-node \
-  @opentelemetry/api @opentelemetry/auto-instrumentations-node \
-  @opentelemetry/sdk-trace-base
-```
-
-### 2. Create Telemetry Module
-
-Create `src/lib/telemetry/index.ts`:
-
-```typescript
-import pino from 'pino';
-import pinoHttp from 'pino-http';
-import { NodeSDK } from '@opentelemetry/sdk-node';
-import { getNodeAutoInstrumentations } from '@opentelemetry/auto-instrumentations-node';
-import { ConsoleSpanExporter } from '@opentelemetry/sdk-trace-base';
-import { trace, meter, SpanStatusCode, Span } from '@opentelemetry/api';
-
-export const logger = pino({
-  level: 'info',
-  transport: {
-    target: 'pino/file',
-    options: { destination: 'logs/telemetry.json' },
-  },
-});
-
-const sdk = new NodeSDK({
-  spanProcessor: new ConsoleSpanExporter(),
-  instrumentations: [getNodeAutoInstrumentations()],
-});
-
-export function initTelemetry() {
-  sdk.start();
-  process.on('SIGTERM', () => sdk.shutdown().catch(console.error));
-}
-
-export const tracer = trace.getTracer('okx-trading');
-export const metrics = meter.getMeter('okx-trading');
-
-export async function createSpan<T>(
-  name: string,
-  attributes: Record<string, string>,
-  fn: (span: Span) => Promise<T>
-): Promise<T> {
-  return tracer.startActiveSpan(name, { attributes }, async (span) => {
-    try {
-      const result = await fn(span);
-      span.setStatus({ code: SpanStatusCode.OK });
-      return result;
-    } catch (error) {
-      span.setStatus({
-        code: SpanStatusCode.ERROR,
-        message: error instanceof Error ? error.message : String(error),
-      });
-      span.recordException(error as Error);
-      throw error;
-    } finally {
-      span.end();
-    }
-  });
-}
-
-export const TRADING_COUNTER = metrics.createCounter('trading_operations_total', {
-  description: 'Total trading operations',
-});
-
-export const ORDER_LATENCY = metrics.createHistogram('order_latency_ms', {
-  description: 'Order execution latency in milliseconds',
-  buckets: [10, 50, 100, 250, 500, 1000, 2500, 5000],
-});
-
-export const DECISION_COUNTER = metrics.createCounter('swarm_decisions_total', {
-  description: 'Total swarm decisions',
-});
-
-export const CONSENSUS_DURATION = metrics.createHistogram('consensus_duration_ms', {
-  description: 'Consensus calculation duration',
-});
-
-export const ACTIVE_AGENTS = metrics.createGauge('active_agents', {
-  description: 'Number of active agents',
-});
-
-export const WEBSOCKET_CONNECTIONS = metrics.createGauge('websocket_connections', {
-  description: 'Active WebSocket connections',
-});
-
-export const httpLogger = pinoHttp({
-  logger,
-  autoLogging: {
-    ignore: ['/api/telemetry'],
-  },
-});
-```
-
-### 3. Create Metrics Endpoint
-
-Create `src/app/api/telemetry/metrics/route.ts`:
-
-```typescript
-import { Registry, collectDefaultMetrics } from 'prom-client';
-import { NextResponse } from 'next/server';
-
-const register = new Registry();
-collectDefaultMetrics({ register });
-
-export async function GET() {
-  const metrics = await register.contentType;
-  return new NextResponse(await register.metrics(), {
-    headers: { 'Content-Type': metrics },
-  });
-}
-```
-
-### 4. Create Logs Endpoint
-
-Create `src/app/api/telemetry/logs/route.ts`:
-
-```typescript
-import { NextResponse } from 'next/server';
-import fs from 'fs/promises';
-import path from 'path';
-
-const LOG_FILE = path.join(process.cwd(), 'logs', 'telemetry.json');
-
-export async function GET() {
-  try {
-    const content = await fs.readFile(LOG_FILE, 'utf-8');
-    const lines = content.trim().split('\n').filter(Boolean).slice(-100);
-    const logs = lines.map((l) => JSON.parse(l));
-    return NextResponse.json(logs);
-  } catch {
-    return NextResponse.json([]);
-  }
-}
-```
-
-### 5. Create Telemetry Dashboard
-
-Create `src/app/telemetry/page.tsx`:
-
-```typescript
-'use client';
-
-import { useEffect, useState } from 'react';
-
-interface Metric { name: string; value: number }
-interface LogEntry { timestamp: string; level: string; message: string; [key: string]: unknown }
-
-export default function TelemetryDashboard() {
-  const [metrics, setMetrics] = useState<Metric[]>([]);
-  const [logs, setLogs] = useState<LogEntry[]>([]);
-
-  useEffect(() => {
-    fetch('/api/telemetry/metrics')
-      .then((r) => r.text())
-      .then((text) => {
-        const lines = text.split('\n').filter((l) => l && !l.startsWith('#'));
-        setMetrics(lines.map((l) => {
-          const [name, value] = l.split(' ');
-          return { name, value: parseFloat(value) || 0 };
-        }));
-      });
-
-    fetch('/api/telemetry/logs').then((r) => r.json()).then(setLogs);
-  }, []);
-
-  return (
-    <div className="p-8">
-      <h1 className="text-2xl font-bold mb-4">Telemetry Dashboard</h1>
-      
-      <section className="mb-8">
-        <h2 className="text-xl font-semibold mb-2">Metrics</h2>
-        <table className="w-full border">
-          <thead>
-            <tr className="bg-gray-100">
-              <th className="border p-2">Name</th>
-              <th className="border p-2">Value</th>
-            </tr>
-          </thead>
-          <tbody>
-            {metrics.map((m) => (
-              <tr key={m.name}>
-                <td className="border p-2">{m.name}</td>
-                <td className="border p-2">{m.value}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </section>
-
-      <section>
-        <h2 className="text-xl font-semibold mb-2">Recent Logs</h2>
-        <div className="bg-gray-900 text-green-400 p-4 rounded font-mono text-sm max-h-96 overflow-auto">
-          {logs.map((log, i) => (
-            <div key={i}>
-              {log.timestamp} [{log.level}] {log.message}
-            </div>
-          ))}
-        </div>
-      </section>
-    </div>
-  );
-}
-```
-
-### 6. Update Instrumentation
-
-Update `src/instrumentation.ts`:
-
-```typescript
-import { initTelemetry, logger, httpLogger } from './lib/telemetry';
-
-export async function register() {
-  if (process.env.NEXT_RUNTIME !== "nodejs") {
-    return;
-  }
-
-  initTelemetry();
-  logger.info('Telemetry initialized');
-
-  const { ensureAutonomyBootState } = await import("./lib/autonomy/service");
-  await ensureAutonomyBootState();
-}
-```
-
-### 7. Integrate HTTP Logger Middleware
-
-Add to your API route handlers or a middleware file:
-
-```typescript
-import { httpLogger } from './lib/telemetry';
-
-export default function handler(req, res) {
-  httpLogger(req, res);
-  // ... your route handler
-}
-```
-
-## Tracked Metrics
-
-### Trading Operations
-| Metric | Type | Description |
-|--------|------|-------------|
-| `orders_submitted_total` | Counter | Total orders submitted |
-| `orders_filled_total` | Counter | Orders successfully filled |
-| `orders_rejected_total` | Counter | Orders rejected |
-| `order_latency_ms` | Histogram | Order execution time |
-
-### Swarm Intelligence
-| Metric | Type | Description |
-|--------|------|-------------|
-| `swarm_decisions_total` | Counter | Total decisions made |
-| `consensus_duration_ms` | Histogram | Time to reach consensus |
-| `active_agents` | Gauge | Active agents |
-| `proposal_rejections_total` | Counter | Rejected proposals |
-
-### System
-| Metric | Type | Description |
-|--------|------|-------------|
-| `nodejs_memory_usage_bytes` | Gauge | Memory consumption |
-| `nodejs_eventloop_lag_seconds` | Gauge | Event loop lag |
-| `websocket_connections` | Gauge | WebSocket connections |
-
-## Custom Spans
-
-### Order Execution
-```typescript
-import { createSpan, logger } from './lib/telemetry';
-
-async function submitOrder(order: Order) {
-  return createSpan('submit_order', { orderId: order.id, symbol: order.symbol }, async (span) => {
-    const result = await executeOrder(order);
-    span.setAttribute('result', result.status);
-    logger.info('Order submitted', { orderId: order.id, status: result.status });
-    return result;
-  });
-}
-```
-
-### Consensus
-```typescript
-import { createSpan, CONSENSUS_DURATION, logger } from './lib/telemetry';
-
-async function calculateConsensus(agents: Agent[]) {
-  return createSpan('consensus', { agentCount: String(agents.length) }, async (span) => {
-    const start = Date.now();
-    const result = await runConsensus(agents);
-    CONSENSUS_DURATION.record(Date.now() - start);
-    span.setAttribute('agreed', String(result.agreed));
-    logger.info('Consensus reached', { agreed: result.agreed, duration: Date.now() - start });
-    return result;
-  });
-}
-```
-
-## Logs Output
-
-Logs are written to `logs/telemetry.json`:
-
-```json
-{"level":"info","message":"Order submitted","orderId":"abc123","status":"filled","timestamp":"2024-01-15T10:30:00.000Z"}
-{"level":"info","message":"Consensus reached","agreed":true,"duration":45,"timestamp":"2024-01-15T10:30:01.000Z"}
-```
-
-## Viewing Telemetry
-
-1. **Metrics** - Visit `/api/telemetry/metrics` for Prometheus-compatible output
-2. **Dashboard** - Visit `/telemetry` for web UI with metrics and logs
-3. **Logs** - Check `logs/telemetry.json` file
 
 ## Integration Points
 
-| Module | Integration |
-|--------|-------------|
-| `src/lib/okx/orders.ts` | Add metrics to order operations |
-| `src/lib/swarm/consensus.ts` | Add tracing to consensus |
-| `src/lib/swarm/validator.ts` | Add tracing to validation |
-| `src/lib/api/client.ts` | Add tracing to API calls |
-| `src/lib/okx/ws-client.ts` | Add metrics for WebSocket |
+| Module | Coverage |
+| --- | --- |
+| `src/instrumentation.node.ts` | Telemetry bootstrap and fail-open startup |
+| `src/lib/autonomy/service.ts` | Scheduler, candidate evaluation, worker lease, blocker state |
+| `src/lib/swarm/autoExecute.ts` | Execution attempts, duplicate suppression, hold/error reasons |
+| `src/lib/swarm/orchestrator.ts` | Swarm runtime and executable decision tracking |
+| `src/lib/market-data/service.ts` | Snapshot health, realtime/degraded state, refresh errors |
+| `src/lib/okx/client.ts` | OKX request latency, success/error counters, request spans |
+| `src/lib/okx/ws-client.ts` | WebSocket connection and parse/error counters |
+| `src/app/api/ai/trade/execute/route.ts` | Trade execution request validation, latency, outcomes |
 
-## Next Steps
+## Tracked Metrics
 
-1. Add telemetry package dependencies
-2. Create `src/lib/telemetry/index.ts` module
-3. Add metrics endpoint `/api/telemetry/metrics`
-4. Add logs endpoint `/api/telemetry/logs`
-5. Create dashboard at `/telemetry`
-6. Integrate tracing and metrics into trading code
+### Runtime
+
+| Metric | Type | Description |
+| --- | --- | --- |
+| `telemetry_initialized` | Gauge | Telemetry bootstrap state |
+| `telemetry_span_duration_ms` | Histogram | Duration of local telemetry spans |
+| `nodejs_heap_used_bytes` | Gauge | Current heap usage |
+| `nodejs_heap_total_bytes` | Gauge | Current heap allocation |
+| `nodejs_rss_bytes` | Gauge | Resident set size |
+| `nodejs_external_memory_bytes` | Gauge | External memory usage |
+| `nodejs_eventloop_lag_seconds` | Gauge | Mean event loop lag |
+| `nodejs_eventloop_lag_max_seconds` | Gauge | Max event loop lag |
+| `nodejs_uptime_seconds` | Gauge | Process uptime |
+| `next_request_errors_total` | Counter | Next.js request errors captured by instrumentation |
+
+### Autonomy and Execution
+
+| Metric | Type | Description |
+| --- | --- | --- |
+| `autonomy_scheduler_active` | Gauge | Whether the autonomy scheduler loop is active |
+| `autonomy_scheduler_errors_total` | Counter | Scheduler dispatch failures |
+| `autonomy_running` | Gauge | Whether autonomy is marked as running |
+| `autonomy_inflight` | Gauge | Whether a worker lease is currently active |
+| `autonomy_candidate_evaluations_total` | Counter | Candidate evaluations by timeframe/decision/blocked |
+| `autonomy_worker_skips_total` | Counter | Worker dispatches skipped due to guards or lease state |
+| `autonomy_worker_runs_total` | Counter | Completed worker runs |
+| `autonomy_worker_errors_total` | Counter | Worker failures |
+| `autonomy_worker_duration_ms` | Histogram | Worker runtime |
+| `swarm_runs_total` | Counter | Swarm orchestration runs |
+| `swarm_run_duration_ms` | Histogram | Swarm orchestration latency |
+| `auto_execution_attempts_total` | Counter | Execution attempts from autonomy |
+| `auto_execution_results_total` | Counter | Final execution outcomes |
+| `auto_execution_errors_total` | Counter | Execution-layer failures that trip the circuit breaker |
+| `auto_execution_duration_ms` | Histogram | Execution attempt latency |
+| `trade_execute_requests_total` | Counter | `/api/ai/trade/execute` request outcomes |
+| `trade_execute_duration_ms` | Histogram | `/api/ai/trade/execute` latency |
+
+### Market Data and Exchange
+
+| Metric | Type | Description |
+| --- | --- | --- |
+| `market_data_tradeable` | Gauge | Whether a symbol/timeframe is currently tradeable |
+| `market_data_realtime` | Gauge | Whether websocket market data is currently realtime |
+| `market_data_stale` | Gauge | Whether market data is stale |
+| `market_refresh_errors_total` | Counter | Market refresh failures |
+| `market_snapshots_total` | Counter | Snapshot requests by status/source |
+| `market_snapshot_duration_ms` | Histogram | Snapshot collection latency |
+| `okx_request_duration_ms` | Histogram | OKX HTTP request latency |
+| `okx_requests_total` | Counter | OKX HTTP request outcomes |
+| `okx_ws_connections_total` | Counter | WebSocket connect events |
+| `okx_ws_disconnects_total` | Counter | WebSocket disconnect events |
+| `okx_ws_errors_total` | Counter | WebSocket runtime errors |
+| `okx_ws_parse_errors_total` | Counter | WebSocket payload parse failures |
+
+## Operator Access
+
+Telemetry APIs are protected with bearer auth.
+
+- preferred token: `TELEMETRY_TOKEN`
+- fallback token: `CRON_SECRET`
+- protected routes: `/api/telemetry/metrics`, `/api/telemetry/logs`,
+  `/api/telemetry/traces`, `/api/telemetry/summary`
+
+The `/telemetry` page uses the same bearer token to load the protected API
+routes.
+
+## Persistence Notes
+
+- events and spans are written to `.data/telemetry/`
+- telemetry files are rotated instead of growing without bound
+- telemetry readers tail the newest records from rotated files rather than
+  loading entire files into memory
+- if directory creation or file writes fail, telemetry continues in memory and
+  the trading runtime stays available

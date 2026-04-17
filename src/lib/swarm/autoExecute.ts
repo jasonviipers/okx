@@ -37,12 +37,21 @@ const DEFAULT_MAX_DAILY_TRADES = 20;
 const DEFAULT_LIVE_TRADING_BUDGET_USD = 0;
 const CIRCUIT_BREAKER_WINDOW_MS = 60_000;
 const CIRCUIT_BREAKER_ERROR_LIMIT = 3;
+const EXECUTION_RESULT_CACHE_MAX_SIZE = 64;
 
 let CIRCUIT_OPEN = false;
 let executionErrorTimestamps: number[] = [];
-const executionResults = new Map<string, ExecutionResult>();
+const executionResults = new Map<
+  string,
+  {
+    decision: TradeSignal;
+    recordedAt: number;
+    result: ExecutionResult;
+    validatedAt: string;
+  }
+>();
 
-function nowIso(): string {
+export function nowIso(): string {
   return new Date().toISOString();
 }
 
@@ -367,18 +376,66 @@ function logResult(result: ExecutionResult) {
   );
 }
 
-function getConsensusKey(
+function getExecutionResultCacheKey(consensus: ConsensusResult): string {
+  return `${consensus.symbol}:${consensus.timeframe}`;
+}
+
+function pruneExecutionResults(now = Date.now()) {
+  for (const [key, entry] of executionResults.entries()) {
+    if (now - entry.recordedAt > CIRCUIT_BREAKER_WINDOW_MS) {
+      executionResults.delete(key);
+    }
+  }
+
+  if (executionResults.size <= EXECUTION_RESULT_CACHE_MAX_SIZE) {
+    return;
+  }
+
+  const oldestFirst = [...executionResults.entries()].sort(
+    (left, right) => left[1].recordedAt - right[1].recordedAt,
+  );
+  while (executionResults.size > EXECUTION_RESULT_CACHE_MAX_SIZE) {
+    const oldest = oldestFirst.shift();
+    if (!oldest) {
+      break;
+    }
+
+    executionResults.delete(oldest[0]);
+  }
+}
+
+function getDuplicateExecutionResult(
   consensus: ConsensusResult,
   decision: TradeSignal,
-): string {
-  return [
-    consensus.symbol,
-    consensus.timeframe,
-    consensus.validatedAt,
+) {
+  pruneExecutionResults();
+  const cached = executionResults.get(getExecutionResultCacheKey(consensus));
+  if (!cached) {
+    return undefined;
+  }
+
+  if (
+    cached.validatedAt !== consensus.validatedAt ||
+    cached.decision !== decision
+  ) {
+    return undefined;
+  }
+
+  return cached.result;
+}
+
+function cacheExecutionResult(
+  consensus: ConsensusResult,
+  decision: TradeSignal,
+  result: ExecutionResult,
+) {
+  pruneExecutionResults();
+  executionResults.set(getExecutionResultCacheKey(consensus), {
     decision,
-    consensus.confidence,
-    consensus.agreement,
-  ].join(":");
+    recordedAt: Date.now(),
+    result,
+    validatedAt: consensus.validatedAt,
+  });
 }
 
 function mapExecutionGuardReason(
@@ -501,7 +558,6 @@ export async function autoExecuteConsensus(
           ? Math.min(maxPositionUsd, liveTradingBudgetUsd)
           : maxPositionUsd;
       const targetNotionalUsd = deriveSize(confidence, cappedMaxPositionUsd);
-      const consensusKey = getConsensusKey(consensus, decision);
       const executionIntent = await createExecutionIntent(
         consensus,
         targetNotionalUsd,
@@ -567,7 +623,7 @@ export async function autoExecuteConsensus(
         return result;
       };
 
-      const priorResult = executionResults.get(consensusKey);
+      const priorResult = getDuplicateExecutionResult(consensus, decision);
       if (priorResult) {
         telemetryWarn(
           "swarm.auto_execute",
@@ -575,7 +631,8 @@ export async function autoExecuteConsensus(
           {
             symbol: consensus.symbol,
             decision,
-            consensusKey,
+            timeframe: consensus.timeframe,
+            validatedAt: consensus.validatedAt,
           },
         );
         await finalizeExecutionIntent(executionIntent.id, priorResult);
@@ -601,7 +658,7 @@ export async function autoExecuteConsensus(
           ],
         });
         await finalizeExecutionIntent(executionIntent.id, result);
-        executionResults.set(consensusKey, result);
+        cacheExecutionResult(consensus, decision, result);
         return finalizeResult(result);
       }
 
@@ -652,7 +709,7 @@ export async function autoExecuteConsensus(
                 ],
         });
         await finalizeExecutionIntent(executionIntent.id, result);
-        executionResults.set(consensusKey, result);
+        cacheExecutionResult(consensus, decision, result);
         return finalizeResult(result);
       }
 
@@ -683,7 +740,7 @@ export async function autoExecuteConsensus(
           ]),
         });
         await finalizeExecutionIntent(executionIntent.id, result);
-        executionResults.set(consensusKey, result);
+        cacheExecutionResult(consensus, decision, result);
         return finalizeResult(result);
       }
 
@@ -726,7 +783,7 @@ export async function autoExecuteConsensus(
               marketStatus: marketSnapshot.status,
             },
           });
-          executionResults.set(consensusKey, result);
+          cacheExecutionResult(consensus, decision, result);
           return finalizeResult(result);
         }
 
@@ -763,7 +820,7 @@ export async function autoExecuteConsensus(
               marketStatus: marketSnapshot.status,
             },
           });
-          executionResults.set(consensusKey, result);
+          cacheExecutionResult(consensus, decision, result);
           return finalizeResult(result);
         }
 
@@ -783,7 +840,7 @@ export async function autoExecuteConsensus(
             ),
           });
           await finalizeExecutionIntent(executionIntent.id, result);
-          executionResults.set(consensusKey, result);
+          cacheExecutionResult(consensus, decision, result);
           return finalizeResult(result);
         }
 
@@ -809,7 +866,7 @@ export async function autoExecuteConsensus(
             ),
           });
           await finalizeExecutionIntent(executionIntent.id, result);
-          executionResults.set(consensusKey, result);
+          cacheExecutionResult(consensus, decision, result);
           return finalizeResult(result);
         }
 
@@ -847,7 +904,7 @@ export async function autoExecuteConsensus(
             normalizedSize,
             response,
           });
-          executionResults.set(consensusKey, result);
+          cacheExecutionResult(consensus, decision, result);
           return finalizeResult(result);
         }
 
@@ -974,7 +1031,7 @@ export async function autoExecuteConsensus(
             payload,
           },
         });
-        executionResults.set(consensusKey, result);
+        cacheExecutionResult(consensus, decision, result);
         return finalizeResult(result);
       } catch (caughtError) {
         recordExecutionError(Date.now());
@@ -1011,7 +1068,7 @@ export async function autoExecuteConsensus(
           caughtError,
         );
         await finalizeExecutionIntent(executionIntent.id, result);
-        executionResults.set(consensusKey, result);
+        cacheExecutionResult(consensus, decision, result);
         return finalizeResult(result);
       }
     },

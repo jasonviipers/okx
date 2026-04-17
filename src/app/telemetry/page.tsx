@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { startTransition, useEffect, useEffectEvent, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import type {
@@ -120,16 +121,69 @@ export default function TelemetryPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [lastUpdated, setLastUpdated] = useState<string | null>(null);
+  const [operatorToken, setOperatorToken] = useState("");
+  const [tokenReady, setTokenReady] = useState(false);
+
+  useEffect(() => {
+    const storedToken = window.sessionStorage.getItem(
+      "telemetry.operator_token",
+    );
+    if (storedToken) {
+      setOperatorToken(storedToken);
+    }
+    setTokenReady(true);
+  }, []);
+
+  useEffect(() => {
+    if (!tokenReady) {
+      return;
+    }
+
+    const normalizedToken = operatorToken.trim();
+    if (normalizedToken) {
+      window.sessionStorage.setItem(
+        "telemetry.operator_token",
+        normalizedToken,
+      );
+      startTransition(() => {
+        setError(null);
+        setLoading(true);
+      });
+      return;
+    }
+
+    window.sessionStorage.removeItem("telemetry.operator_token");
+    startTransition(() => {
+      setPayload(null);
+      setLastUpdated(null);
+      setLoading(false);
+      setError("Enter the operator bearer token to load telemetry.");
+    });
+  }, [operatorToken, tokenReady]);
 
   const refresh = useEffectEvent(async () => {
+    const normalizedToken = operatorToken.trim();
+    if (!normalizedToken) {
+      return;
+    }
+
     try {
       const response = await fetch(
         "/api/telemetry/summary?logs=80&traces=80&intents=20&history=20",
         {
           cache: "no-store",
+          headers: {
+            Authorization: `Bearer ${normalizedToken}`,
+          },
         },
       );
       if (!response.ok) {
+        if (response.status === 401) {
+          throw new Error(
+            "Telemetry API unauthorized. Verify the operator bearer token.",
+          );
+        }
+
         throw new Error(
           `Telemetry request failed with status ${response.status}`,
         );
@@ -158,14 +212,79 @@ export default function TelemetryPage() {
     }
   });
 
-  useEffect(() => {
-    void refresh();
-    const timer = window.setInterval(() => {
-      void refresh();
-    }, 5_000);
+  const openMetrics = useEffectEvent(async () => {
+    const normalizedToken = operatorToken.trim();
+    if (!normalizedToken) {
+      startTransition(() => {
+        setError("Enter the operator bearer token before opening metrics.");
+      });
+      return;
+    }
 
-    return () => window.clearInterval(timer);
-  }, []);
+    try {
+      const response = await fetch("/api/telemetry/metrics", {
+        cache: "no-store",
+        headers: {
+          Authorization: `Bearer ${normalizedToken}`,
+        },
+      });
+      if (!response.ok) {
+        throw new Error(
+          `Metrics request failed with status ${response.status}`,
+        );
+      }
+
+      const metricsText = await response.text();
+      const blobUrl = URL.createObjectURL(
+        new Blob([metricsText], { type: "text/plain;charset=utf-8" }),
+      );
+      window.open(blobUrl, "_blank", "noopener,noreferrer");
+      window.setTimeout(() => URL.revokeObjectURL(blobUrl), 60_000);
+    } catch (caughtError) {
+      startTransition(() => {
+        setError(
+          caughtError instanceof Error
+            ? caughtError.message
+            : "Failed to load metrics",
+        );
+      });
+    }
+  });
+
+  useEffect(() => {
+    let timer: number | undefined;
+
+    const clearTimer = () => {
+      if (timer !== undefined) {
+        window.clearInterval(timer);
+        timer = undefined;
+      }
+    };
+
+    const handleVisibilityChange = () => {
+      clearTimer();
+      if (
+        !tokenReady ||
+        document.visibilityState !== "visible" ||
+        operatorToken.trim().length === 0
+      ) {
+        return;
+      }
+
+      void refresh();
+      timer = window.setInterval(() => {
+        void refresh();
+      }, 5_000);
+    };
+
+    handleVisibilityChange();
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      clearTimer();
+    };
+  }, [operatorToken, tokenReady]);
 
   const runtime = payload?.runtime ?? null;
   const metrics = payload?.metrics ?? null;
@@ -174,7 +293,7 @@ export default function TelemetryPage() {
   const executionIntents = payload?.executionIntents ?? [];
 
   return (
-    <main className="min-h-screen bg-background text-foreground p-3 md:p-4 font-mono">
+    <main className="min-h-screen bg-background p-3 font-mono text-foreground md:p-4">
       <div className="mx-auto flex w-full max-w-7xl flex-col gap-3">
         <div className="flex flex-col gap-2 border border-border bg-card p-3 md:flex-row md:items-end md:justify-between">
           <div>
@@ -189,23 +308,41 @@ export default function TelemetryPage() {
               {lastUpdated ? formatTimestamp(lastUpdated) : "loading"}
             </p>
           </div>
-          <div className="flex items-center gap-2 text-[0.625rem]">
-            <a
-              href="/api/telemetry/metrics"
-              target="_blank"
-              rel="noreferrer"
-              className="border border-border px-2 py-1 text-terminal-cyan hover:bg-secondary"
-            >
-              /metrics
-            </a>
-            <a
-              href="/"
-              className="border border-border px-2 py-1 text-terminal-green hover:bg-secondary"
-            >
-              Back To Dashboard
-            </a>
+          <div className="flex flex-col gap-2 text-[0.625rem] md:items-end">
+            <label className="flex items-center gap-2">
+              <span className="text-terminal-dim">Operator Token</span>
+              <input
+                type="password"
+                value={operatorToken}
+                onChange={(event) => setOperatorToken(event.target.value)}
+                placeholder="Bearer token"
+                className="w-56 border border-border bg-background px-2 py-1 text-terminal-cyan outline-none placeholder:text-terminal-dim"
+              />
+            </label>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => void openMetrics()}
+                className="border border-border px-2 py-1 text-terminal-cyan hover:bg-secondary"
+              >
+                /metrics
+              </button>
+              <Link
+                href="/"
+                className="border border-border px-2 py-1 text-terminal-green hover:bg-secondary"
+              >
+                Back To Dashboard
+              </Link>
+            </div>
           </div>
         </div>
+
+        {!operatorToken.trim() && (
+          <div className="border border-border bg-card px-3 py-2 text-[0.6875rem] text-terminal-dim">
+            Telemetry endpoints are operator-protected. Use the bearer token
+            from `TELEMETRY_TOKEN` or `CRON_SECRET`.
+          </div>
+        )}
 
         {error && (
           <div className="border border-terminal-red/40 bg-terminal-red/5 px-3 py-2 text-[0.6875rem] text-terminal-red">
@@ -225,7 +362,7 @@ export default function TelemetryPage() {
             }
             detail={
               runtime
-                ? `${runtime.autonomy.symbol} ${runtime.autonomy.timeframe} • last run ${formatTimestamp(runtime.autonomy.lastRunAt)}`
+                ? `${runtime.autonomy.symbol} ${runtime.autonomy.timeframe} | last run ${formatTimestamp(runtime.autonomy.lastRunAt)}`
                 : loading
                   ? "Loading autonomy status"
                   : "No autonomy data"
@@ -249,7 +386,7 @@ export default function TelemetryPage() {
             }
             detail={
               runtime
-                ? `${runtime.marketData.symbol ?? "n/a"} • ${runtime.marketData.connectionState} • ${runtime.marketData.detail}`
+                ? `${runtime.marketData.symbol ?? "n/a"} | ${runtime.marketData.connectionState} | ${runtime.marketData.detail}`
                 : "Loading market data"
             }
             accent={
@@ -263,7 +400,7 @@ export default function TelemetryPage() {
           <TelemetryStatCard
             title="Worker Runs"
             value={String(metricTotal(metrics, "autonomy_worker_runs_total"))}
-            detail={`${metricTotal(metrics, "autonomy_worker_skips_total")} skips • ${metricTotal(metrics, "autonomy_worker_errors_total")} worker errors`}
+            detail={`${metricTotal(metrics, "autonomy_worker_skips_total")} skips | ${metricTotal(metrics, "autonomy_worker_errors_total")} worker errors`}
             accent="cyan"
           />
           <TelemetryStatCard
@@ -275,7 +412,7 @@ export default function TelemetryPage() {
             )}
             detail={`${metricTotal(metrics, "auto_execution_results_total", {
               status: "hold",
-            })} holds • ${metricTotal(metrics, "auto_execution_results_total", {
+            })} holds | ${metricTotal(metrics, "auto_execution_results_total", {
               status: "error",
             })} errors`}
             accent="green"
@@ -405,7 +542,7 @@ export default function TelemetryPage() {
                       </span>
                     </div>
                     <div className="mt-1 text-terminal-dim">
-                      {formatTimestamp(span.startedAt)} • trace{" "}
+                      {formatTimestamp(span.startedAt)} | trace{" "}
                       {span.traceId.slice(0, 16)}
                     </div>
                     {Object.keys(span.attributes).length > 0 && (
@@ -444,7 +581,7 @@ export default function TelemetryPage() {
                     <div className="mt-1 text-terminal-dim">
                       {formatTimestamp(entry.timestamp)}
                       {entry.traceId
-                        ? ` • trace ${entry.traceId.slice(0, 16)}`
+                        ? ` | trace ${entry.traceId.slice(0, 16)}`
                         : ""}
                     </div>
                     {entry.attributes &&

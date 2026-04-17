@@ -213,6 +213,11 @@ export async function ensureAutonomyBootState() {
     nextRunAt: state.nextRunAt ?? new Date().toISOString(),
     lastError: undefined,
   });
+  setGauge(
+    "autonomy_running",
+    "Whether autonomy is currently marked as running.",
+    1,
+  );
   info("autonomy", "Autonomy boot state initialized", {
     symbol: state.symbol,
     timeframe: state.timeframe,
@@ -636,7 +641,6 @@ async function evaluateAutonomyCandidate(
         "Total autonomy candidate evaluations.",
         1,
         {
-          symbol,
           timeframe,
           decision: result.consensus.decision ?? result.consensus.signal,
           blocked: result.consensus.blocked,
@@ -1010,6 +1014,11 @@ export async function dispatchAutonomyWorker(options?: {
           reason: "failed to acquire worker lease",
         } as const;
       }
+      setGauge(
+        "autonomy_inflight",
+        "Whether an autonomy worker lease is currently active.",
+        1,
+      );
 
       const startedAt = new Date().toISOString();
       const baseUrl = resolveInternalBaseUrl();

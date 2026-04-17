@@ -1,8 +1,19 @@
 import { ensureAutonomyBootState } from "@/lib/autonomy/service";
-import { info, initTelemetry } from "@/lib/telemetry/server";
+import {
+  info,
+  initTelemetry,
+  error as telemetryError,
+} from "@/lib/telemetry/server";
 
 export async function registerNodeInstrumentation() {
-  await initTelemetry();
-  info("instrumentation", "Node instrumentation bootstrapped");
+  try {
+    await initTelemetry();
+    info("instrumentation", "Node instrumentation bootstrapped");
+  } catch (caughtError) {
+    telemetryError("instrumentation", "telemetry init failed", {
+      error: caughtError,
+    });
+  }
+
   await ensureAutonomyBootState();
 }
