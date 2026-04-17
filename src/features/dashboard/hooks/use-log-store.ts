@@ -38,19 +38,61 @@ function emitLogChange() {
   }
 }
 
+const SENSITIVE_KEYS = new Set([
+  "password",
+  "token",
+  "auth",
+  "apikey",
+  "api_key",
+  "secret",
+  "authorization",
+  "cookie",
+  "stack",
+]);
+
+function sanitizeValue(value: unknown, maxLen = 200): string {
+  if (value == null) return "";
+  const str = typeof value === "string" ? value : JSON.stringify(value);
+  return str.length > maxLen ? str.slice(0, maxLen) + "…" : str;
+}
+
+function sanitizePayload(payload: unknown): string | undefined {
+  if (payload == null) return undefined;
+  if (typeof payload === "string") return sanitizeValue(payload);
+  if (typeof payload === "object") {
+    try {
+      const obj = payload as Record<string, unknown>;
+      const sanitized: Record<string, unknown> = {};
+      for (const [key, val] of Object.entries(obj)) {
+        sanitized[key] = SENSITIVE_KEYS.has(key.toLowerCase())
+          ? "[REDACTED]"
+          : val;
+      }
+      return sanitizeValue(JSON.stringify(sanitized));
+    } catch {
+      return sanitizeValue(payload);
+    }
+  }
+  return sanitizeValue(payload);
+}
+
+function sanitizeMessage(message: string): string {
+  return message.length > 500 ? message.slice(0, 500) + "…" : message;
+}
+
 export function addLog(
   level: LogEntry["level"],
   source: string,
   message: string,
-  payload?: string,
+  payload?: unknown,
 ) {
   const entry: LogEntry = {
     id: `log-${++logIdCounter}`,
     timestamp: new Date().toISOString(),
     level,
     source,
-    message,
-    payload,
+    message: sanitizeMessage(message),
+    payload: sanitizePayload(payload),
   };
   logStore.entries = [entry, ...logStore.entries].slice(0, 500);
   emitLogChange();

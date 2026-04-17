@@ -129,11 +129,11 @@ export function PositionsPanel() {
               No open positions
             </div>
           ) : (
-            positions.map((pos: Position) => {
+            positions.map((pos: Position, index: number) => {
               const pnlFmt = formatPnl(pos.pnl);
               return (
                 <div
-                  key={`${pos.symbol}-${pos.side}`}
+                  key={`${pos.symbol}-${pos.side}-${index}`}
                   className="grid grid-cols-7 text-[0.5625rem] font-mono px-2 py-px border-b border-border/50 hover:bg-secondary/50"
                 >
                   <span className="font-semibold">{pos.symbol}</span>

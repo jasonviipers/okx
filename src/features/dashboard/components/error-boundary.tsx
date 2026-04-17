@@ -2,11 +2,13 @@
 
 import { Component, type ErrorInfo, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
+import { addLog } from "@/features/dashboard/hooks/use-log-store";
 
 interface Props {
   children: ReactNode;
   fallback?: ReactNode;
   label?: string;
+  onError?: (error: Error, errorInfo: ErrorInfo) => void;
 }
 
 interface State {
@@ -25,11 +27,12 @@ export class ErrorBoundary extends Component<Props, State> {
   }
 
   componentDidCatch(error: Error, errorInfo: ErrorInfo) {
-    console.error(
-      `[ErrorBoundary${this.props.label ? `:${this.props.label}` : ""}]`,
-      error,
-      errorInfo,
-    );
+    const source = this.props.label ?? "Panel";
+    addLog("ERROR", source, error.message, {
+      componentStack: errorInfo.componentStack,
+    });
+    console.error(`[ErrorBoundary:${source}]`, error, errorInfo);
+    this.props.onError?.(error, errorInfo);
   }
 
   render() {

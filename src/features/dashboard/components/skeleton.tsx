@@ -1,6 +1,6 @@
 "use client";
 
-import { type ReactNode, Suspense } from "react";
+import { type ReactNode } from "react";
 
 export function PanelSkeleton({ label }: { label: string }) {
   return (
@@ -18,11 +18,14 @@ export function PanelSkeleton({ label }: { label: string }) {
 export function PanelSuspense({
   children,
   label,
+  loading = false,
 }: {
   children: ReactNode;
   label: string;
+  loading?: boolean;
 }) {
-  return (
-    <Suspense fallback={<PanelSkeleton label={label} />}>{children}</Suspense>
-  );
+  if (loading) {
+    return <PanelSkeleton label={label} />;
+  }
+  return <>{children}</>;
 }

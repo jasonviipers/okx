@@ -200,21 +200,23 @@ export function CandlestickChart() {
       const data = param.seriesData.get(candleSeries) as
         | CandlestickData<Time>
         | undefined;
-      if (data) {
-        setOhlcTooltip({
-          open: data.open,
-          high: data.high,
-          low: data.low,
-          close: data.close,
-          volume:
-            (
-              param.seriesData.get(volumeSeries) as
-                | HistogramData<Time>
-                | undefined
-            )?.value ?? 0,
-          time: String(param.time),
-        });
+      if (!data) {
+        setOhlcTooltip(null);
+        return;
       }
+      setOhlcTooltip({
+        open: data.open,
+        high: data.high,
+        low: data.low,
+        close: data.close,
+        volume:
+          (
+            param.seriesData.get(volumeSeries) as
+              | HistogramData<Time>
+              | undefined
+          )?.value ?? 0,
+        time: String(param.time),
+      });
     });
 
     chartRef.current = chart;
@@ -253,89 +255,96 @@ export function CandlestickChart() {
     }
 
     const dataKey = `${selectedSymbol}:${selectedTimeframe}:${candles.length}:${candles[candles.length - 1]?.timestamp}`;
-    if (dataKey === prevDataKeyRef.current) return;
+    const dataUnchanged = dataKey === prevDataKeyRef.current;
     prevDataKeyRef.current = dataKey;
 
-    const sorted = [...candles].sort(
-      (a, b) =>
-        new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime(),
-    );
-
-    const candleData: CandlestickData<Time>[] = sorted.map((c) => ({
-      time: (new Date(c.timestamp).getTime() / 1000) as Time,
-      open: c.open,
-      high: c.high,
-      low: c.low,
-      close: c.close,
-    }));
-
-    const volumeData: HistogramData<Time>[] = sorted.map((c) => ({
-      time: (new Date(c.timestamp).getTime() / 1000) as Time,
-      value: c.volume,
-      color: c.close >= c.open ? "#00d4aa40" : "#ff444440",
-    }));
-
-    const closes = sorted.map((c) => c.close);
-    const ema9Data = computeEMA(closes, 9);
-    const ema21Data = computeEMA(closes, 21);
-    const bb = computeBollingerBands(closes, 20, 2);
-
-    candleSeriesRef.current.setData(candleData);
-    volumeSeriesRef.current.setData(volumeData);
-
-    if (showEMA9 && ema9SeriesRef.current) {
-      ema9SeriesRef.current.setData(
-        ema9Data
-          .map((v, i) => ({ time: candleData[i].time, value: v }))
-          .filter((p) => !Number.isNaN(p.value)),
+    if (!dataUnchanged) {
+      const sorted = [...candles].sort(
+        (a, b) =>
+          new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime(),
       );
-      ema9SeriesRef.current.applyOptions({ visible: true });
-    } else if (ema9SeriesRef.current) {
-      ema9SeriesRef.current.applyOptions({ visible: false });
+
+      const candleData: CandlestickData<Time>[] = sorted.map((c) => ({
+        time: (new Date(c.timestamp).getTime() / 1000) as Time,
+        open: c.open,
+        high: c.high,
+        low: c.low,
+        close: c.close,
+      }));
+
+      const volumeData: HistogramData<Time>[] = sorted.map((c) => ({
+        time: (new Date(c.timestamp).getTime() / 1000) as Time,
+        value: c.volume,
+        color: c.close >= c.open ? "#00d4aa40" : "#ff444440",
+      }));
+
+      const closes = sorted.map((c) => c.close);
+      const ema9Data = showEMA9 ? computeEMA(closes, 9) : null;
+      const ema21Data = showEMA21 ? computeEMA(closes, 21) : null;
+      const bb = showBB ? computeBollingerBands(closes, 20, 2) : null;
+
+      candleSeriesRef.current.setData(candleData);
+      volumeSeriesRef.current.setData(volumeData);
+
+      if (showEMA9 && ema9Data && ema9SeriesRef.current) {
+        ema9SeriesRef.current.setData(
+          ema9Data
+            .map((v, i) => ({ time: candleData[i].time, value: v }))
+            .filter((p) => !Number.isNaN(p.value)),
+        );
+      }
+      if (showEMA21 && ema21Data && ema21SeriesRef.current) {
+        ema21SeriesRef.current.setData(
+          ema21Data
+            .map((v, i) => ({ time: candleData[i].time, value: v }))
+            .filter((p) => !Number.isNaN(p.value)),
+        );
+      }
+      if (
+        showBB &&
+        bb &&
+        bbUpperRef.current &&
+        bbLowerRef.current &&
+        bbMiddleRef.current
+      ) {
+        bbUpperRef.current.setData(
+          bb.upper
+            .map((v, i) => ({ time: candleData[i].time, value: v }))
+            .filter((p) => !Number.isNaN(p.value)),
+        );
+        bbLowerRef.current.setData(
+          bb.lower
+            .map((v, i) => ({ time: candleData[i].time, value: v }))
+            .filter((p) => !Number.isNaN(p.value)),
+        );
+        bbMiddleRef.current.setData(
+          bb.sma
+            .map((v, i) => ({ time: candleData[i].time, value: v }))
+            .filter((p) => !Number.isNaN(p.value)),
+        );
+      }
     }
 
-    if (showEMA21 && ema21SeriesRef.current) {
-      ema21SeriesRef.current.setData(
-        ema21Data
-          .map((v, i) => ({ time: candleData[i].time, value: v }))
-          .filter((p) => !Number.isNaN(p.value)),
-      );
-      ema21SeriesRef.current.applyOptions({ visible: true });
-    } else if (ema21SeriesRef.current) {
-      ema21SeriesRef.current.applyOptions({ visible: false });
+    // Always apply visibility for toggles, even when data is unchanged
+    if (ema9SeriesRef.current) {
+      ema9SeriesRef.current.applyOptions({ visible: showEMA9 });
+    }
+    if (ema21SeriesRef.current) {
+      ema21SeriesRef.current.applyOptions({ visible: showEMA21 });
+    }
+    if (bbUpperRef.current) {
+      bbUpperRef.current.applyOptions({ visible: showBB });
+    }
+    if (bbLowerRef.current) {
+      bbLowerRef.current.applyOptions({ visible: showBB });
+    }
+    if (bbMiddleRef.current) {
+      bbMiddleRef.current.applyOptions({ visible: showBB });
     }
 
-    if (
-      showBB &&
-      bbUpperRef.current &&
-      bbLowerRef.current &&
-      bbMiddleRef.current
-    ) {
-      bbUpperRef.current.setData(
-        bb.upper
-          .map((v, i) => ({ time: candleData[i].time, value: v }))
-          .filter((p) => !Number.isNaN(p.value)),
-      );
-      bbLowerRef.current.setData(
-        bb.lower
-          .map((v, i) => ({ time: candleData[i].time, value: v }))
-          .filter((p) => !Number.isNaN(p.value)),
-      );
-      bbMiddleRef.current.setData(
-        bb.sma
-          .map((v, i) => ({ time: candleData[i].time, value: v }))
-          .filter((p) => !Number.isNaN(p.value)),
-      );
-      bbUpperRef.current.applyOptions({ visible: true });
-      bbLowerRef.current.applyOptions({ visible: true });
-      bbMiddleRef.current.applyOptions({ visible: true });
-    } else {
-      bbUpperRef.current?.applyOptions({ visible: false });
-      bbLowerRef.current?.applyOptions({ visible: false });
-      bbMiddleRef.current?.applyOptions({ visible: false });
+    if (!dataUnchanged) {
+      chartRef.current?.timeScale().fitContent();
     }
-
-    chartRef.current?.timeScale().fitContent();
   }, [
     snapshot.data,
     selectedSymbol,

@@ -10,7 +10,7 @@ import { cn } from "@/lib/utils";
 
 export function TickerTape() {
   const { selectedSymbol, setSelectedSymbol } = useDashboard();
-  const tickers = useTickerFeed([...DEFAULT_SYMBOLS]);
+  const tickers = useTickerFeed(DEFAULT_SYMBOLS);
   const scrollRef = useRef<HTMLDivElement>(null);
   const [isPaused, setIsPaused] = useState(false);
 
@@ -58,9 +58,9 @@ export function TickerTape() {
                       isPositive ? "text-terminal-green" : "text-terminal-red",
                     )}
                   >
-                    {ticker.last.toLocaleString(undefined, {
+                    {ticker.last.toLocaleString("en-US", {
                       minimumFractionDigits: 2,
-                      maximumFractionDigits: 2,
+                      maximumFractionDigits: ticker.last < 1 ? 6 : 2,
                     })}
                   </span>
                   <span

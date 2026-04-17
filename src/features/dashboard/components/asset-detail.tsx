@@ -64,7 +64,7 @@ export function AssetDetail() {
   const change24h = ticker?.change24h ?? 0;
   const isUp = change24h >= 0;
 
-  if (snapshot.loading) {
+  if (snapshot.loading && !snapshot.data) {
     return (
       <Card size="sm" className="h-full">
         <CardHeader>
@@ -147,9 +147,12 @@ export function AssetDetail() {
         <div className="grid grid-cols-3 gap-x-3 gap-y-1">
           <DataField
             label="Open"
-            value={formatNumber(
-              ticker.last - (ticker.change24h / 100) * ticker.last,
-            )}
+            value={(() => {
+              if (ticker.open24h != null) return formatNumber(ticker.open24h);
+              const denom = 1 + ticker.change24h / 100;
+              if (denom === 0) return "---";
+              return formatNumber(ticker.last / denom);
+            })()}
           />
           <DataField label="High 24h" value={formatNumber(ticker.high24h)} />
           <DataField label="Low 24h" value={formatNumber(ticker.low24h)} />

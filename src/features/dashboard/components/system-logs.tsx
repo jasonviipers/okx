@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -46,8 +46,38 @@ export function SystemLogs() {
 
   const virtualRef = useRef<HTMLDivElement>(null);
   const ROW_HEIGHT = 18;
-  const VISIBLE_ROWS = Math.ceil(300 / ROW_HEIGHT);
+  const [containerHeight, setContainerHeight] = useState(300);
   const [scrollTop, setScrollTop] = useState(0);
+  const prevEntriesLengthRef = useRef(0);
+
+  const VISIBLE_ROWS = Math.ceil(containerHeight / ROW_HEIGHT);
+
+  useEffect(() => {
+    const el = virtualRef.current;
+    if (!el) return;
+    const obs = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        setContainerHeight(entry.contentRect.height);
+      }
+    });
+    obs.observe(el);
+    return () => obs.disconnect();
+  }, []);
+
+  useEffect(() => {
+    const el = virtualRef.current;
+    if (!el) return;
+    const prevLen = prevEntriesLengthRef.current;
+    if (entries.length > prevLen) {
+      const nearBottom =
+        el.scrollHeight - el.scrollTop - el.clientHeight < ROW_HEIGHT * 2;
+      if (nearBottom) {
+        el.scrollTop = el.scrollHeight;
+        setScrollTop(el.scrollTop);
+      }
+    }
+    prevEntriesLengthRef.current = entries.length;
+  }, [entries.length]);
 
   const startIdx = Math.floor(scrollTop / ROW_HEIGHT);
   const endIdx = Math.min(startIdx + VISIBLE_ROWS + 5, entries.length);

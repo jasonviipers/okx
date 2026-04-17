@@ -47,6 +47,7 @@ interface SwrState<T> {
 interface DataStore<T> {
   state: SwrState<T>;
   version: number;
+  generation: number;
   listeners: Set<() => void>;
   timer: ReturnType<typeof setInterval> | null;
 }
@@ -59,6 +60,7 @@ function getStore<T>(key: string): DataStore<T> {
     entry = {
       state: { data: null, error: null, loading: true, refreshing: false },
       version: 0,
+      generation: 0,
       listeners: new Set(),
       timer: null,
     };
@@ -87,10 +89,13 @@ export function useMarketSnapshot(
       `/api/ai/market/snapshot?symbol=${symbol}&timeframe=${timeframe}&limit=200`,
     ),
   );
-  fetcherRef.current = () =>
-    fetchJson<ApiEnvelope<SnapshotData>>(
-      `/api/ai/market/snapshot?symbol=${symbol}&timeframe=${timeframe}&limit=200`,
-    );
+
+  useEffect(() => {
+    fetcherRef.current = () =>
+      fetchJson<ApiEnvelope<SnapshotData>>(
+        `/api/ai/market/snapshot?symbol=${symbol}&timeframe=${timeframe}&limit=200`,
+      );
+  }, [symbol, timeframe]);
 
   const subscribe = useCallback(
     (onStoreChange: () => void) => {
@@ -99,6 +104,7 @@ export function useMarketSnapshot(
       const needsFetch = entry.state.loading && entry.state.data === null;
 
       const doFetch = async (isRefresh: boolean) => {
+        const gen = ++entry.generation;
         if (isRefresh) {
           entry.state = { ...entry.state, refreshing: true, error: null };
           emitChange(key);
@@ -113,6 +119,7 @@ export function useMarketSnapshot(
         }
         try {
           const res = await fetcherRef.current();
+          if (gen !== entry.generation) return;
           entry.state = {
             data: res.data,
             error: null,
@@ -120,6 +127,7 @@ export function useMarketSnapshot(
             refreshing: false,
           };
         } catch (err) {
+          if (gen !== entry.generation) return;
           entry.state = {
             ...entry.state,
             error: err instanceof Error ? err.message : String(err),
@@ -140,9 +148,12 @@ export function useMarketSnapshot(
 
       return () => {
         entry.listeners.delete(onStoreChange);
-        if (entry.listeners.size === 0 && entry.timer) {
-          clearInterval(entry.timer);
-          entry.timer = null;
+        if (entry.listeners.size === 0) {
+          if (entry.timer) {
+            clearInterval(entry.timer);
+            entry.timer = null;
+          }
+          storeMap.delete(key);
         }
       };
     },
@@ -150,16 +161,21 @@ export function useMarketSnapshot(
   );
 
   const lastRef = useRef<{
+    key: string;
     state: SwrState<SnapshotData>;
     version: number;
   } | null>(null);
 
   const getSnapshot = useCallback(() => {
     const entry = getStore<SnapshotData>(key);
-    if (lastRef.current && lastRef.current.version === entry.version) {
+    if (
+      lastRef.current &&
+      lastRef.current.key === key &&
+      lastRef.current.version === entry.version
+    ) {
       return lastRef.current;
     }
-    const snap = { state: entry.state, version: entry.version };
+    const snap = { key, state: entry.state, version: entry.version };
     lastRef.current = snap;
     return snap;
   }, [key]);
@@ -192,11 +208,13 @@ export function useMarketSnapshot(
 
   const refresh = useCallback(() => {
     const entry = getStore<SnapshotData>(key);
+    const gen = ++entry.generation;
     const doFetch = async () => {
       entry.state = { ...entry.state, refreshing: true, error: null };
       emitChange(key);
       try {
         const res = await fetcherRef.current();
+        if (gen !== entry.generation) return;
         entry.state = {
           data: res.data,
           error: null,
@@ -204,6 +222,7 @@ export function useMarketSnapshot(
           refreshing: false,
         };
       } catch (err) {
+        if (gen !== entry.generation) return;
         entry.state = {
           ...entry.state,
           error: err instanceof Error ? err.message : String(err),
@@ -230,10 +249,13 @@ export function useCandles(
       `/api/ai/market/candles?symbol=${symbol}&timeframe=${timeframe}&limit=${limit}`,
     ),
   );
-  fetcherRef.current = () =>
-    fetchJson<ApiEnvelope<CandlesData>>(
-      `/api/ai/market/candles?symbol=${symbol}&timeframe=${timeframe}&limit=${limit}`,
-    );
+
+  useEffect(() => {
+    fetcherRef.current = () =>
+      fetchJson<ApiEnvelope<CandlesData>>(
+        `/api/ai/market/candles?symbol=${symbol}&timeframe=${timeframe}&limit=${limit}`,
+      );
+  }, [symbol, timeframe, limit]);
 
   const subscribe = useCallback(
     (onStoreChange: () => void) => {
@@ -242,6 +264,7 @@ export function useCandles(
       const needsFetch = entry.state.loading && entry.state.data === null;
 
       const doFetch = async (isRefresh: boolean) => {
+        const gen = ++entry.generation;
         if (isRefresh) {
           entry.state = { ...entry.state, refreshing: true, error: null };
           emitChange(key);
@@ -256,6 +279,7 @@ export function useCandles(
         }
         try {
           const res = await fetcherRef.current();
+          if (gen !== entry.generation) return;
           entry.state = {
             data: res.data,
             error: null,
@@ -263,6 +287,7 @@ export function useCandles(
             refreshing: false,
           };
         } catch (err) {
+          if (gen !== entry.generation) return;
           entry.state = {
             ...entry.state,
             error: err instanceof Error ? err.message : String(err),
@@ -282,9 +307,12 @@ export function useCandles(
 
       return () => {
         entry.listeners.delete(onStoreChange);
-        if (entry.listeners.size === 0 && entry.timer) {
-          clearInterval(entry.timer);
-          entry.timer = null;
+        if (entry.listeners.size === 0) {
+          if (entry.timer) {
+            clearInterval(entry.timer);
+            entry.timer = null;
+          }
+          storeMap.delete(key);
         }
       };
     },
@@ -292,16 +320,21 @@ export function useCandles(
   );
 
   const lastRef = useRef<{
+    key: string;
     state: SwrState<CandlesData>;
     version: number;
   } | null>(null);
 
   const getSnapshot = useCallback(() => {
     const entry = getStore<CandlesData>(key);
-    if (lastRef.current && lastRef.current.version === entry.version) {
+    if (
+      lastRef.current &&
+      lastRef.current.key === key &&
+      lastRef.current.version === entry.version
+    ) {
       return lastRef.current;
     }
-    const snap = { state: entry.state, version: entry.version };
+    const snap = { key, state: entry.state, version: entry.version };
     lastRef.current = snap;
     return snap;
   }, [key]);
@@ -334,11 +367,13 @@ export function useCandles(
 
   const refresh = useCallback(() => {
     const entry = getStore<CandlesData>(key);
+    const gen = ++entry.generation;
     const doFetch = async () => {
       entry.state = { ...entry.state, refreshing: true, error: null };
       emitChange(key);
       try {
         const res = await fetcherRef.current();
+        if (gen !== entry.generation) return;
         entry.state = {
           data: res.data,
           error: null,
@@ -346,6 +381,7 @@ export function useCandles(
           refreshing: false,
         };
       } catch (err) {
+        if (gen !== entry.generation) return;
         entry.state = {
           ...entry.state,
           error: err instanceof Error ? err.message : String(err),
@@ -382,7 +418,7 @@ function emitTickerChange() {
   }
 }
 
-export function useTickerFeed(symbols: string[]) {
+export function useTickerFeed(symbols: readonly string[]) {
   const symbolsRef = useRef(symbols);
   symbolsRef.current = symbols;
 

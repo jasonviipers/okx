@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useTransition } from "react";
+import { useEffect, useRef, useTransition } from "react";
 import { Button } from "@/components/ui/button";
 import { AgentDashboard } from "@/features/dashboard/components/agent-dashboard";
 import { AssetDetail } from "@/features/dashboard/components/asset-detail";
@@ -46,16 +46,22 @@ function DashboardShell() {
 
   const systemStatus = useSystemStatus();
 
-  // Log system status changes
+  const prevStatusSigRef = useRef("");
+  const prevErrorRef = useRef<string | undefined>(undefined);
   useEffect(() => {
     if (systemStatus.data) {
-      addLog(
-        "INFO",
-        "System",
-        `Status loaded: OKX ${systemStatus.data.okx.available ? "online" : "offline"}, Market ${systemStatus.data.marketData.realtime ? "realtime" : "polling"}`,
-      );
+      const sig = `${systemStatus.data.okx.available}:${systemStatus.data.marketData.realtime}`;
+      if (sig !== prevStatusSigRef.current) {
+        prevStatusSigRef.current = sig;
+        addLog(
+          "INFO",
+          "System",
+          `Status loaded: OKX ${systemStatus.data.okx.available ? "online" : "offline"}, Market ${systemStatus.data.marketData.realtime ? "realtime" : "polling"}`,
+        );
+      }
     }
-    if (systemStatus.error) {
+    if (systemStatus.error && systemStatus.error !== prevErrorRef.current) {
+      prevErrorRef.current = systemStatus.error;
       addLog("ERROR", "System", `Status error: ${systemStatus.error}`);
     }
   }, [systemStatus.data, systemStatus.error]);

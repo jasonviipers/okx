@@ -149,10 +149,18 @@ export function AgentDashboard() {
   const isAutonomyRunning = autonomy.optimisticEnabled;
 
   const agentStatuses = useMemo(() => {
-    const latestEvents = new Map<string, SwarmStreamEvent>();
+    const latestEvents = new Map<
+      string,
+      { evt: SwarmStreamEvent; ts: number }
+    >();
     for (const evt of events) {
-      if (evt.vote?.model) {
-        latestEvents.set(evt.vote.model, evt);
+      const model = evt.vote?.model || evt.pipeline?.model;
+      if (model) {
+        const existing = latestEvents.get(model);
+        const ts = new Date(evt.timestamp).getTime();
+        if (!existing || ts > existing.ts) {
+          latestEvents.set(model, { evt, ts });
+        }
       }
     }
     const allModels = [
@@ -162,16 +170,20 @@ export function AgentDashboard() {
     ];
     return allModels.map((model: string) => {
       const display = AGENT_DISPLAY[model];
-      const latestEvt = latestEvents.get(model);
+      const latest = latestEvents.get(model);
+      const latestEvt = latest?.evt;
       const role = SWARM_ROLE_MAP[model];
       const isVeto = role ? (ROLE_CONFIGS[role]?.isVetoLayer ?? false) : false;
       let status: "idle" | "thinking" | "executing" | "error" = "idle";
       if (latestEvt) {
+        const age = Date.now() - (latest?.ts ?? 0);
         status =
           latestEvt.type === "error"
             ? "error"
             : latestEvt.type === "vote" || latestEvt.type === "pipeline"
-              ? "executing"
+              ? age < 30_000
+                ? "executing"
+                : "thinking"
               : "thinking";
       }
       return {
@@ -264,7 +276,7 @@ export function AgentDashboard() {
             ) : (
               events.slice(0, 100).map((evt: SwarmStreamEvent, i: number) => (
                 <div
-                  key={`evt-${i}-${evt.timestamp}`}
+                  key={evt.id ?? `${evt.timestamp}-${evt.type ?? i}`}
                   className={cn(
                     "border-l-2 px-2 py-0.5 text-[0.5625rem] font-mono border-b border-border/30 animate-slide-in",
                     eventBorderColor(evt.type),
@@ -393,9 +405,9 @@ export function AgentDashboard() {
                         </div>
                       )}
                       <div className="flex gap-1 mt-0.5">
-                        {c.votes.map((vote: AgentVote, vi: number) => (
+                        {c.votes.map((vote: AgentVote) => (
                           <span
-                            key={`${vote.model}-${vi}`}
+                            key={vote.model}
                             className={cn(
                               "text-[0.5rem] px-1 border border-border/50",
                               vote.signal === "BUY"

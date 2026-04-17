@@ -5,6 +5,7 @@ import {
   type ReactNode,
   useCallback,
   useContext,
+  useEffect,
   useState,
 } from "react";
 import type { Timeframe } from "@/types/market";
@@ -68,6 +69,15 @@ export function DashboardProvider({ children }: { children: ReactNode }) {
     sidebarOpen: false,
     activeTab: "chart",
   });
+
+  useEffect(() => {
+    if (typeof document !== "undefined") {
+      document.documentElement.setAttribute(
+        "data-color-scheme",
+        state.colorScheme,
+      );
+    }
+  }, [state.colorScheme]);
 
   const setSelectedSymbol = useCallback((symbol: string) => {
     setState((s) => ({ ...s, selectedSymbol: symbol }));

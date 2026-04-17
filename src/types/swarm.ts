@@ -194,5 +194,6 @@ export interface SwarmStreamEvent {
   pipeline?: {
     stage: string;
     detail: string;
+    model?: string;
   };
 }
