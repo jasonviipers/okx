@@ -118,6 +118,12 @@ function DashboardShell() {
         ))}
         <div className="flex-1" />
         <div className="flex items-center gap-1">
+          <a
+            href="/telemetry"
+            className="px-2 py-1 border border-border text-[0.5625rem] text-terminal-cyan hover:bg-secondary"
+          >
+            TELEMETRY
+          </a>
           {COLOR_SCHEMES.map((scheme) => (
             <button
               key={scheme}

@@ -1,11 +1,21 @@
 import "server-only";
 
+import { performance } from "node:perf_hooks";
 import {
   getCandles as getRestCandles,
   getOrderBook as getRestOrderBook,
   getTicker as getRestTicker,
 } from "@/lib/okx/market";
 import { getOkxPublicWsClient } from "@/lib/okx/ws-client";
+import {
+  error,
+  incrementCounter,
+  info,
+  observeHistogram,
+  setGauge,
+  warn,
+  withTelemetrySpan,
+} from "@/lib/telemetry/server";
 import type { MarketDataStatus } from "@/types/api";
 import type {
   Candle,
@@ -185,10 +195,14 @@ function ensureWsListenerAttached() {
   client.addListener((event) => {
     if ("event" in event) {
       if (event.event === "connected") {
+        info("market.data", "Market data websocket connected");
         for (const state of states.values()) {
           state.connectionState = "connected";
         }
       } else if (event.event === "error") {
+        warn("market.data", "Market data websocket reported an error", {
+          message: event.message,
+        });
         for (const state of states.values()) {
           state.connectionState = "error";
           state.lastError = event.message;
@@ -252,6 +266,13 @@ async function bootstrapState(symbol: string, timeframe: Timeframe) {
         ? "rest"
         : "rest";
 
+  info("market.data", "Bootstrapped market state", {
+    symbol,
+    timeframe,
+    source: state.source,
+    connectionState: state.connectionState,
+  });
+
   await refreshCandles(symbol, timeframe);
 }
 
@@ -292,12 +313,26 @@ function ensurePolling(symbol: string, timeframe: Timeframe) {
         ) {
           await refreshCandles(symbol, timeframe);
         }
-      } catch (error) {
+      } catch (caughtError) {
         state.connectionState = "error";
         state.lastError =
-          error instanceof Error
-            ? error.message
+          caughtError instanceof Error
+            ? caughtError.message
             : "Unknown market refresh error";
+        incrementCounter(
+          "market_refresh_errors_total",
+          "Total market refresh errors.",
+          1,
+          {
+            symbol,
+            timeframe,
+          },
+        );
+        error("market.data", "Market refresh failed", {
+          symbol,
+          timeframe,
+          error: caughtError,
+        });
       }
     })();
   }, getRestRefreshMs());
@@ -383,38 +418,134 @@ function buildStatus(
   };
 }
 
+function reportStatusMetrics(status: MarketFeedStatus) {
+  setGauge(
+    "market_data_tradeable",
+    "Whether market data is currently tradeable for the symbol.",
+    status.tradeable ? 1 : 0,
+    {
+      symbol: status.symbol,
+      timeframe: status.timeframe,
+    },
+  );
+  setGauge(
+    "market_data_realtime",
+    "Whether market data is currently realtime for the symbol.",
+    status.realtime ? 1 : 0,
+    {
+      symbol: status.symbol,
+      timeframe: status.timeframe,
+    },
+  );
+  setGauge(
+    "market_data_stale",
+    "Whether market data is stale for the symbol.",
+    status.stale ? 1 : 0,
+    {
+      symbol: status.symbol,
+      timeframe: status.timeframe,
+    },
+  );
+}
+
 export async function getMarketSnapshot(
   symbol: string,
   timeframe: Timeframe,
 ): Promise<MarketSnapshot> {
-  await ensureSymbolState(symbol, timeframe);
-
-  const startedAt = Date.now();
-  const state = getOrCreateState(symbol);
-  while (
-    (!state.ticker ||
-      !state.orderbook ||
-      !state.candlesByTimeframe.get(timeframe)?.candles.length) &&
-    Date.now() - startedAt < DEFAULT_MARKET_WARMUP_TIMEOUT_MS
-  ) {
-    await new Promise((resolve) => setTimeout(resolve, 100));
-  }
-
-  const candleState = state.candlesByTimeframe.get(timeframe);
-  if (!state.ticker || !state.orderbook || !candleState?.candles.length) {
-    throw new Error(`Market data unavailable for ${symbol} ${timeframe}.`);
-  }
-
-  return {
-    context: {
-      symbol,
-      timeframe,
-      ticker: state.ticker,
-      orderbook: state.orderbook,
-      candles: candleState.candles,
+  return withTelemetrySpan(
+    {
+      name: "market.snapshot",
+      source: "market.data",
+      attributes: {
+        symbol,
+        timeframe,
+      },
     },
-    status: buildStatus(symbol, timeframe, state),
-  };
+    async (span) => {
+      const startedAt = performance.now();
+      await ensureSymbolState(symbol, timeframe);
+
+      const waitStartedAt = Date.now();
+      const state = getOrCreateState(symbol);
+      while (
+        (!state.ticker ||
+          !state.orderbook ||
+          !state.candlesByTimeframe.get(timeframe)?.candles.length) &&
+        Date.now() - waitStartedAt < DEFAULT_MARKET_WARMUP_TIMEOUT_MS
+      ) {
+        await new Promise((resolve) => setTimeout(resolve, 100));
+      }
+
+      const candleState = state.candlesByTimeframe.get(timeframe);
+      if (!state.ticker || !state.orderbook || !candleState?.candles.length) {
+        incrementCounter(
+          "market_snapshots_total",
+          "Total market snapshot requests.",
+          1,
+          {
+            symbol,
+            timeframe,
+            status: "unavailable",
+          },
+        );
+        throw new Error(`Market data unavailable for ${symbol} ${timeframe}.`);
+      }
+
+      const status = buildStatus(symbol, timeframe, state);
+      reportStatusMetrics(status);
+      const durationMs = Number((performance.now() - startedAt).toFixed(3));
+      observeHistogram(
+        "market_snapshot_duration_ms",
+        "Duration of market snapshot collection in milliseconds.",
+        durationMs,
+        {
+          labels: {
+            symbol,
+            timeframe,
+            source: status.source,
+            tradeable: status.tradeable,
+          },
+        },
+      );
+      incrementCounter(
+        "market_snapshots_total",
+        "Total market snapshot requests.",
+        1,
+        {
+          symbol,
+          timeframe,
+          status: status.tradeable ? "tradeable" : "degraded",
+          source: status.source,
+        },
+      );
+      span.addAttributes({
+        source: status.source,
+        realtime: status.realtime,
+        tradeable: status.tradeable,
+        stale: status.stale,
+        connectionState: status.connectionState,
+      });
+
+      if (!status.tradeable) {
+        warn("market.data", "Market snapshot is not tradeable", {
+          symbol,
+          timeframe,
+          status,
+        });
+      }
+
+      return {
+        context: {
+          symbol,
+          timeframe,
+          ticker: state.ticker,
+          orderbook: state.orderbook,
+          candles: candleState.candles,
+        },
+        status,
+      };
+    },
+  );
 }
 
 export async function getRealtimeMarketContext(

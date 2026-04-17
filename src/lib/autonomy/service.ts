@@ -20,6 +20,15 @@ import {
 import { getHistory } from "@/lib/persistence/history";
 import { autoExecuteConsensus } from "@/lib/swarm/autoExecute";
 import { runSwarm } from "@/lib/swarm/orchestrator";
+import {
+  incrementCounter,
+  info,
+  observeHistogram,
+  setGauge,
+  error as telemetryError,
+  warn,
+  withTelemetrySpan,
+} from "@/lib/telemetry/server";
 import type { AutonomyCandidateScore, AutonomyStatus } from "@/types/api";
 import type { Timeframe } from "@/types/market";
 import type { ExecutionResult, SwarmRunResult } from "@/types/swarm";
@@ -152,8 +161,23 @@ function ensureAutonomyScheduler() {
     return;
   }
 
+  info("autonomy", "Starting autonomy scheduler", {
+    tickMs: AUTONOMY_SCHEDULER_TICK_MS,
+  });
+  setGauge(
+    "autonomy_scheduler_active",
+    "Whether the autonomy scheduler loop is active.",
+    1,
+  );
   const timer = setInterval(() => {
-    void maybeDispatchDueAutonomyRun().catch((error) => {
+    void maybeDispatchDueAutonomyRun("scheduler").catch((error) => {
+      incrementCounter(
+        "autonomy_scheduler_errors_total",
+        "Total autonomy scheduler dispatch errors.",
+      );
+      telemetryError("autonomy", "Failed to dispatch due autonomy run", {
+        error,
+      });
       console.error(
         "[AutonomyScheduler] Failed to dispatch due autonomy run:",
         error,
@@ -169,11 +193,17 @@ export async function ensureAutonomyBootState() {
   ensureAutonomyScheduler();
 
   if (!autoStartEnabledByEnv()) {
+    info("autonomy", "Autonomy boot skipped because env disables auto-start");
     return;
   }
 
   const state = await readAutonomyState();
   if (state.running) {
+    setGauge(
+      "autonomy_running",
+      "Whether autonomy is currently marked as running.",
+      1,
+    );
     return;
   }
 
@@ -182,6 +212,10 @@ export async function ensureAutonomyBootState() {
     running: true,
     nextRunAt: state.nextRunAt ?? new Date().toISOString(),
     lastError: undefined,
+  });
+  info("autonomy", "Autonomy boot state initialized", {
+    symbol: state.symbol,
+    timeframe: state.timeframe,
   });
 }
 
@@ -226,6 +260,16 @@ export async function startAutonomyLoop(config?: {
     nextRunAt: new Date().toISOString(),
     lastError: undefined,
   }));
+  setGauge(
+    "autonomy_running",
+    "Whether autonomy is currently marked as running.",
+    1,
+  );
+  info("autonomy", "Autonomy loop started", {
+    symbol: config?.symbol,
+    timeframe: config?.timeframe,
+    selectionMode: config?.selectionMode,
+  });
 
   return getAutonomyStatus();
 }
@@ -555,31 +599,60 @@ async function evaluateAutonomyCandidate(
   budgetRemainingUsd: number,
   accountOverview: AccountOverview,
 ): Promise<AutonomySymbolEvaluation> {
-  const snapshot = await getMarketSnapshot(symbol, timeframe);
-  const ctx = await getRealtimeMarketContext(symbol, timeframe);
-  const result = await runSwarm(ctx, {
-    budgetRemainingUsd,
-  });
-  const portfolioState = buildPortfolioState(
-    accountOverview,
-    symbol,
-    budgetRemainingUsd,
-  );
-  const { score, portfolioFitScore } = scoreAutonomyCandidate({
-    symbol,
-    snapshot,
-    result,
-    portfolioState,
-  });
+  return withTelemetrySpan(
+    {
+      name: "autonomy.evaluate_candidate",
+      source: "autonomy",
+      attributes: {
+        symbol,
+        timeframe,
+      },
+    },
+    async (span) => {
+      const snapshot = await getMarketSnapshot(symbol, timeframe);
+      const ctx = await getRealtimeMarketContext(symbol, timeframe);
+      const result = await runSwarm(ctx, {
+        budgetRemainingUsd,
+      });
+      const portfolioState = buildPortfolioState(
+        accountOverview,
+        symbol,
+        budgetRemainingUsd,
+      );
+      const { score, portfolioFitScore } = scoreAutonomyCandidate({
+        symbol,
+        snapshot,
+        result,
+        portfolioState,
+      });
+      span.addAttributes({
+        decision: result.consensus.decision ?? result.consensus.signal,
+        blocked: result.consensus.blocked,
+        score,
+        portfolioFitScore,
+      });
+      incrementCounter(
+        "autonomy_candidate_evaluations_total",
+        "Total autonomy candidate evaluations.",
+        1,
+        {
+          symbol,
+          timeframe,
+          decision: result.consensus.decision ?? result.consensus.signal,
+          blocked: result.consensus.blocked,
+        },
+      );
 
-  return {
-    symbol,
-    snapshot,
-    result,
-    score,
-    portfolioState,
-    portfolioFitScore,
-  };
+      return {
+        symbol,
+        snapshot,
+        result,
+        score,
+        portfolioState,
+        portfolioFitScore,
+      };
+    },
+  );
 }
 
 function appendAutonomyRejection(
@@ -708,74 +781,101 @@ async function selectAutonomyRun(
   state: Awaited<ReturnType<typeof readAutonomyState>>,
   budgetRemainingUsd: number,
 ) {
-  const accountOverview = await getAccountOverview();
-  const symbols = await resolveAutonomySymbols(state, accountOverview);
-  const evaluations: AutonomySymbolEvaluation[] = [];
-  const errors: string[] = [];
-  const settled = await Promise.allSettled(
-    symbols.map((symbol) =>
-      evaluateAutonomyCandidate(
-        symbol,
-        state.timeframe,
-        budgetRemainingUsd,
-        accountOverview,
-      ),
-    ),
-  );
+  return withTelemetrySpan(
+    {
+      name: "autonomy.select_run",
+      source: "autonomy",
+      attributes: {
+        timeframe: state.timeframe,
+        selectionMode: state.selectionMode,
+      },
+    },
+    async (span) => {
+      const accountOverview = await getAccountOverview();
+      const symbols = await resolveAutonomySymbols(state, accountOverview);
+      const evaluations: AutonomySymbolEvaluation[] = [];
+      const errors: string[] = [];
+      const settled = await Promise.allSettled(
+        symbols.map((symbol) =>
+          evaluateAutonomyCandidate(
+            symbol,
+            state.timeframe,
+            budgetRemainingUsd,
+            accountOverview,
+          ),
+        ),
+      );
 
-  for (const [index, settledResult] of settled.entries()) {
-    const symbol = symbols[index];
-    if (!symbol) {
-      continue;
-    }
+      for (const [index, settledResult] of settled.entries()) {
+        const symbol = symbols[index];
+        if (!symbol) {
+          continue;
+        }
 
-    if (settledResult.status === "fulfilled") {
-      let evaluation = applyPortfolioConstraints(settledResult.value);
-      const throttleUntil = getSymbolThrottleUntil(state, symbol);
-      if (throttleUntil && throttleUntil > Date.now()) {
-        evaluation = appendAutonomyRejection(evaluation, {
-          code: "symbol_throttle_active",
-          summary: "Symbol-specific decision throttle is active.",
-          detail:
-            "This symbol was recently selected and remains inside its throttle window.",
-          metrics: {
-            throttleUntil: new Date(throttleUntil).toISOString(),
-          },
+        if (settledResult.status === "fulfilled") {
+          let evaluation = applyPortfolioConstraints(settledResult.value);
+          const throttleUntil = getSymbolThrottleUntil(state, symbol);
+          if (throttleUntil && throttleUntil > Date.now()) {
+            evaluation = appendAutonomyRejection(evaluation, {
+              code: "symbol_throttle_active",
+              summary: "Symbol-specific decision throttle is active.",
+              detail:
+                "This symbol was recently selected and remains inside its throttle window.",
+              metrics: {
+                throttleUntil: new Date(throttleUntil).toISOString(),
+              },
+            });
+          }
+
+          evaluations.push(evaluation);
+          continue;
+        }
+
+        errors.push(
+          `${symbol}: ${
+            settledResult.reason instanceof Error
+              ? settledResult.reason.message
+              : String(settledResult.reason)
+          }`,
+        );
+      }
+
+      if (evaluations.length === 0) {
+        throw new Error(
+          errors.length > 0
+            ? `Autonomy could not evaluate any symbols. ${errors.join("; ")}`
+            : "Autonomy could not evaluate any symbols.",
+        );
+      }
+
+      const best =
+        evaluations
+          .filter((evaluation) => evaluation.score > 0)
+          .sort((left, right) => right.score - left.score)[0] ??
+        evaluations.sort((left, right) => right.score - left.score)[0];
+
+      const candidateScores = evaluations
+        .map(toAutonomyCandidateScore)
+        .sort((left, right) => right.score - left.score);
+
+      span.addAttributes({
+        candidateCount: candidateScores.length,
+        bestSymbol: best.symbol,
+        bestScore: best.score,
+        errors: errors.length,
+      });
+      if (best.score <= 0) {
+        warn("autonomy", "Autonomy selected a non-executable candidate", {
+          bestSymbol: best.symbol,
+          timeframe: state.timeframe,
+          candidateScores: candidateScores.slice(0, 3),
+          errors,
         });
       }
 
-      evaluations.push(evaluation);
-      continue;
-    }
-
-    errors.push(
-      `${symbol}: ${
-        settledResult.reason instanceof Error
-          ? settledResult.reason.message
-          : String(settledResult.reason)
-      }`,
-    );
-  }
-
-  if (evaluations.length === 0) {
-    throw new Error(
-      errors.length > 0
-        ? `Autonomy could not evaluate any symbols. ${errors.join("; ")}`
-        : "Autonomy could not evaluate any symbols.",
-    );
-  }
-
-  const best =
-    evaluations
-      .filter((evaluation) => evaluation.score > 0)
-      .sort((left, right) => right.score - left.score)[0] ??
-    evaluations.sort((left, right) => right.score - left.score)[0];
-
-  const candidateScores = evaluations
-    .map(toAutonomyCandidateScore)
-    .sort((left, right) => right.score - left.score);
-
-  return { best, symbols, errors, candidateScores };
+      return { best, symbols, errors, candidateScores };
+    },
+  );
 }
 
 export async function stopAutonomyLoop() {
@@ -789,6 +889,17 @@ export async function stopAutonomyLoop() {
     leaseId: undefined,
     leaseAcquiredAt: undefined,
   }));
+  setGauge(
+    "autonomy_running",
+    "Whether autonomy is currently marked as running.",
+    0,
+  );
+  setGauge(
+    "autonomy_inflight",
+    "Whether an autonomy worker lease is currently active.",
+    0,
+  );
+  info("autonomy", "Autonomy loop stopped");
 
   return getAutonomyStatus();
 }
@@ -799,216 +910,349 @@ export async function dispatchAutonomyWorker(options?: {
 }) {
   ensureAutonomyScheduler();
 
-  const rawState = await readAutonomyState();
-  const state = normalizeWorkerLeaseState(rawState);
-  if (state !== rawState) {
-    await writeAutonomyState(state);
-  }
-  if (!state.running) {
-    return { executed: false, reason: "autonomy stopped" } as const;
-  }
-
-  if (!options?.force && !shouldRunNow(state)) {
-    return { executed: false, reason: "not due yet" } as const;
-  }
-
-  if (state.inFlight && isLeaseActive(state.leaseAcquiredAt)) {
-    return { executed: false, reason: "worker already in flight" } as const;
-  }
-
-  const leaseId = makeLeaseId();
-  const leased = await updateAutonomyState((current) => {
-    if (!current.running) {
-      return current;
-    }
-
-    if (current.inFlight && isLeaseActive(current.leaseAcquiredAt)) {
-      return current;
-    }
-
-    return {
-      ...current,
-      inFlight: true,
-      leaseId,
-      leaseAcquiredAt: new Date().toISOString(),
-      lastError: undefined,
-    };
-  });
-
-  if (leased.leaseId !== leaseId) {
-    return {
-      executed: false,
-      reason: "failed to acquire worker lease",
-    } as const;
-  }
-
-  const startedAt = new Date().toISOString();
-  const baseUrl = resolveInternalBaseUrl();
-  let execution: ExecutionResult | undefined;
-
-  try {
-    const budgetRemainingUsd =
-      leased.budgetUsd && leased.budgetUsd > 0
-        ? Math.max(0, leased.budgetUsd - (await getTodayExecutedNotionalUsd()))
-        : 0;
-    const { best, symbols, errors, candidateScores } = await selectAutonomyRun(
-      leased,
-      budgetRemainingUsd,
-    );
-    const snapshot = best.snapshot;
-    const result = best.result;
-    const decision = result.consensus.decision ?? result.consensus.signal;
-    const positionAwareCooldownActive =
-      leased.lastTradeAt !== undefined &&
-      Date.now() - leased.lastTradeAt < leased.cooldownMs &&
-      leased.symbol === result.consensus.symbol &&
-      decision === "BUY" &&
-      best.portfolioState.positionState === "long";
-
-    if (positionAwareCooldownActive) {
-      execution = {
-        status: "hold",
-        timestamp: new Date().toISOString(),
-        symbol: result.consensus.symbol,
-        decision,
-        size: 0,
-        reason: "autonomy cooldown active",
-        response: {
-          cooldownMs: leased.cooldownMs,
-        },
-        rejectionReasons: [
-          {
-            layer: "autonomy",
-            code: "autonomy_cooldown_active",
-            summary: "Position-aware autonomy cooldown is active.",
-            detail:
-              "The worker skipped the buy because the same symbol already has active spot inventory and remains inside its cooldown window.",
-            metrics: {
-              cooldownMs: leased.cooldownMs,
-              portfolioConcentrationPct: Number(
-                (best.portfolioState.portfolioConcentrationPct * 100).toFixed(
-                  4,
-                ),
-              ),
-              positionState: best.portfolioState.positionState,
-            },
-          },
-        ],
-      };
-    } else if (
-      (!snapshot.status.tradeable ||
-        (liveExecutionRequiresRealtime() && !snapshot.status.realtime)) &&
-      decision !== "HOLD"
-    ) {
-      execution = {
-        status: "hold",
-        timestamp: new Date().toISOString(),
-        symbol: result.consensus.symbol,
-        decision,
-        size: 0,
-        reason: "market data not tradeable",
-        response: {
-          marketStatus: snapshot.status,
-        },
-        rejectionReasons: [
-          {
-            layer: "market_data",
-            code: "autonomy_market_not_tradeable",
-            summary:
-              "Autonomy rejected the candidate because market data was not tradeable.",
-            detail:
-              "The worker will not execute on stale or degraded market data.",
-            metrics: {
-              realtime: snapshot.status.realtime,
-              tradeable: snapshot.status.tradeable,
-              connectionState: snapshot.status.connectionState,
-            },
-          },
-        ],
-      };
-    } else {
-      execution = await autoExecuteConsensus(result.consensus, baseUrl);
-    }
-
-    await updateAutonomyState((current) => ({
-      ...current,
-      symbolThrottleUntil: {
-        ...(current.symbolThrottleUntil ?? {}),
-        [result.consensus.symbol]:
-          result.consensus.symbolThrottleMs &&
-          result.consensus.symbolThrottleMs > 0
-            ? new Date(
-                Date.now() + result.consensus.symbolThrottleMs,
-              ).toISOString()
-            : (current.symbolThrottleUntil?.[result.consensus.symbol] ??
-              new Date().toISOString()),
+  return withTelemetrySpan(
+    {
+      name: "autonomy.dispatch_worker",
+      source: "autonomy",
+      attributes: {
+        trigger: options?.trigger ?? "manual",
+        force: options?.force ?? false,
       },
-      inFlight: false,
-      leaseId: undefined,
-      leaseAcquiredAt: undefined,
-      symbol: result.consensus.symbol,
-      candidateSymbols:
-        leased.selectionMode === "auto" ? symbols : current.candidateSymbols,
-      lastRunAt: startedAt,
-      nextRunAt: current.running
-        ? new Date(Date.now() + current.intervalMs).toISOString()
-        : undefined,
-      lastDecision: decision,
-      lastExecutionStatus: execution?.status,
-      lastError: execution?.status === "error" ? execution.error : undefined,
-      lastReason:
-        execution?.reason ??
-        execution?.error ??
-        (errors.length > 0
-          ? `Partial scan issues: ${errors.join("; ")}`
-          : undefined),
-      lastCandidateScores: candidateScores,
-      lastSelectedCandidate: toAutonomyCandidateScore(best),
-      lastRejectedReasons:
-        execution?.rejectionReasons ?? result.consensus.rejectionReasons,
-      iterationCount: current.iterationCount + 1,
-      lastTradeAt:
-        execution?.status === "success" ? Date.now() : current.lastTradeAt,
-    }));
+    },
+    async (span) => {
+      const workerStartedAt = Date.now();
+      const rawState = await readAutonomyState();
+      const state = normalizeWorkerLeaseState(rawState);
+      if (state !== rawState) {
+        await writeAutonomyState(state);
+      }
+      setGauge(
+        "autonomy_running",
+        "Whether autonomy is currently marked as running.",
+        state.running ? 1 : 0,
+      );
+      setGauge(
+        "autonomy_inflight",
+        "Whether an autonomy worker lease is currently active.",
+        state.inFlight ? 1 : 0,
+      );
 
-    return {
-      executed: true,
-      trigger: options?.trigger ?? "manual",
-      execution,
-    } as const;
-  } catch (error) {
-    const message =
-      error instanceof Error ? error.message : "Unknown autonomy error";
+      if (!state.running) {
+        incrementCounter(
+          "autonomy_worker_skips_total",
+          "Total skipped autonomy worker dispatches.",
+          1,
+          {
+            reason: "autonomy_stopped",
+            trigger: options?.trigger ?? "manual",
+          },
+        );
+        return { executed: false, reason: "autonomy stopped" } as const;
+      }
 
-    await updateAutonomyState((current) => ({
-      ...current,
-      inFlight: false,
-      leaseId: undefined,
-      leaseAcquiredAt: undefined,
-      lastRunAt: startedAt,
-      nextRunAt: current.running
-        ? new Date(Date.now() + current.intervalMs).toISOString()
-        : undefined,
-      lastExecutionStatus: "error",
-      lastError: message,
-      lastReason: message,
-      iterationCount: current.iterationCount + 1,
-    }));
+      if (!options?.force && !shouldRunNow(state)) {
+        incrementCounter(
+          "autonomy_worker_skips_total",
+          "Total skipped autonomy worker dispatches.",
+          1,
+          {
+            reason: "not_due_yet",
+            trigger: options?.trigger ?? "manual",
+          },
+        );
+        return { executed: false, reason: "not due yet" } as const;
+      }
 
-    return {
-      executed: false,
-      trigger: options?.trigger ?? "manual",
-      reason: message,
-    } as const;
-  }
+      if (state.inFlight && isLeaseActive(state.leaseAcquiredAt)) {
+        incrementCounter(
+          "autonomy_worker_skips_total",
+          "Total skipped autonomy worker dispatches.",
+          1,
+          {
+            reason: "lease_active",
+            trigger: options?.trigger ?? "manual",
+          },
+        );
+        return { executed: false, reason: "worker already in flight" } as const;
+      }
+
+      const leaseId = makeLeaseId();
+      const leased = await updateAutonomyState((current) => {
+        if (!current.running) {
+          return current;
+        }
+
+        if (current.inFlight && isLeaseActive(current.leaseAcquiredAt)) {
+          return current;
+        }
+
+        return {
+          ...current,
+          inFlight: true,
+          leaseId,
+          leaseAcquiredAt: new Date().toISOString(),
+          lastError: undefined,
+        };
+      });
+
+      if (leased.leaseId !== leaseId) {
+        incrementCounter(
+          "autonomy_worker_skips_total",
+          "Total skipped autonomy worker dispatches.",
+          1,
+          {
+            reason: "lease_not_acquired",
+            trigger: options?.trigger ?? "manual",
+          },
+        );
+        return {
+          executed: false,
+          reason: "failed to acquire worker lease",
+        } as const;
+      }
+
+      const startedAt = new Date().toISOString();
+      const baseUrl = resolveInternalBaseUrl();
+      let execution: ExecutionResult | undefined;
+
+      try {
+        const budgetRemainingUsd =
+          leased.budgetUsd && leased.budgetUsd > 0
+            ? Math.max(
+                0,
+                leased.budgetUsd - (await getTodayExecutedNotionalUsd()),
+              )
+            : 0;
+        const { best, symbols, errors, candidateScores } =
+          await selectAutonomyRun(leased, budgetRemainingUsd);
+        const snapshot = best.snapshot;
+        const result = best.result;
+        const decision = result.consensus.decision ?? result.consensus.signal;
+        const positionAwareCooldownActive =
+          leased.lastTradeAt !== undefined &&
+          Date.now() - leased.lastTradeAt < leased.cooldownMs &&
+          leased.symbol === result.consensus.symbol &&
+          decision === "BUY" &&
+          best.portfolioState.positionState === "long";
+
+        span.addAttributes({
+          budgetRemainingUsd,
+          selectedSymbol: result.consensus.symbol,
+          selectedDecision: decision,
+          candidateCount: candidateScores.length,
+        });
+
+        if (positionAwareCooldownActive) {
+          execution = {
+            status: "hold",
+            timestamp: new Date().toISOString(),
+            symbol: result.consensus.symbol,
+            decision,
+            size: 0,
+            reason: "autonomy cooldown active",
+            response: {
+              cooldownMs: leased.cooldownMs,
+            },
+            rejectionReasons: [
+              {
+                layer: "autonomy",
+                code: "autonomy_cooldown_active",
+                summary: "Position-aware autonomy cooldown is active.",
+                detail:
+                  "The worker skipped the buy because the same symbol already has active spot inventory and remains inside its cooldown window.",
+                metrics: {
+                  cooldownMs: leased.cooldownMs,
+                  portfolioConcentrationPct: Number(
+                    (
+                      best.portfolioState.portfolioConcentrationPct * 100
+                    ).toFixed(4),
+                  ),
+                  positionState: best.portfolioState.positionState,
+                },
+              },
+            ],
+          };
+        } else if (
+          (!snapshot.status.tradeable ||
+            (liveExecutionRequiresRealtime() && !snapshot.status.realtime)) &&
+          decision !== "HOLD"
+        ) {
+          execution = {
+            status: "hold",
+            timestamp: new Date().toISOString(),
+            symbol: result.consensus.symbol,
+            decision,
+            size: 0,
+            reason: "market data not tradeable",
+            response: {
+              marketStatus: snapshot.status,
+            },
+            rejectionReasons: [
+              {
+                layer: "market_data",
+                code: "autonomy_market_not_tradeable",
+                summary:
+                  "Autonomy rejected the candidate because market data was not tradeable.",
+                detail:
+                  "The worker will not execute on stale or degraded market data.",
+                metrics: {
+                  realtime: snapshot.status.realtime,
+                  tradeable: snapshot.status.tradeable,
+                  connectionState: snapshot.status.connectionState,
+                },
+              },
+            ],
+          };
+        } else {
+          execution = await autoExecuteConsensus(result.consensus, baseUrl);
+        }
+
+        await updateAutonomyState((current) => ({
+          ...current,
+          symbolThrottleUntil: {
+            ...(current.symbolThrottleUntil ?? {}),
+            [result.consensus.symbol]:
+              result.consensus.symbolThrottleMs &&
+              result.consensus.symbolThrottleMs > 0
+                ? new Date(
+                    Date.now() + result.consensus.symbolThrottleMs,
+                  ).toISOString()
+                : (current.symbolThrottleUntil?.[result.consensus.symbol] ??
+                  new Date().toISOString()),
+          },
+          inFlight: false,
+          leaseId: undefined,
+          leaseAcquiredAt: undefined,
+          symbol: result.consensus.symbol,
+          candidateSymbols:
+            leased.selectionMode === "auto"
+              ? symbols
+              : current.candidateSymbols,
+          lastRunAt: startedAt,
+          nextRunAt: current.running
+            ? new Date(Date.now() + current.intervalMs).toISOString()
+            : undefined,
+          lastDecision: decision,
+          lastExecutionStatus: execution?.status,
+          lastError:
+            execution?.status === "error" ? execution.error : undefined,
+          lastReason:
+            execution?.reason ??
+            execution?.error ??
+            (errors.length > 0
+              ? `Partial scan issues: ${errors.join("; ")}`
+              : undefined),
+          lastCandidateScores: candidateScores,
+          lastSelectedCandidate: toAutonomyCandidateScore(best),
+          lastRejectedReasons:
+            execution?.rejectionReasons ?? result.consensus.rejectionReasons,
+          iterationCount: current.iterationCount + 1,
+          lastTradeAt:
+            execution?.status === "success" ? Date.now() : current.lastTradeAt,
+        }));
+
+        const workerDurationMs = Date.now() - workerStartedAt;
+        observeHistogram(
+          "autonomy_worker_duration_ms",
+          "Duration of autonomy worker dispatches in milliseconds.",
+          workerDurationMs,
+          {
+            labels: {
+              trigger: options?.trigger ?? "manual",
+              status: execution?.status ?? "unknown",
+            },
+          },
+        );
+        incrementCounter(
+          "autonomy_worker_runs_total",
+          "Total executed autonomy worker runs.",
+          1,
+          {
+            trigger: options?.trigger ?? "manual",
+            status: execution?.status ?? "unknown",
+            decision,
+          },
+        );
+        setGauge(
+          "autonomy_inflight",
+          "Whether an autonomy worker lease is currently active.",
+          0,
+        );
+
+        if (execution?.status !== "success") {
+          warn("autonomy", "Autonomy worker completed without a trade", {
+            trigger: options?.trigger ?? "manual",
+            execution,
+            selectedCandidate: toAutonomyCandidateScore(best),
+            partialErrors: errors,
+          });
+        } else {
+          info("autonomy", "Autonomy worker executed a trade", {
+            trigger: options?.trigger ?? "manual",
+            execution,
+            selectedCandidate: toAutonomyCandidateScore(best),
+          });
+        }
+
+        return {
+          executed: true,
+          trigger: options?.trigger ?? "manual",
+          execution,
+        } as const;
+      } catch (error) {
+        const message =
+          error instanceof Error ? error.message : "Unknown autonomy error";
+
+        await updateAutonomyState((current) => ({
+          ...current,
+          inFlight: false,
+          leaseId: undefined,
+          leaseAcquiredAt: undefined,
+          lastRunAt: startedAt,
+          nextRunAt: current.running
+            ? new Date(Date.now() + current.intervalMs).toISOString()
+            : undefined,
+          lastExecutionStatus: "error",
+          lastError: message,
+          lastReason: message,
+          iterationCount: current.iterationCount + 1,
+        }));
+        setGauge(
+          "autonomy_inflight",
+          "Whether an autonomy worker lease is currently active.",
+          0,
+        );
+        incrementCounter(
+          "autonomy_worker_errors_total",
+          "Total autonomy worker errors.",
+          1,
+          {
+            trigger: options?.trigger ?? "manual",
+          },
+        );
+        telemetryError("autonomy", "Autonomy worker failed", {
+          trigger: options?.trigger ?? "manual",
+          error,
+        });
+
+        return {
+          executed: false,
+          trigger: options?.trigger ?? "manual",
+          reason: message,
+        } as const;
+      }
+    },
+  );
 }
 
-export async function maybeDispatchDueAutonomyRun() {
+export async function maybeDispatchDueAutonomyRun(
+  trigger: "status_poll" | "scheduler" = "status_poll",
+) {
   const state = await readAutonomyState();
   if (!shouldRunNow(state)) {
     return false;
   }
 
-  await dispatchAutonomyWorker({ trigger: "status_poll" });
+  await dispatchAutonomyWorker({ trigger });
   return true;
 }
