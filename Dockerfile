@@ -31,5 +31,7 @@ COPY --from=deps /app/node_modules ./node_modules
 COPY --from=builder /app/.next ./.next
 COPY --from=builder /app/public ./public
 COPY --from=builder /app/next.config.ts ./next.config.ts
+COPY --from=builder /app/src/db/migrations ./src/db/migrations
+RUN mkdir -p .data
 
 CMD ["node_modules/.bin/next", "start", "-H", "0.0.0.0", "-p", "3000"]
