@@ -4,6 +4,7 @@
 @import "streamdown/styles.css";
 @source "../node_modules/streamdown/dist/*.js";
 
+
 @custom-variant dark (&:is(.dark *));
 
 :root {
@@ -31,7 +32,7 @@
   --chart-3: #00b8d4;
   --chart-4: #ff4444;
   --chart-5: #ffd700;
-  --radius: 0rem;
+  --radius: 0.25rem;
   --sidebar: #0d1117;
   --sidebar-foreground: #c5cdd8;
   --sidebar-primary: #00d4aa;
@@ -50,8 +51,8 @@
 }
 
 @theme inline {
-  --font-sans: "Courier New", "Lucida Console", monospace;
-  --font-mono: "Courier New", "Lucida Console", monospace;
+  --font-sans: var(--font-inter), 'Inter', system-ui, sans-serif;
+  --font-mono: var(--font-jetbrains), 'JetBrains Mono', monospace;
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);
@@ -76,10 +77,10 @@
   --color-chart-3: var(--chart-3);
   --color-chart-4: var(--chart-4);
   --color-chart-5: var(--chart-5);
-  --radius-sm: 0rem;
-  --radius-md: 0rem;
-  --radius-lg: 0rem;
-  --radius-xl: 0rem;
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
   --color-sidebar: var(--sidebar);
   --color-sidebar-foreground: var(--sidebar-foreground);
   --color-sidebar-primary: var(--sidebar-primary);
@@ -101,217 +102,18 @@
     @apply border-border outline-ring/50;
   }
   body {
-    @apply bg-background text-foreground font-mono;
-    font-family: "Courier New", "Lucida Console", monospace;
-    letter-spacing: 0;
+    @apply bg-background text-foreground;
   }
-}
-
-.terminal-text {
-  font-family: "Courier New", "Lucida Console", monospace;
-  font-size: 0.6875rem;
-  line-height: 1.25;
-  letter-spacing: 0;
-}
-
-.terminal-text-xs {
-  font-family: "Courier New", "Lucida Console", monospace;
-  font-size: 0.625rem;
-  line-height: 1.2;
-  letter-spacing: 0;
-}
-
-.terminal-text-xxs {
-  font-family: "Courier New", "Lucida Console", monospace;
-  font-size: 0.5625rem;
-  line-height: 1.1;
-  letter-spacing: 0;
-  text-transform: uppercase;
-}
-
-.data-cell {
-  font-family: "Courier New", "Lucida Console", monospace;
-  font-size: 0.6875rem;
-  line-height: 1.25;
-  padding: 0 0.375rem;
-  white-space: nowrap;
-  font-variant-numeric: tabular-nums;
-}
-
-.data-header {
-  font-family: "Courier New", "Lucida Console", monospace;
-  font-size: 0.5625rem;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: var(--muted-foreground);
-  border-bottom: 1px solid var(--border);
-  padding: 0.125rem 0.375rem;
-}
-
-.bloomberg-panel {
-  border: 1px solid var(--border);
-  background: var(--card);
-  display: flex;
-  flex-direction: column;
-}
-
-.bloomberg-header {
-  background: var(--secondary);
-  border-bottom: 1px solid var(--border);
-  padding: 0.1875rem 0.5rem;
-  font-size: 0.5625rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: var(--primary);
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-
-.bloomberg-grid {
-  display: grid;
-  gap: 1px;
-  background: var(--border);
-}
-
-.data-positive {
-  color: var(--terminal-green);
-}
-
-.data-negative {
-  color: var(--terminal-red);
-}
-
-.data-neutral {
-  color: var(--muted-foreground);
-}
-
-.cmd-input {
-  background: var(--input);
-  border: 1px solid var(--border);
-  color: var(--primary);
-  caret-color: var(--primary);
-  font-family: "Courier New", "Lucida Console", monospace;
-  font-size: 0.75rem;
-  letter-spacing: 0;
-}
-
-.cmd-input::placeholder {
-  color: var(--terminal-dim);
-}
-
-.cmd-input:focus {
-  border-color: var(--primary);
-  box-shadow:
-    0 0 0 1px var(--primary),
-    inset 0 0 4px rgba(0, 212, 170, 0.05);
-  outline: none;
-}
-
-.terminal-panel {
-  border: 1px solid var(--border);
-  background: var(--card);
-}
-
-.terminal-header {
-  background: var(--secondary);
-  border-bottom: 1px solid var(--border);
-  padding: 0.25rem 0.5rem;
-  font-size: 0.6875rem;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: var(--primary);
-}
-
-.terminal-cell {
-  font-variant-numeric: tabular-nums;
-  font-size: 0.6875rem;
-  line-height: 1.25rem;
-  padding: 0 0.375rem;
-  white-space: nowrap;
-}
-
-.terminal-cell-header {
-  font-size: 0.625rem;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: var(--muted-foreground);
-  border-bottom: 1px solid var(--border);
-  padding-bottom: 0.125rem;
-}
-
-.positive {
-  color: var(--terminal-green);
-}
-
-.negative {
-  color: var(--terminal-red);
-}
-
-.neutral {
-  color: var(--muted-foreground);
-}
-
-.command-input {
-  background: var(--input);
-  border: 1px solid var(--border);
-  color: var(--primary);
-  caret-color: var(--primary);
-  font-family: var(--font-mono), "Courier New", "Lucida Console", monospace;
-  font-size: 0.8125rem;
-  letter-spacing: 0.02em;
-}
-
-.command-input::placeholder {
-  color: var(--terminal-dim);
-}
-
-.command-input:focus {
-  border-color: var(--primary);
-  box-shadow:
-    0 0 0 1px var(--primary),
-    inset 0 0 4px rgba(0, 212, 170, 0.05);
-  outline: none;
-}
-
-.scanline {
-  position: relative;
-}
-
-.scanline::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  background: repeating-linear-gradient(
-    0deg,
-    transparent,
-    transparent 1px,
-    rgba(10, 14, 20, 0.03) 1px,
-    rgba(10, 14, 20, 0.03) 2px
-  );
 }
 
 /* -- Color Scheme Transitions ---------------------------------------------- */
 
 :root {
-  transition:
-    color 0.3s ease,
-    background-color 0.3s ease,
-    border-color 0.3s ease,
-    box-shadow 0.3s ease,
-    text-shadow 0.3s ease;
+  transition: color 0.3s ease, background-color 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease, text-shadow 0.3s ease;
 }
 
-*,
-*::before,
-*::after {
-  transition:
-    color 0.3s ease,
-    background-color 0.3s ease,
-    border-color 0.3s ease;
+*, *::before, *::after {
+  transition: color 0.3s ease, background-color 0.3s ease, border-color 0.3s ease;
 }
 
 /* -- Color Schemes ---------------------------------------------------------- */
@@ -441,37 +243,26 @@
   --sidebar-ring: #e040fb;
 }
 
+/* Bloomberg terminal scrollbar */
 ::-webkit-scrollbar {
-  width: 4px;
-  height: 4px;
+  width: 6px;
+  height: 6px;
 }
 ::-webkit-scrollbar-track {
   background: var(--background);
 }
 ::-webkit-scrollbar-thumb {
   background: var(--border);
-  border-radius: 0;
+  border-radius: 3px;
 }
 ::-webkit-scrollbar-thumb:hover {
   background: var(--terminal-dim);
 }
-::-webkit-scrollbar-corner {
-  background: var(--background);
-}
-
-* {
-  scrollbar-width: thin;
-  scrollbar-color: var(--border) var(--background);
-}
 
 /* Ticker animation */
 @keyframes ticker-scroll {
-  0% {
-    transform: translateX(0);
-  }
-  100% {
-    transform: translateX(-50%);
-  }
+  0% { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
 }
 .animate-ticker {
   animation: ticker-scroll 60s linear infinite;
@@ -484,13 +275,8 @@
 
 /* Candlestick pulse */
 @keyframes pulse-soft {
-  0%,
-  100% {
-    opacity: 1;
-  }
-  50% {
-    opacity: 0.7;
-  }
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.7; }
 }
 .animate-pulse-soft {
   animation: pulse-soft 2s ease-in-out infinite;
@@ -498,24 +284,12 @@
 
 /* ─── Real-time value flash animations ─────────────────────────────────── */
 @keyframes flash-green {
-  0% {
-    color: var(--terminal-green);
-    text-shadow: 0 0 6px var(--terminal-green);
-  }
-  100% {
-    color: inherit;
-    text-shadow: none;
-  }
+  0% { color: var(--terminal-green); text-shadow: 0 0 6px var(--terminal-green); }
+  100% { color: inherit; text-shadow: none; }
 }
 @keyframes flash-red {
-  0% {
-    color: var(--terminal-red);
-    text-shadow: 0 0 6px var(--terminal-red);
-  }
-  100% {
-    color: inherit;
-    text-shadow: none;
-  }
+  0% { color: var(--terminal-red); text-shadow: 0 0 6px var(--terminal-red); }
+  100% { color: inherit; text-shadow: none; }
 }
 .flash-up {
   animation: flash-green 0.6s ease-out forwards;
@@ -526,14 +300,8 @@
 
 /* Slide-in for new feed items */
 @keyframes slide-in-top {
-  0% {
-    opacity: 0;
-    transform: translateY(-8px);
-  }
-  100% {
-    opacity: 1;
-    transform: translateY(0);
-  }
+  0% { opacity: 0; transform: translateY(-8px); }
+  100% { opacity: 1; transform: translateY(0); }
 }
 .animate-slide-in {
   animation: slide-in-top 0.3s ease-out;
