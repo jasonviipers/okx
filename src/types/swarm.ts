@@ -25,6 +25,7 @@ export type StrategyEngine =
   | "mean_reversion"
   | "microstructure"
   | "none";
+export type DecisionSource = "deterministic" | "diagnostic_swarm";
 
 export interface StrategyEngineReport {
   engine: StrategyEngine;
@@ -131,6 +132,16 @@ export interface ConsensusResult {
   decision?: TradeSignal;
   confidence: number;
   agreement: number;
+  decisionSource?: DecisionSource;
+  featureSummary?: Record<string, number>;
+  riskFlags?: string[];
+  directionalEdgeScore?: number;
+  executionQualityScore?: number;
+  riskPenaltyScore?: number;
+  expectedNetEdgeBps?: number;
+  marketQualityScore?: number;
+  decisionCadenceMs?: number;
+  symbolThrottleMs?: number;
   votes: AgentVote[];
   weightedScores: Record<TradeSignal, number>;
   validatedAt: string;

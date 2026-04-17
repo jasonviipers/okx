@@ -5,7 +5,7 @@ import { normalizeConsensusResult } from "@/lib/swarm/normalize-consensus";
 import type { Timeframe } from "@/types/market";
 import type { ConsensusResult } from "@/types/swarm";
 
-const SWARM_CACHE_TTL_SECONDS = 30;
+const DEFAULT_SWARM_CACHE_TTL_SECONDS = 15;
 
 function getSwarmKey(symbol: string, timeframe: Timeframe): string {
   return `swarm:result:${symbol}:${timeframe}`;
@@ -25,11 +25,19 @@ export async function setCachedSwarmResult(
   symbol: string,
   timeframe: Timeframe,
   result: ConsensusResult,
+  ttlSeconds?: number,
 ): Promise<void> {
   await cacheSet(
     getSwarmKey(symbol, timeframe),
     JSON.stringify(result),
-    SWARM_CACHE_TTL_SECONDS,
+    ttlSeconds ??
+      Math.max(
+        5,
+        Math.round(
+          (result.decisionCadenceMs ?? DEFAULT_SWARM_CACHE_TTL_SECONDS * 1000) /
+            1000,
+        ),
+      ),
   );
 }
 

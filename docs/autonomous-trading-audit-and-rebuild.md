@@ -1,5 +1,89 @@
 # Autonomous Trading Audit And Rebuild
 
+## Implementation Status Checklist
+Audit date: 2026-04-17
+
+Checked items are materially implemented in the current codebase. Unchecked items are missing or only partially implemented.
+
+Audit scope used for this checklist:
+- `src/lib/swarm/*`
+- `src/lib/autonomy/service.ts`
+- `src/lib/market-data/service.ts`
+- `src/lib/persistence/*`
+- `src/app/api/ai/swarm/*`
+- `src/app/api/ai/system/*`
+- `src/components/terminal/*`
+
+### Phase 1: Immediate stabilization
+- [x] Require realtime market data for live execution and block live execution on degraded snapshots.
+- [x] Surface structured rejection reasons instead of relying only on free-text block messages.
+- [x] Keep raw directional scoring separate from final decision and execution eligibility.
+- [x] Expose autonomy candidate ranking inputs and last rejection reasons in runtime status.
+- [x] Tighten stream, history, and execution observability so operators can inspect why a trade was not placed.
+
+### Target trading algorithm
+- [x] Replace end-to-end swarm voting with a rules-plus-score deterministic decision engine.
+- [x] Recompute decisions on a fast rolling cadence with symbol-specific throttling.
+- [x] Implement a unified feature-calculation module covering short-horizon returns, realized volatility, spread and slippage proxies, order-book pressure, candle structure, volume expansion, VWAP or rolling-mean distance, breakout or compression features, and inventory or account constraints.
+- [x] Implement a first-class composite score with directional edge, execution quality, risk penalty, and expected net edge after fees and slippage.
+- [x] Restrict execution outputs to `BUY`, `SELL`, or `HOLD`.
+- [x] Keep spot semantics inventory-aware so `BUY` adds inventory and `SELL` only reduces existing inventory.
+- [x] Remove LLM voting from the primary execution-critical path and keep LLMs only as optional secondary overlays.
+
+### Market data, strategy, risk, execution, and portfolio
+- [x] Require realtime-quality data in the live execution path.
+- [ ] Disable synthetic fallback as a production trading input across the full live decision path.
+- [x] Replace the multi-agent vote aggregation layer with a deterministic strategy engine that emits edge score, confidence, expected value, and rationale metadata.
+- [x] Expose clearer threshold-based rejection metadata in validator, expected-value, harness, autonomy, and execution layers.
+- [x] Convert veto-style blockers into scored constraints end to end instead of layered HOLD suppression.
+- [x] Separate signal generation from execution policy.
+- [x] Enforce execution-policy constraints for minimum confidence, market tradability, budget, max position sizing, min trade notional, and inventory-aware `SELL` sizing.
+- [ ] Enforce cooldown only when justified by position state instead of blanket time-based suppression.
+- [x] Rank autonomy candidates using a richer score that includes confidence, agreement, expected net edge, and market quality.
+- [ ] Add explicit portfolio allocation logic using inventory state, concentration, and symbol budget allocation.
+
+### Persistence and learning
+- [x] Persist swarm decision snapshots in history.
+- [x] Persist execution intents separately from final execution results.
+- [x] Persist trade execution records with order details.
+- [ ] Persist pre-trade feature snapshots.
+- [ ] Persist post-trade outcome windows.
+- [ ] Persist realized slippage metrics.
+- [ ] Persist realized and unrealized strategy performance attribution.
+- [ ] Replace blocked-history bias with outcome-based learning.
+
+### Public interfaces and API surfaces
+- [x] Extend `ConsensusResult` with `directionalSignal`, `directionalConfidence`, `directionalAgreement`, `decision`, `executionEligible`, and `rejectionReasons`.
+- [x] Expose expected net edge and market quality on runtime-facing payloads through consensus subreports and autonomy candidate scores.
+- [x] Expose `lastCandidateScores`, `lastSelectedCandidate`, and `lastRejectedReasons` in autonomy status.
+- [x] Surface structured threshold failures in stream and history responses.
+- [ ] Introduce a dedicated deterministic `DecisionResult` that supersedes the swarm-shaped `ConsensusResult`.
+- [x] Add first-class `riskFlags` to the execution-ready decision payload.
+- [ ] Expose full outcome metrics through persistence and APIs.
+
+### Evaluation and tests
+- [ ] Add unit tests for feature calculations, score composition, threshold gating, sizing rules, and inventory-aware `SELL` behavior.
+- [ ] Add simulation or replay coverage for historical candle and order-book playback, fee and slippage sensitivity, and low-volatility false-positive suppression.
+- [ ] Add integration tests for the autonomy loop from market snapshot to execution intent and spot inventory lifecycle.
+- [ ] Add safety tests for duplicate execution prevention, circuit breaker behavior, stale lease recovery, budget exhaustion, and minimum trade size handling.
+- [ ] Add acceptance-scenario coverage proving autonomous execution under valid realtime conditions and explicit threshold-based no-trade outcomes.
+
+### Phase roadmap status
+- [x] Phase 1 is materially implemented.
+- [x] Phase 2 is implemented.
+- [ ] Phase 3 is implemented.
+- [ ] Phase 4 is implemented.
+
+### Acceptance criteria snapshot
+- [x] The system can route spot `BUY`, `SELL`, and `HOLD` decisions automatically without human confirmation when execution gates pass.
+- [x] Live execution is blocked when market data is stale or non-realtime.
+- [x] `SELL` behavior is inventory-aware and does not assume shorting capability.
+- [x] Operators can inspect candidate rankings, rejection reasons, expected edge, and market quality in runtime UI and API surfaces.
+- [x] A no-trade outcome is always traceable to explicit mathematical thresholds only, without residual heuristic deadlock.
+- [ ] Symbol selection is driven by expected opportunity plus portfolio state rather than confidence or agreement-weighted heuristics.
+- [ ] Every decision can be replayed from stored features, thresholds, and execution metadata.
+- [ ] Offline replay and rolling forward validation gate new live trading logic before rollout.
+
 ## Current System
 The current system is a spot-only OKX trading workstation built around a five-model swarm plus a separate execution model. Live market context is assembled by the market-data service, which combines websocket subscriptions, REST backfill, stale-data polling, and optional synthetic fallback before exposing `MarketSnapshot` and `MarketContext` to the rest of the app.
 

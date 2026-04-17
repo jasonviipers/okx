@@ -215,8 +215,13 @@ function toAutonomyCandidateScore(
     decision: consensus.decision ?? consensus.signal,
     confidence: consensus.confidence,
     agreement: consensus.agreement,
-    expectedNetEdgeBps: consensus.expectedValue?.netEdgeBps,
-    marketQualityScore: consensus.harness?.marketQualityScore,
+    expectedNetEdgeBps:
+      consensus.expectedNetEdgeBps ?? consensus.expectedValue?.netEdgeBps,
+    marketQualityScore:
+      consensus.marketQualityScore ?? consensus.harness?.marketQualityScore,
+    riskFlags: consensus.riskFlags,
+    decisionCadenceMs: consensus.decisionCadenceMs,
+    symbolThrottleMs: consensus.symbolThrottleMs,
     rejectionReasons: consensus.rejectionReasons,
   };
 }
@@ -242,10 +247,13 @@ function scoreAutonomyCandidate(
   }
 
   const expectedNetEdge =
-    consensus.expectedValue?.netEdgeBps !== undefined
-      ? Math.max(0, consensus.expectedValue.netEdgeBps)
+    consensus.expectedNetEdgeBps !== undefined
+      ? Math.max(0, consensus.expectedNetEdgeBps)
+      : consensus.expectedValue?.netEdgeBps !== undefined
+        ? Math.max(0, consensus.expectedValue.netEdgeBps)
       : 0;
-  const marketQuality = consensus.harness?.marketQualityScore ?? 0.5;
+  const marketQuality =
+    consensus.marketQualityScore ?? consensus.harness?.marketQualityScore ?? 0.5;
 
   return Number(
     (
@@ -275,10 +283,13 @@ async function resolveAutonomySymbols(
 async function evaluateAutonomyCandidate(
   symbol: string,
   timeframe: Timeframe,
+  budgetRemainingUsd: number,
 ): Promise<AutonomySymbolEvaluation> {
   const snapshot = await getMarketSnapshot(symbol, timeframe);
   const ctx = await getRealtimeMarketContext(symbol, timeframe);
-  const result = await runSwarm(ctx);
+  const result = await runSwarm(ctx, {
+    budgetRemainingUsd,
+  });
   return {
     symbol,
     snapshot,
@@ -287,38 +298,115 @@ async function evaluateAutonomyCandidate(
   };
 }
 
+function appendAutonomyRejection(
+  evaluation: AutonomySymbolEvaluation,
+  reason: {
+    code: string;
+    summary: string;
+    detail: string;
+    metrics?: Record<string, unknown>;
+  },
+): AutonomySymbolEvaluation {
+  return {
+    ...evaluation,
+    score: 0,
+    result: {
+      ...evaluation.result,
+      consensus: {
+        ...evaluation.result.consensus,
+        decision: "HOLD",
+        blocked: true,
+        executionEligible: false,
+        blockReason: reason.summary,
+        confidence: Math.min(evaluation.result.consensus.confidence, 0.49),
+        rejectionReasons: [
+          ...evaluation.result.consensus.rejectionReasons,
+          {
+            layer: "autonomy",
+            code: reason.code,
+            summary: reason.summary,
+            detail: reason.detail,
+            metrics: reason.metrics,
+          },
+        ],
+      },
+    },
+  };
+}
+
+function getSymbolThrottleUntil(
+  state: Awaited<ReturnType<typeof readAutonomyState>>,
+  symbol: string,
+): number | null {
+  const iso = state.symbolThrottleUntil?.[symbol];
+  if (!iso) {
+    return null;
+  }
+
+  const ts = new Date(iso).getTime();
+  return Number.isFinite(ts) ? ts : null;
+}
+
 async function selectAutonomyRun(
   state: Awaited<ReturnType<typeof readAutonomyState>>,
+  budgetRemainingUsd: number,
 ) {
   const symbols = await resolveAutonomySymbols(state);
   const evaluations: AutonomySymbolEvaluation[] = [];
-  let best: AutonomySymbolEvaluation | undefined;
   const errors: string[] = [];
+  const settled = await Promise.allSettled(
+    symbols.map((symbol) =>
+      evaluateAutonomyCandidate(symbol, state.timeframe, budgetRemainingUsd),
+    ),
+  );
 
-  for (const symbol of symbols) {
-    try {
-      const evaluation = await evaluateAutonomyCandidate(
-        symbol,
-        state.timeframe,
-      );
-      evaluations.push(evaluation);
-      if (!best || evaluation.score > best.score) {
-        best = evaluation;
-      }
-    } catch (error) {
-      errors.push(
-        `${symbol}: ${error instanceof Error ? error.message : String(error)}`,
-      );
+  for (const [index, settledResult] of settled.entries()) {
+    const symbol = symbols[index];
+    if (!symbol) {
+      continue;
     }
+
+    if (settledResult.status === "fulfilled") {
+      let evaluation = settledResult.value;
+      const throttleUntil = getSymbolThrottleUntil(state, symbol);
+      if (throttleUntil && throttleUntil > Date.now()) {
+        evaluation = appendAutonomyRejection(evaluation, {
+          code: "symbol_throttle_active",
+          summary: "Symbol-specific decision throttle is active.",
+          detail:
+            "This symbol was recently selected and remains inside its throttle window.",
+          metrics: {
+            throttleUntil: new Date(throttleUntil).toISOString(),
+          },
+        });
+      }
+
+      evaluations.push(evaluation);
+      continue;
+    }
+
+    errors.push(
+      `${symbol}: ${
+        settledResult.reason instanceof Error
+          ? settledResult.reason.message
+          : String(settledResult.reason)
+      }`,
+    );
   }
 
-  if (!best) {
+  if (evaluations.length === 0) {
     throw new Error(
       errors.length > 0
         ? `Autonomy could not evaluate any symbols. ${errors.join("; ")}`
         : "Autonomy could not evaluate any symbols.",
     );
   }
+
+  const best =
+    evaluations
+      .filter((evaluation) => evaluation.score > 0)
+      .sort((left, right) => right.score - left.score)[0] ??
+    evaluations.sort((left, right) => right.score - left.score)[0];
 
   const candidateScores = evaluations
     .map(toAutonomyCandidateScore)
@@ -391,8 +479,13 @@ export async function dispatchAutonomyWorker(options?: {
   let execution: ExecutionResult | undefined;
 
   try {
+    const budgetRemainingUsd =
+      leased.budgetUsd && leased.budgetUsd > 0
+        ? Math.max(0, leased.budgetUsd - (await getTodayExecutedNotionalUsd()))
+        : 0;
     const { best, symbols, errors, candidateScores } = await selectAutonomyRun(
       leased,
+      budgetRemainingUsd,
     );
     const snapshot = best.snapshot;
     const result = best.result;
@@ -462,6 +555,16 @@ export async function dispatchAutonomyWorker(options?: {
 
     await updateAutonomyState((current) => ({
       ...current,
+      symbolThrottleUntil: {
+        ...(current.symbolThrottleUntil ?? {}),
+        [result.consensus.symbol]:
+          result.consensus.symbolThrottleMs && result.consensus.symbolThrottleMs > 0
+            ? new Date(
+                Date.now() + result.consensus.symbolThrottleMs,
+              ).toISOString()
+            : current.symbolThrottleUntil?.[result.consensus.symbol] ??
+              new Date().toISOString(),
+      },
       inFlight: false,
       leaseId: undefined,
       leaseAcquiredAt: undefined,

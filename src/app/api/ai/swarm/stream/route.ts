@@ -1,12 +1,10 @@
 import type { NextRequest } from "next/server";
-import { createAgent } from "@/lib/agents/create-agent";
-import { ACTIVE_SWARM_MODELS } from "@/lib/configs/models";
-import { getRoleForModel } from "@/lib/configs/roles";
 import { getRealtimeMarketContext } from "@/lib/market-data/service";
 import { getMemorySummary, storeSwarmMemory } from "@/lib/memory/aging-memory";
 import { recordSwarmRun } from "@/lib/persistence/history";
 import { setCachedSwarmResult } from "@/lib/redis/swarm-cache";
 import { buildSwarmDecision } from "@/lib/swarm/pipeline";
+import { collectDiagnosticVotes } from "@/lib/swarm/orchestrator";
 import type { Timeframe } from "@/types/market";
 import type { SwarmStreamEvent } from "@/types/swarm";
 
@@ -51,8 +49,8 @@ export async function GET(req: NextRequest) {
           timeframe,
           message: "Market context ready",
           pipeline: {
-            stage: "agents",
-            detail: "Market snapshot loaded and agent voting started",
+            stage: "deterministic",
+            detail: "Market snapshot loaded and deterministic scoring started",
           },
         });
 
@@ -64,18 +62,17 @@ export async function GET(req: NextRequest) {
           message: "Generating memory summary",
         });
         const memorySummary = await getMemorySummary(ctx);
-        const votes = [];
-
-        for (const modelId of ACTIVE_SWARM_MODELS) {
-          if (req.signal.aborted) {
-            break;
-          }
-
-          const vote = await createAgent(modelId, getRoleForModel(modelId))(
-            ctx,
-            memorySummary,
-          );
-          votes.push(vote);
+        sendEvent({
+          type: "status",
+          timestamp: new Date().toISOString(),
+          symbol,
+          timeframe,
+          message: "Collecting diagnostic agent commentary",
+        });
+        const { votes, errors } = await collectDiagnosticVotes(ctx, {
+          memorySummary,
+        });
+        for (const vote of votes) {
           sendEvent({
             type: "vote",
             timestamp: new Date().toISOString(),
@@ -84,22 +81,30 @@ export async function GET(req: NextRequest) {
             vote,
           });
         }
-
-        if (votes.length > 0) {
+        if (errors.length > 0) {
           sendEvent({
-            type: "status",
+            type: "pipeline",
             timestamp: new Date().toISOString(),
             symbol,
             timeframe,
-            message: "Running consensus pipeline",
+            message: errors.join("; "),
+            pipeline: {
+              stage: "diagnostics",
+              detail: errors.join("; "),
+            },
           });
-          const { consensus } = await buildSwarmDecision(
-            ctx,
-            votes,
-            memorySummary,
-          );
+        }
+
+        sendEvent({
+          type: "status",
+          timestamp: new Date().toISOString(),
+          symbol,
+          timeframe,
+          message: "Running deterministic decision engine",
+        });
+        const { consensus } = await buildSwarmDecision(ctx, votes, memorySummary);
           const pipelineStages: Array<[string, string | undefined]> = [
-            ["consensus", "Votes aggregated into a provisional decision"],
+            ["consensus", "Deterministic decision computed from feature scores"],
             [
               "regime",
               consensus.regime
@@ -186,7 +191,6 @@ export async function GET(req: NextRequest) {
             recordSwarmRun(result),
             storeSwarmMemory(result),
           ]);
-        }
       } catch (error) {
         sendEvent({
           type: "error",

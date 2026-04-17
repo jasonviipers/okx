@@ -29,6 +29,7 @@ export interface StoredAutonomyState {
   lastCandidateScores?: AutonomyCandidateScore[];
   lastSelectedCandidate?: AutonomyCandidateScore;
   lastRejectedReasons?: RejectionReason[];
+  symbolThrottleUntil?: Record<string, string>;
   leaseId?: string;
   leaseAcquiredAt?: string;
 }
@@ -61,11 +62,12 @@ export function getDefaultAutonomyState(): StoredAutonomyState {
     selectionMode: parseSelectionMode(process.env.AUTONOMOUS_SYMBOL_SELECTION),
     candidateSymbols: parseSymbolList(process.env.AUTONOMOUS_SYMBOLS),
     timeframe: (process.env.AUTONOMOUS_TIMEFRAME as Timeframe) || "1H",
-    intervalMs: parseNumber(process.env.AUTONOMOUS_INTERVAL_MS, 60_000),
+    intervalMs: parseNumber(process.env.AUTONOMOUS_INTERVAL_MS, 20_000),
     cooldownMs: parseNumber(process.env.AUTONOMOUS_COOLDOWN_MS, 120_000),
     budgetUsd: parseNumber(process.env.LIVE_TRADING_BUDGET_USD, 0),
     iterationCount: 0,
     inFlight: false,
+    symbolThrottleUntil: {},
   };
 }
 

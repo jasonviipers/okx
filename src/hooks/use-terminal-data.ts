@@ -264,7 +264,7 @@ export function useConsensus(
     execution?: ExecutionResult;
     cached?: boolean;
     totalElapsedMs?: number;
-  }>(fetcher, 30_000);
+  }>(fetcher, 10_000);
 }
 
 export function useSwarmStream(symbol = "BTC-USDT", timeframe = "1H") {

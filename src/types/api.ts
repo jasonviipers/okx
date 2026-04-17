@@ -57,6 +57,9 @@ export interface AutonomyCandidateScore {
   agreement: number;
   expectedNetEdgeBps?: number;
   marketQualityScore?: number;
+  riskFlags?: string[];
+  decisionCadenceMs?: number;
+  symbolThrottleMs?: number;
   rejectionReasons: RejectionReason[];
 }
 

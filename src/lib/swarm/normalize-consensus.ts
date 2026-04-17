@@ -7,6 +7,7 @@ export function normalizeConsensusResult(
 
   return {
     ...consensus,
+    decisionSource: consensus.decisionSource ?? "deterministic",
     directionalSignal: consensus.directionalSignal ?? consensus.signal,
     directionalConfidence:
       consensus.directionalConfidence ?? consensus.confidence,
@@ -17,5 +18,16 @@ export function normalizeConsensusResult(
       consensus.executionEligible ??
       (!consensus.blocked && decision !== "HOLD"),
     rejectionReasons: consensus.rejectionReasons ?? [],
+    featureSummary: consensus.featureSummary ?? {},
+    riskFlags: consensus.riskFlags ?? [],
+    directionalEdgeScore: consensus.directionalEdgeScore ?? 0,
+    executionQualityScore: consensus.executionQualityScore ?? 0,
+    riskPenaltyScore: consensus.riskPenaltyScore ?? 0,
+    expectedNetEdgeBps:
+      consensus.expectedNetEdgeBps ?? consensus.expectedValue?.netEdgeBps,
+    marketQualityScore:
+      consensus.marketQualityScore ?? consensus.harness?.marketQualityScore,
+    decisionCadenceMs: consensus.decisionCadenceMs ?? 20_000,
+    symbolThrottleMs: consensus.symbolThrottleMs ?? 30_000,
   };
 }

@@ -277,6 +277,14 @@ function SwarmHistoryPanel({ entries }: { entries: StoredSwarmRun[] }) {
               <span className="text-muted-foreground tabular-nums">
                 agr:{(c.agreement * 100).toFixed(0)}%
               </span>
+              {c.expectedNetEdgeBps !== undefined && (
+                <span className="text-muted-foreground tabular-nums">
+                  ev:{c.expectedNetEdgeBps.toFixed(1)}
+                </span>
+              )}
+              {c.decisionSource && (
+                <span className="text-terminal-cyan">{c.decisionSource}</span>
+              )}
               {c.blocked && <span className="text-terminal-red">BLK</span>}
               <span className="text-muted-foreground">
                 {formatMs(entry.totalElapsedMs)}

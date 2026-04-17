@@ -121,6 +121,11 @@ function ConsensusPanel({
             {consensus.blockReason}
           </span>
         )}
+        {consensus.decisionSource && (
+          <span className="terminal-text-xs text-terminal-cyan">
+            {consensus.decisionSource.toUpperCase()}
+          </span>
+        )}
       </div>
 
       {(consensus.directionalSignal !== decisionSignal ||
@@ -156,10 +161,35 @@ function ConsensusPanel({
         >
           {consensus.executionEligible ? "ELIGIBLE" : "REJECTED"}
         </span>
+        {consensus.decisionCadenceMs && (
+          <span className="terminal-text-xs text-muted-foreground">
+            cad:{(consensus.decisionCadenceMs / 1000).toFixed(1)}s
+          </span>
+        )}
+        {consensus.symbolThrottleMs && (
+          <span className="terminal-text-xs text-muted-foreground">
+            thr:{(consensus.symbolThrottleMs / 1000).toFixed(1)}s
+          </span>
+        )}
       </div>
 
       <div className="flex items-baseline gap-2">
         <span className="terminal-text text-muted-foreground">SCORES</span>
+        {consensus.directionalEdgeScore !== undefined && (
+          <span className="terminal-text-xs text-muted-foreground">
+            edge:{consensus.directionalEdgeScore.toFixed(2)}
+          </span>
+        )}
+        {consensus.executionQualityScore !== undefined && (
+          <span className="terminal-text-xs text-muted-foreground">
+            exec:{(consensus.executionQualityScore * 100).toFixed(0)}%
+          </span>
+        )}
+        {consensus.riskPenaltyScore !== undefined && (
+          <span className="terminal-text-xs text-muted-foreground">
+            risk:{(consensus.riskPenaltyScore * 100).toFixed(0)}%
+          </span>
+        )}
         {Object.entries(consensus.weightedScores).map(([sig, score]) => (
           <span
             key={sig}
@@ -245,7 +275,12 @@ function ConsensusPanel({
         <div className="flex items-baseline gap-2 flex-wrap">
           <span className="terminal-text text-muted-foreground">HARNESS</span>
           <span className="terminal-text-xs text-muted-foreground">
-            mqual:{(consensus.harness.marketQualityScore * 100).toFixed(0)}%
+            mqual:
+            {(
+              (consensus.marketQualityScore ??
+                consensus.harness.marketQualityScore) * 100
+            ).toFixed(0)}
+            %
           </span>
           <span className="terminal-text-xs text-muted-foreground">
             liq:{(consensus.harness.liquidityScore * 100).toFixed(0)}%
@@ -258,6 +293,41 @@ function ConsensusPanel({
           )}
         </div>
       )}
+
+      {consensus.riskFlags && consensus.riskFlags.length > 0 && (
+        <div className="mt-1">
+          <div className="data-header">RISK FLAGS</div>
+          <div className="flex flex-wrap gap-1">
+            {consensus.riskFlags.slice(0, 6).map((flag) => (
+              <span
+                key={flag}
+                className="terminal-text-xs text-terminal-amber"
+              >
+                {flag}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {consensus.featureSummary &&
+        Object.keys(consensus.featureSummary).length > 0 && (
+          <div className="mt-1">
+            <div className="data-header">FEATURES</div>
+            <div className="flex flex-wrap gap-x-2 gap-y-px">
+              {Object.entries(consensus.featureSummary)
+                .slice(0, 8)
+                .map(([label, value]) => (
+                  <span
+                    key={label}
+                    className="terminal-text-xs text-muted-foreground"
+                  >
+                    {label}:{value.toFixed(1)}
+                  </span>
+                ))}
+            </div>
+          </div>
+        )}
 
       {consensus.researchSummary && (
         <div className="flex items-baseline gap-2 flex-wrap">
@@ -322,9 +392,15 @@ function ConsensusPanel({
 
       <div className="mt-1">
         <div className="data-header">VOTES ({consensus.votes.length})</div>
-        {consensus.votes.map((vote, i) => (
-          <VoteRow key={`${vote.model}-${vote.role}-${i}`} vote={vote} />
-        ))}
+        {consensus.votes.length === 0 ? (
+          <div className="terminal-text-xs text-muted-foreground">
+            Diagnostic agent votes were not requested for this run.
+          </div>
+        ) : (
+          consensus.votes.map((vote, i) => (
+            <VoteRow key={`${vote.model}-${vote.role}-${i}`} vote={vote} />
+          ))
+        )}
       </div>
     </div>
   );

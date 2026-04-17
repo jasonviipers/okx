@@ -35,8 +35,16 @@ for (const modelId of ACTIVE_SWARM_MODELS) {
   }
 }
 
-export async function runSwarm(ctx: MarketContext): Promise<SwarmRunResult> {
-  const cached = await getCachedSwarmResult(ctx.symbol, ctx.timeframe);
+export async function runSwarm(
+  ctx: MarketContext,
+  options?: {
+    forceFresh?: boolean;
+    budgetRemainingUsd?: number;
+  },
+): Promise<SwarmRunResult> {
+  const cached = options?.forceFresh
+    ? null
+    : await getCachedSwarmResult(ctx.symbol, ctx.timeframe);
   if (cached) {
     return {
       consensus: cached,
@@ -48,14 +56,40 @@ export async function runSwarm(ctx: MarketContext): Promise<SwarmRunResult> {
 
   const startedAt = Date.now();
   const memorySummary = await getMemorySummary(ctx);
+  const { consensus } = await buildSwarmDecision(
+    ctx,
+    [],
+    memorySummary,
+    options?.budgetRemainingUsd,
+  );
+  await setCachedSwarmResult(ctx.symbol, ctx.timeframe, consensus);
 
+  const result = {
+    consensus,
+    marketContext: ctx,
+    totalElapsedMs: Date.now() - startedAt,
+    cached: false,
+  };
+
+  await recordSwarmRun(result);
+  await storeSwarmMemory(result);
+  return result;
+}
+
+export async function collectDiagnosticVotes(
+  ctx: MarketContext,
+  options?: {
+    memorySummary?: Awaited<ReturnType<typeof getMemorySummary>>;
+  },
+): Promise<{ votes: AgentVote[]; errors: string[] }> {
+  const resolvedMemorySummary =
+    options?.memorySummary ?? (await getMemorySummary(ctx));
   const settled = await Promise.allSettled(
     ACTIVE_SWARM_MODELS.map((modelId) => {
       const roleConfig = getRoleForModel(modelId);
-      return createAgent(modelId, roleConfig)(ctx, memorySummary);
+      return createAgent(modelId, roleConfig)(ctx, resolvedMemorySummary);
     }),
   );
-
   const votes: AgentVote[] = [];
   const errors: string[] = [];
 
@@ -71,12 +105,6 @@ export async function runSwarm(ctx: MarketContext): Promise<SwarmRunResult> {
     }
   }
 
-  if (votes.length === 0) {
-    throw new Error(
-      `Swarm analysis failed; no agent votes were produced. Errors: ${errors.join("; ")}`,
-    );
-  }
-
   const vetoModels = ACTIVE_SWARM_MODELS.filter(
     (modelId) =>
       MODEL_ROLES[modelId as AIModel] === "risk" ||
@@ -86,23 +114,12 @@ export async function runSwarm(ctx: MarketContext): Promise<SwarmRunResult> {
   const missingVetos = vetoModels.filter(
     (modelId) => !votingModels.includes(modelId),
   );
+
   if (missingVetos.length > 0) {
     console.warn(
-      `[Orchestrator] Veto layer(s) did not vote: ${missingVetos.join(", ")}. Consensus will proceed without full veto coverage.`,
+      `[Orchestrator] Diagnostic veto layer(s) did not vote: ${missingVetos.join(", ")}.`,
     );
   }
 
-  const { consensus } = await buildSwarmDecision(ctx, votes, memorySummary);
-  await setCachedSwarmResult(ctx.symbol, ctx.timeframe, consensus);
-
-  const result = {
-    consensus,
-    marketContext: ctx,
-    totalElapsedMs: Date.now() - startedAt,
-    cached: false,
-  };
-
-  await recordSwarmRun(result);
-  await storeSwarmMemory(result);
-  return result;
+  return { votes, errors };
 }

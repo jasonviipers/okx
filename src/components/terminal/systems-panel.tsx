@@ -186,6 +186,11 @@ function AutonomyPanel({ status }: { status: RuntimeStatus["autonomy"] }) {
                   mq:{(candidate.marketQualityScore * 100).toFixed(0)}%
                 </span>
               )}
+              {candidate.symbolThrottleMs !== undefined && (
+                <span className="text-muted-foreground">
+                  thr:{(candidate.symbolThrottleMs / 1000).toFixed(0)}s
+                </span>
+              )}
               {!candidate.realtime && (
                 <span className="text-terminal-amber">NON-RT</span>
               )}
