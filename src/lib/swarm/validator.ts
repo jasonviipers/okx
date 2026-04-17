@@ -36,9 +36,7 @@ export function validateConsensus(
           detail: `Model ${vetoVote.model} issued a HOLD with veto confidence.`,
           metrics: {
             vetoConfidence: Number((vetoVote.confidence * 100).toFixed(4)),
-            vetoThreshold: Number(
-              (VETO_CONFIDENCE_THRESHOLD * 100).toFixed(4),
-            ),
+            vetoThreshold: Number((VETO_CONFIDENCE_THRESHOLD * 100).toFixed(4)),
           },
         }),
         validatedAt: new Date().toISOString(),
@@ -80,9 +78,7 @@ export function validateConsensus(
       detail: `Last-candle volatility ${(volatilityPercent * 100).toFixed(3)}% is above ${(MAX_VOLATILITY_PERCENT * 100).toFixed(3)}%.`,
       metrics: {
         volatilityPercent: Number((volatilityPercent * 100).toFixed(4)),
-        maxVolatilityPercent: Number(
-          (MAX_VOLATILITY_PERCENT * 100).toFixed(4),
-        ),
+        maxVolatilityPercent: Number((MAX_VOLATILITY_PERCENT * 100).toFixed(4)),
       },
     });
   }
@@ -113,7 +109,9 @@ export function validateConsensus(
     });
   }
 
-  if (nextConsensus.rejectionReasons.length > consensus.rejectionReasons.length) {
+  if (
+    nextConsensus.rejectionReasons.length > consensus.rejectionReasons.length
+  ) {
     return {
       ...markConsensusBlocked(nextConsensus, {
         layer: "validator",

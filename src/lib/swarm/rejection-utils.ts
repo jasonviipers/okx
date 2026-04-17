@@ -1,8 +1,10 @@
-import type { ConsensusResult, RejectionReason, TradeSignal } from "@/types/swarm";
+import type {
+  ConsensusResult,
+  RejectionReason,
+  TradeSignal,
+} from "@/types/swarm";
 
-function dedupeRejectionReasons(
-  reasons: RejectionReason[],
-): RejectionReason[] {
+function dedupeRejectionReasons(reasons: RejectionReason[]): RejectionReason[] {
   const seen = new Set<string>();
 
   return reasons.filter((reason) => {

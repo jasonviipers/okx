@@ -20,6 +20,19 @@
       "recommended": true,
       "suspicious": {
         "noUnknownAtRules": "off"
+      },
+      "correctness": {
+        "useExhaustiveDependencies": {
+          "level": "warn",
+          "options": {
+            "hooks": [
+              {
+                "name": "useEffectEvent",
+                "stableResult": true
+              }
+            ]
+          }
+        }
       }
     },
     "domains": {

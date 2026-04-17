@@ -322,6 +322,25 @@ export async function getAccountOverview(
       sell: toNumber(buyingPower?.availSell),
     };
 
+    const fallbackBuyingPower: SpotBuyingPower | undefined =
+      !symbolParts && tradingBalances.length > 0
+        ? {
+            symbol,
+            quoteCurrency: undefined,
+            baseCurrency: undefined,
+            buy: tradingBalances.reduce(
+              (sum, b) => sum + b.availableBalance,
+              0,
+            ),
+            sell: 0,
+          }
+        : undefined;
+
+    const finalBuyingPower =
+      requestBuyingPower.buy > 0 || requestBuyingPower.sell > 0
+        ? requestBuyingPower
+        : fallbackBuyingPower ?? requestBuyingPower;
+
     return {
       totalEquity: toNumber(balance?.totalEq),
       availableEquity: toNumber(balance?.availEq),
@@ -330,7 +349,7 @@ export async function getAccountOverview(
       unrealizedPnl: toNumber(balance?.upl),
       marginRatio: toMarginRatio(balance?.imr, balance?.mmr),
       notionalUsd: toNumber(balance?.notionalUsd),
-      buyingPower: derivedSpotBuyingPower ?? requestBuyingPower,
+      buyingPower: derivedSpotBuyingPower ?? finalBuyingPower,
       tradingBalances,
       fundingBalances,
       accountMode: getOkxAccountModeLabel(),

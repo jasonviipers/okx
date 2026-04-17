@@ -138,8 +138,7 @@ function buildInitialPerformance(
     realizedSlippageUsd,
     latestMarkPrice: anchorPrice,
     latestObservedAt: anchorTime,
-    latestSignedReturnBps:
-      anchorPrice !== undefined ? 0 : undefined,
+    latestSignedReturnBps: anchorPrice !== undefined ? 0 : undefined,
     latestPnlUsd: anchorPrice !== undefined ? 0 : undefined,
     latestPnlPct: anchorPrice !== undefined ? 0 : undefined,
     outcomeWindows: buildOutcomeWindows(anchorTime),
@@ -152,7 +151,8 @@ function refreshTradeEntryPerformance(
   observedAt = new Date().toISOString(),
 ): { entry: StoredTradeExecution; changed: boolean } {
   const basePerformance =
-    entry.performance ?? buildInitialPerformance(entry.order, entry.executionContext);
+    entry.performance ??
+    buildInitialPerformance(entry.order, entry.executionContext);
   const entryPrice =
     basePerformance.filledPrice ??
     basePerformance.referencePrice ??
@@ -174,7 +174,10 @@ function refreshTradeEntryPerformance(
 
   let changed = entry.performance === undefined;
   const nextOutcomeWindows = basePerformance.outcomeWindows.map((window) => {
-    if (window.observedAt || new Date(window.targetTime).getTime() > Date.now()) {
+    if (
+      window.observedAt ||
+      new Date(window.targetTime).getTime() > Date.now()
+    ) {
       return window;
     }
 
@@ -192,7 +195,10 @@ function refreshTradeEntryPerformance(
       markPrice: round(markPrice, 8),
       signedReturnBps,
       pnlUsd,
-      pnlPct: round((pnlUsd / Math.max(entry.order.notionalUsd ?? 0.0001, 0.0001)) * 100, 4),
+      pnlPct: round(
+        (pnlUsd / Math.max(entry.order.notionalUsd ?? 0.0001, 0.0001)) * 100,
+        4,
+      ),
     };
   });
 
@@ -275,10 +281,15 @@ export async function getHistory(limit = 100): Promise<StoredHistoryEntry[]> {
   return entries.slice(0, limit);
 }
 
-export async function getTradeHistory(limit = 100): Promise<StoredTradeExecution[]> {
+export async function getTradeHistory(
+  limit = 100,
+): Promise<StoredTradeExecution[]> {
   const entries = await readHistory();
   return entries
-    .filter((entry): entry is StoredTradeExecution => entry.type === "trade_execution")
+    .filter(
+      (entry): entry is StoredTradeExecution =>
+        entry.type === "trade_execution",
+    )
     .slice(0, limit);
 }
 
@@ -307,7 +318,9 @@ export async function refreshTradeExecutionOutcomes(
     ),
   ];
   const tickerResults = await Promise.allSettled(
-    candidateSymbols.map(async (symbol) => [symbol, await getTicker(symbol)] as const),
+    candidateSymbols.map(
+      async (symbol) => [symbol, await getTicker(symbol)] as const,
+    ),
   );
   const tickerMap = new Map<string, number>();
 
@@ -338,6 +351,9 @@ export async function refreshTradeExecutionOutcomes(
   }
 
   return nextEntries
-    .filter((entry): entry is StoredTradeExecution => entry.type === "trade_execution")
+    .filter(
+      (entry): entry is StoredTradeExecution =>
+        entry.type === "trade_execution",
+    )
     .slice(0, limit);
 }

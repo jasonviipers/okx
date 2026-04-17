@@ -332,8 +332,7 @@ function buildPortfolioState(
   return {
     baseCurrency: symbolParts?.baseCurrency,
     quoteCurrency: symbolParts?.quoteCurrency,
-    positionState:
-      (baseBalance?.availableBalance ?? 0) > 0 ? "long" : "flat",
+    positionState: (baseBalance?.availableBalance ?? 0) > 0 ? "long" : "flat",
     totalTradingEquityUsd,
     currentBaseInventoryUsd,
     availableBaseInventoryUsd,
@@ -379,7 +378,8 @@ function computePortfolioFitScore(
         )
       : 0;
   const exposureNeed = clamp01(
-    portfolioState.portfolioConcentrationPct / DEFAULT_MAX_SYMBOL_ALLOCATION_PCT,
+    portfolioState.portfolioConcentrationPct /
+      DEFAULT_MAX_SYMBOL_ALLOCATION_PCT,
   );
 
   if (decision === "BUY") {
@@ -476,9 +476,11 @@ function scoreAutonomyCandidate(
       ? Math.max(0, consensus.expectedNetEdgeBps)
       : consensus.expectedValue?.netEdgeBps !== undefined
         ? Math.max(0, consensus.expectedValue.netEdgeBps)
-      : 0;
+        : 0;
   const marketQuality =
-    consensus.marketQualityScore ?? consensus.harness?.marketQualityScore ?? 0.5;
+    consensus.marketQualityScore ??
+    consensus.harness?.marketQualityScore ??
+    0.5;
   const portfolioFitScore = computePortfolioFitScore(
     consensus.decision ?? consensus.signal,
     portfolioState,
@@ -591,7 +593,8 @@ function appendAutonomyRejection(
 function applyPortfolioConstraints(
   evaluation: AutonomySymbolEvaluation,
 ): AutonomySymbolEvaluation {
-  const decision = evaluation.result.consensus.decision ?? evaluation.result.consensus.signal;
+  const decision =
+    evaluation.result.consensus.decision ?? evaluation.result.consensus.signal;
   const { portfolioState } = evaluation;
   let nextEvaluation = evaluation;
 
@@ -850,7 +853,9 @@ export async function dispatchAutonomyWorker(options?: {
             metrics: {
               cooldownMs: leased.cooldownMs,
               portfolioConcentrationPct: Number(
-                (best.portfolioState.portfolioConcentrationPct * 100).toFixed(4),
+                (best.portfolioState.portfolioConcentrationPct * 100).toFixed(
+                  4,
+                ),
               ),
               positionState: best.portfolioState.positionState,
             },
@@ -876,7 +881,8 @@ export async function dispatchAutonomyWorker(options?: {
           {
             layer: "market_data",
             code: "autonomy_market_not_tradeable",
-            summary: "Autonomy rejected the candidate because market data was not tradeable.",
+            summary:
+              "Autonomy rejected the candidate because market data was not tradeable.",
             detail:
               "The worker will not execute on stale or degraded market data.",
             metrics: {
@@ -896,12 +902,13 @@ export async function dispatchAutonomyWorker(options?: {
       symbolThrottleUntil: {
         ...(current.symbolThrottleUntil ?? {}),
         [result.consensus.symbol]:
-          result.consensus.symbolThrottleMs && result.consensus.symbolThrottleMs > 0
+          result.consensus.symbolThrottleMs &&
+          result.consensus.symbolThrottleMs > 0
             ? new Date(
                 Date.now() + result.consensus.symbolThrottleMs,
               ).toISOString()
-            : current.symbolThrottleUntil?.[result.consensus.symbol] ??
-              new Date().toISOString(),
+            : (current.symbolThrottleUntil?.[result.consensus.symbol] ??
+              new Date().toISOString()),
       },
       inFlight: false,
       leaseId: undefined,
@@ -925,8 +932,7 @@ export async function dispatchAutonomyWorker(options?: {
       lastCandidateScores: candidateScores,
       lastSelectedCandidate: toAutonomyCandidateScore(best),
       lastRejectedReasons:
-        execution?.rejectionReasons ??
-        result.consensus.rejectionReasons,
+        execution?.rejectionReasons ?? result.consensus.rejectionReasons,
       iterationCount: current.iterationCount + 1,
       lastTradeAt:
         execution?.status === "success" ? Date.now() : current.lastTradeAt,

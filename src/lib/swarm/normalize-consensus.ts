@@ -11,8 +11,7 @@ export function normalizeConsensusResult(
     directionalSignal: consensus.directionalSignal ?? consensus.signal,
     directionalConfidence:
       consensus.directionalConfidence ?? consensus.confidence,
-    directionalAgreement:
-      consensus.directionalAgreement ?? consensus.agreement,
+    directionalAgreement: consensus.directionalAgreement ?? consensus.agreement,
     decision,
     executionEligible:
       consensus.executionEligible ??

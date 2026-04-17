@@ -108,18 +108,22 @@ export function applyMetaSelection(
 
   if (regime.regime === "stress" || regime.regime === "illiquid") {
     nextConfidence = Math.min(nextConfidence, 0.35);
-    nextConsensus = markConsensusBlocked(nextConsensus, {
-      layer: "meta_selector",
-      code: `regime_${regime.regime}`,
-      summary: `Meta-selector suppressed trading in ${regime.regime} conditions.`,
-      detail: "The active regime is hostile to reliable execution.",
-      metrics: {
-        regime: regime.regime,
-        regimeConfidence: Number((regime.confidence * 100).toFixed(4)),
+    nextConsensus = markConsensusBlocked(
+      nextConsensus,
+      {
+        layer: "meta_selector",
+        code: `regime_${regime.regime}`,
+        summary: `Meta-selector suppressed trading in ${regime.regime} conditions.`,
+        detail: "The active regime is hostile to reliable execution.",
+        metrics: {
+          regime: regime.regime,
+          regimeConfidence: Number((regime.confidence * 100).toFixed(4)),
+        },
       },
-    }, {
-      confidence: nextConfidence,
-    });
+      {
+        confidence: nextConfidence,
+      },
+    );
     nextDecision = "HOLD";
     notes.push("Trading disabled because the regime is hostile to execution.");
   } else if (regime.regime === "mean_reversion") {

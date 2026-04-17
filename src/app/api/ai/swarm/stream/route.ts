@@ -102,95 +102,99 @@ export async function GET(req: NextRequest) {
           timeframe,
           message: "Running deterministic decision engine",
         });
-        const { consensus } = await buildSwarmDecision(ctx, votes, memorySummary);
-          const pipelineStages: Array<[string, string | undefined]> = [
-            ["consensus", "Deterministic decision computed from feature scores"],
-            [
-              "regime",
-              consensus.regime
-                ? `Regime classified as ${consensus.regime.regime}`
-                : undefined,
-            ],
-            [
-              "meta",
-              consensus.metaSelection
-                ? `Selected ${consensus.metaSelection.selectedEngine}`
-                : undefined,
-            ],
-            [
-              "ev",
-              consensus.expectedValue
-                ? `Net edge ${consensus.expectedValue.netEdgeBps.toFixed(2)} bps`
-                : undefined,
-            ],
-            [
-              "reliability",
-              consensus.reliability
-                ? `Reliability ${consensus.reliability.reliabilityScore.toFixed(2)}`
-                : undefined,
-            ],
-            [
-              "validator",
-              consensus.blocked
-                ? `Blocked: ${consensus.blockReason ?? "validator veto"}`
-                : "Validator passed",
-            ],
-            [
-              "harness",
-              consensus.harness
-                ? `Memory alignment ${consensus.harness.memoryAlignmentScore.toFixed(2)}`
-                : undefined,
-            ],
-          ];
+        const { consensus } = await buildSwarmDecision(
+          ctx,
+          votes,
+          memorySummary,
+        );
+        const pipelineStages: Array<[string, string | undefined]> = [
+          ["consensus", "Deterministic decision computed from feature scores"],
+          [
+            "regime",
+            consensus.regime
+              ? `Regime classified as ${consensus.regime.regime}`
+              : undefined,
+          ],
+          [
+            "meta",
+            consensus.metaSelection
+              ? `Selected ${consensus.metaSelection.selectedEngine}`
+              : undefined,
+          ],
+          [
+            "ev",
+            consensus.expectedValue
+              ? `Net edge ${consensus.expectedValue.netEdgeBps.toFixed(2)} bps`
+              : undefined,
+          ],
+          [
+            "reliability",
+            consensus.reliability
+              ? `Reliability ${consensus.reliability.reliabilityScore.toFixed(2)}`
+              : undefined,
+          ],
+          [
+            "validator",
+            consensus.blocked
+              ? `Blocked: ${consensus.blockReason ?? "validator veto"}`
+              : "Validator passed",
+          ],
+          [
+            "harness",
+            consensus.harness
+              ? `Memory alignment ${consensus.harness.memoryAlignmentScore.toFixed(2)}`
+              : undefined,
+          ],
+        ];
 
-          for (const [stage, detail] of pipelineStages) {
-            if (!detail) continue;
-            sendEvent({
-              type: "pipeline",
-              timestamp: new Date().toISOString(),
-              symbol,
-              timeframe,
-              message: detail,
-              pipeline: {
-                stage,
-                detail,
-              },
-            });
-          }
-
-          for (const rejectionReason of consensus.rejectionReasons) {
-            sendEvent({
-              type: "pipeline",
-              timestamp: new Date().toISOString(),
-              symbol,
-              timeframe,
-              message: rejectionReason.summary,
-              pipeline: {
-                stage: rejectionReason.layer,
-                detail: rejectionReason.summary,
-              },
-            });
-          }
-
+        for (const [stage, detail] of pipelineStages) {
+          if (!detail) continue;
           sendEvent({
-            type: "consensus",
+            type: "pipeline",
             timestamp: new Date().toISOString(),
             symbol,
             timeframe,
-            consensus,
+            message: detail,
+            pipeline: {
+              stage,
+              detail,
+            },
           });
+        }
 
-          const result = {
-            consensus,
-            marketContext: ctx,
-            totalElapsedMs: Date.now() - startedAt,
-            cached: false,
-          };
-          await Promise.all([
-            setCachedSwarmResult(symbol, timeframe, consensus),
-            recordSwarmRun(result),
-            storeSwarmMemory(result),
-          ]);
+        for (const rejectionReason of consensus.rejectionReasons) {
+          sendEvent({
+            type: "pipeline",
+            timestamp: new Date().toISOString(),
+            symbol,
+            timeframe,
+            message: rejectionReason.summary,
+            pipeline: {
+              stage: rejectionReason.layer,
+              detail: rejectionReason.summary,
+            },
+          });
+        }
+
+        sendEvent({
+          type: "consensus",
+          timestamp: new Date().toISOString(),
+          symbol,
+          timeframe,
+          consensus,
+        });
+
+        const result = {
+          consensus,
+          marketContext: ctx,
+          totalElapsedMs: Date.now() - startedAt,
+          cached: false,
+        };
+        await Promise.all([
+          setCachedSwarmResult(symbol, timeframe, consensus),
+          recordSwarmRun(result),
+          storeSwarmMemory(result),
+        ]);
       } catch (error) {
         sendEvent({
           type: "error",

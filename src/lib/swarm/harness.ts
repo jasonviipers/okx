@@ -128,9 +128,7 @@ export function applyDecisionHarness(
         marketQualityScore: Number(
           (harness.marketQualityScore * 100).toFixed(4),
         ),
-        memoryAlignmentScore: Number(
-          (memoryAlignmentScore * 100).toFixed(4),
-        ),
+        memoryAlignmentScore: Number((memoryAlignmentScore * 100).toFixed(4)),
         blockedRatio: Number((memory.blockedRatio * 100).toFixed(4)),
       },
     });

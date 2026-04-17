@@ -1,5 +1,9 @@
 import type { MarketContext } from "@/types/market";
-import type { ConsensusResult, RejectionReason, ExpectedValueReport } from "@/types/swarm";
+import type {
+  ConsensusResult,
+  RejectionReason,
+  ExpectedValueReport,
+} from "@/types/swarm";
 import {
   appendRejectionReason,
   markConsensusBlocked,
@@ -109,9 +113,9 @@ export function applyExpectedValueGate(
       {
         layer: "expected_value",
         code: "expected_value_rejected",
-        summary: "Expected-value gate rejected the setup after fees and slippage.",
-        detail:
-          "The setup failed one or more expected-value thresholds.",
+        summary:
+          "Expected-value gate rejected the setup after fees and slippage.",
+        detail: "The setup failed one or more expected-value thresholds.",
       },
       {
         confidence: nextConfidence,

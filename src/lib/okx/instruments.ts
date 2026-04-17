@@ -93,11 +93,17 @@ function parseNumber(value: string | undefined, fallback: number): number {
 }
 
 function uniqueUppercase(values: string[]): string[] {
-  return [...new Set(values.map((value) => value.trim().toUpperCase()).filter(Boolean))];
+  return [
+    ...new Set(
+      values.map((value) => value.trim().toUpperCase()).filter(Boolean),
+    ),
+  ];
 }
 
 function extractBaseAsset(symbol: string): string {
-  return symbol.split("-")[0]?.trim().toUpperCase() ?? symbol.trim().toUpperCase();
+  return (
+    symbol.split("-")[0]?.trim().toUpperCase() ?? symbol.trim().toUpperCase()
+  );
 }
 
 function extractQuoteAsset(symbol: string): string {
@@ -133,10 +139,7 @@ export function getConfiguredAutonomousQuoteCurrencies(): string[] {
     ...parseSymbolList(process.env.AUTONOMOUS_QUOTE_CURRENCY),
   ]);
 
-  return uniqueUppercase([
-    ...configured,
-    ...DEFAULT_AUTONOMOUS_QUOTES,
-  ]);
+  return uniqueUppercase([...configured, ...DEFAULT_AUTONOMOUS_QUOTES]);
 }
 
 export function getQuoteCurrenciesFromBalances(
@@ -149,7 +152,8 @@ export function getQuoteCurrenciesFromBalances(
         (balance.usdValue > 0 || balance.availableBalance >= 1),
     )
     .sort((left, right) => {
-      const leftRank = left.usdValue > 0 ? left.usdValue : left.availableBalance;
+      const leftRank =
+        left.usdValue > 0 ? left.usdValue : left.availableBalance;
       const rightRank =
         right.usdValue > 0 ? right.usdValue : right.availableBalance;
       return rightRank - leftRank;
@@ -193,7 +197,11 @@ async function listSpotInstrumentRows(): Promise<OkxInstrumentRow[]> {
       instType: "SPOT",
     }),
   );
-  await setCachedJson(INSTRUMENTS_CACHE_KEY, rows, INSTRUMENTS_CACHE_TTL_SECONDS);
+  await setCachedJson(
+    INSTRUMENTS_CACHE_KEY,
+    rows,
+    INSTRUMENTS_CACHE_TTL_SECONDS,
+  );
   return rows;
 }
 
@@ -248,7 +256,9 @@ function getDynamicBaseAssetsFromMarket(
           !isLeveragedToken(base)
         );
       })
-      .sort((left, right) => estimateQuoteVolume(right) - estimateQuoteVolume(left))
+      .sort(
+        (left, right) => estimateQuoteVolume(right) - estimateQuoteVolume(left),
+      )
       .slice(0, Math.max(limit * 4, 24))
       .map((row) => extractBaseAsset(row.instId)),
   );
@@ -282,7 +292,9 @@ export async function getAutonomousSymbolUniverse(options?: {
       options?.limit ?? parseNumber(process.env.AUTONOMOUS_SYMBOL_LIMIT, 8),
     ),
   );
-  const manualBaseAssets = getConfiguredAutonomousBaseAssets(options?.explicitSymbols);
+  const manualBaseAssets = getConfiguredAutonomousBaseAssets(
+    options?.explicitSymbols,
+  );
   const quoteCurrencies = uniqueUppercase([
     ...(options?.quoteCurrencies ?? []),
     ...getConfiguredAutonomousQuoteCurrencies(),
@@ -323,7 +335,9 @@ export async function getAutonomousSymbolUniverse(options?: {
       })
       .sort((left, right) => {
         const leftBaseIndex = baseAssets.indexOf(extractBaseAsset(left.instId));
-        const rightBaseIndex = baseAssets.indexOf(extractBaseAsset(right.instId));
+        const rightBaseIndex = baseAssets.indexOf(
+          extractBaseAsset(right.instId),
+        );
         return leftBaseIndex - rightBaseIndex;
       })
       .map((row) => row.instId);

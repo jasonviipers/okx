@@ -299,10 +299,7 @@ function ConsensusPanel({
           <div className="data-header">RISK FLAGS</div>
           <div className="flex flex-wrap gap-1">
             {consensus.riskFlags.slice(0, 6).map((flag) => (
-              <span
-                key={flag}
-                className="terminal-text-xs text-terminal-amber"
-              >
+              <span key={flag} className="terminal-text-xs text-terminal-amber">
                 {flag}
               </span>
             ))}
@@ -377,7 +374,9 @@ function ConsensusPanel({
             {execution.reason && (
               <>
                 {" "}
-                <span className="text-muted-foreground">{execution.reason}</span>
+                <span className="text-muted-foreground">
+                  {execution.reason}
+                </span>
               </>
             )}
             {execution.error && (
@@ -433,7 +432,7 @@ function StreamLog({ events }: { events: SwarmStreamEvent[] }) {
     );
   }
   return (
-    <div >
+    <div>
       {events.map((evt, index) => {
         const key = getStreamEventKey(evt, index);
         const ts = formatTime(evt.timestamp);

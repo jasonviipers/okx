@@ -74,12 +74,12 @@ function computeRealizedVolatility(
     return 0;
   }
 
-  const returns = candles
-    .slice(1)
-    .map((candle, index) => {
-      const previousClose = candles[index]?.close ?? 0;
-      return previousClose > 0 ? (candle.close - previousClose) / previousClose : 0;
-    });
+  const returns = candles.slice(1).map((candle, index) => {
+    const previousClose = candles[index]?.close ?? 0;
+    return previousClose > 0
+      ? (candle.close - previousClose) / previousClose
+      : 0;
+  });
 
   const mean = average(returns);
   const variance =
@@ -186,8 +186,7 @@ function computeRollingVwap(ctx: MarketContext): number {
 
   const weightedPrice = sum(
     candles.map((candle) => {
-      const typicalPrice =
-        (candle.high + candle.low + candle.close) / 3;
+      const typicalPrice = (candle.high + candle.low + candle.close) / 3;
       return typicalPrice * candle.volume;
     }),
   );
@@ -195,7 +194,10 @@ function computeRollingVwap(ctx: MarketContext): number {
   return weightedPrice / totalVolume;
 }
 
-function computeDistanceFromReference(price: number, reference: number): number {
+function computeDistanceFromReference(
+  price: number,
+  reference: number,
+): number {
   return reference > 0 ? (price - reference) / reference : 0;
 }
 
@@ -207,7 +209,9 @@ function computeBreakoutDistance(ctx: MarketContext): number {
     return 0;
   }
 
-  const previousHigh = Math.max(...previousCandles.map((candle) => candle.high));
+  const previousHigh = Math.max(
+    ...previousCandles.map((candle) => candle.high),
+  );
   const previousLow = Math.min(...previousCandles.map((candle) => candle.low));
 
   if (last.close > previousHigh && previousHigh > 0) {
@@ -322,7 +326,8 @@ export function deriveDecisionCadence(
   realizedVolatilityLong: number,
 ): { decisionCadenceMs: number; symbolThrottleMs: number } {
   const baseCadenceMs = getDefaultCadenceMs(timeframe);
-  const qualityFactor = marketQualityScore >= 0.7 ? 0.85 : marketQualityScore <= 0.45 ? 1.2 : 1;
+  const qualityFactor =
+    marketQualityScore >= 0.7 ? 0.85 : marketQualityScore <= 0.45 ? 1.2 : 1;
   const compressionFactor = compressionScore >= 0.55 ? 0.9 : 1.05;
   const volatilityFactor =
     realizedVolatilityLong >= 0.012
@@ -331,10 +336,18 @@ export function deriveDecisionCadence(
         ? 0.95
         : 1;
   const decisionCadenceMs = Math.round(
-    clamp(baseCadenceMs * qualityFactor * compressionFactor * volatilityFactor, 5_000, 60_000),
+    clamp(
+      baseCadenceMs * qualityFactor * compressionFactor * volatilityFactor,
+      5_000,
+      60_000,
+    ),
   );
   const symbolThrottleMs = Math.round(
-    clamp(decisionCadenceMs * (marketQualityScore >= 0.7 ? 1.4 : 1.9), 7_500, 120_000),
+    clamp(
+      decisionCadenceMs * (marketQualityScore >= 0.7 ? 1.4 : 1.9),
+      7_500,
+      120_000,
+    ),
   );
 
   return {
@@ -349,9 +362,15 @@ export function buildDecisionFeatures(input: {
   budgetRemainingUsd?: number;
 }): DecisionFeatureVector {
   const maxPositionUsd = parseNumber(process.env.MAX_POSITION_USD, 100);
-  const minimumTradeNotionalUsd = parseNumber(process.env.MIN_TRADE_NOTIONAL, 5);
+  const minimumTradeNotionalUsd = parseNumber(
+    process.env.MIN_TRADE_NOTIONAL,
+    5,
+  );
   const budgetCapUsd = getBudgetCapUsd(input.budgetRemainingUsd ?? 0);
-  const availableQuoteUsd = Math.max(0, input.accountOverview.buyingPower.buy * 0.9);
+  const availableQuoteUsd = Math.max(
+    0,
+    input.accountOverview.buyingPower.buy * 0.9,
+  );
   const availableBaseUsd = Math.max(
     0,
     input.accountOverview.buyingPower.sell * input.ctx.ticker.bid * 0.9,
@@ -368,7 +387,11 @@ export function buildDecisionFeatures(input: {
     minimumTradeNotionalUsd,
     Math.min(
       maxPositionUsd,
-      Math.max(maxExecutableBuyUsd, maxExecutableSellUsd, minimumTradeNotionalUsd),
+      Math.max(
+        maxExecutableBuyUsd,
+        maxExecutableSellUsd,
+        minimumTradeNotionalUsd,
+      ),
       budgetCapUsd,
     ),
   );
@@ -440,9 +463,7 @@ export function buildFeatureSummary(
     orderBookImbalancePct: Number(
       (features.orderBookImbalance * 100).toFixed(4),
     ),
-    topBookPressurePct: Number(
-      (features.topBookPressure * 100).toFixed(4),
-    ),
+    topBookPressurePct: Number((features.topBookPressure * 100).toFixed(4)),
     volumeExpansion: Number(features.volumeExpansion.toFixed(4)),
     distanceFromVwapBps: Number(
       (features.distanceFromVwap * 10_000).toFixed(4),

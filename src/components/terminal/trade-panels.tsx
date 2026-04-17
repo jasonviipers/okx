@@ -250,7 +250,9 @@ function TradeHistoryPanel({ entries }: { entries: StoredTradeExecution[] }) {
                 <span className="text-muted-foreground">
                   @
                   {(
-                    entry.order.filledPrice ?? entry.order.referencePrice ?? 0
+                    entry.order.filledPrice ??
+                    entry.order.referencePrice ??
+                    0
                   ).toFixed(2)}
                 </span>
               )}

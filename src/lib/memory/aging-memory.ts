@@ -1,6 +1,6 @@
 import "server-only";
 
-import { and, desc, eq, sql } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 import db, { dbFilePath } from "@/db";
 import { swarmMemory } from "@/db/schema";
 import type { MarketContext, Timeframe } from "@/types/market";
@@ -9,64 +9,6 @@ import type { SwarmRunResult, TradeSignal } from "@/types/swarm";
 
 const MEMORY_HALF_LIFE_HOURS = 72;
 const MAX_RECALL_CANDIDATES = 120;
-
-type RawMemoryRow = {
-  id: number;
-  createdAt: string;
-  symbol: string;
-  timeframe: string;
-  signal: TradeSignal;
-  confidence: number;
-  agreement: number;
-  blocked: boolean;
-  blockReason: string | null;
-  price: number;
-  change24h: number;
-  spreadBps: number;
-  volatilityPct: number;
-  imbalance: number;
-  summary: string;
-};
-
-declare global {
-  var __swarmMemoryReady: Promise<void> | undefined;
-}
-
-function ensureMemoryTable(): Promise<void> {
-  if (!globalThis.__swarmMemoryReady) {
-    globalThis.__swarmMemoryReady = (async () => {
-      await db.run(
-        sql.raw(`
-        CREATE TABLE IF NOT EXISTS swarm_memory (
-          id INTEGER PRIMARY KEY AUTOINCREMENT,
-          created_at TEXT NOT NULL,
-          symbol TEXT NOT NULL,
-          timeframe TEXT NOT NULL,
-          signal TEXT NOT NULL,
-          confidence REAL NOT NULL,
-          agreement REAL NOT NULL,
-          blocked INTEGER NOT NULL,
-          block_reason TEXT,
-          price REAL NOT NULL,
-          change24h REAL NOT NULL,
-          spread_bps REAL NOT NULL,
-          volatility_pct REAL NOT NULL,
-          imbalance REAL NOT NULL,
-          summary TEXT NOT NULL
-        )
-      `),
-      );
-      await db.run(
-        sql.raw(`
-        CREATE INDEX IF NOT EXISTS idx_swarm_memory_symbol_tf_created
-        ON swarm_memory(symbol, timeframe, created_at DESC)
-      `),
-      );
-    })();
-  }
-
-  return globalThis.__swarmMemoryReady;
-}
 
 function clamp(value: number, min = 0, max = 1): number {
   return Math.min(max, Math.max(min, value));
@@ -80,9 +22,7 @@ function spreadBps(ctx: MarketContext): number {
 
 function volatilityPct(ctx: MarketContext): number {
   const last = ctx.candles.at(-1);
-  if (!last || last.close <= 0) {
-    return 0;
-  }
+  if (!last || last.close <= 0) return 0;
   return ((last.high - last.low) / last.close) * 100;
 }
 
@@ -111,12 +51,12 @@ function buildMemorySummaryLine(result: SwarmRunResult): string {
     .join(" | ");
 }
 
-function mapRow(row: RawMemoryRow): MemoryRecord {
+function mapRow(row: typeof swarmMemory.$inferSelect): MemoryRecord {
   return {
     id: row.id,
     createdAt: row.createdAt,
     symbol: row.symbol,
-    timeframe: row.timeframe as MemoryRecord["timeframe"],
+    timeframe: row.timeframe,
     signal: row.signal,
     confidence: row.confidence,
     agreement: row.agreement,
@@ -148,9 +88,14 @@ function computeSimilarity(record: MemoryRecord, ctx: MarketContext): number {
   const spreadSimilarity =
     1 - Math.min(1, Math.abs(record.spreadBps - spreadBps(ctx)) / 40);
   const volatilitySimilarity =
-    1 - Math.min(1, Math.abs(record.volatilityPct - volatilityPct(ctx)) / 4);
+    1 -
+    Math.min(1, Math.abs(record.volatilityPct - volatilityPct(ctx)) / 4);
   const imbalanceSimilarity =
-    1 - Math.min(1, Math.abs(record.imbalance - orderbookImbalance(ctx)) / 1.2);
+    1 -
+    Math.min(
+      1,
+      Math.abs(record.imbalance - orderbookImbalance(ctx)) / 1.2,
+    );
 
   return clamp(
     priceChangeSimilarity * 0.35 +
@@ -161,7 +106,6 @@ function computeSimilarity(record: MemoryRecord, ctx: MarketContext): number {
 }
 
 export async function storeSwarmMemory(result: SwarmRunResult): Promise<void> {
-  await ensureMemoryTable();
   const { marketContext, consensus } = result;
 
   await db.insert(swarmMemory).values({
@@ -187,36 +131,32 @@ export async function getRecentMemories(
   timeframe?: Timeframe,
   limit = 50,
 ): Promise<MemoryRecord[]> {
-  await ensureMemoryTable();
+  const rows =
+    symbol && timeframe
+      ? await db
+          .select()
+          .from(swarmMemory)
+          .where(
+            and(
+              eq(swarmMemory.symbol, symbol),
+              eq(swarmMemory.timeframe, timeframe),
+            ),
+          )
+          .orderBy(desc(swarmMemory.createdAt))
+          .limit(limit)
+      : await db
+          .select()
+          .from(swarmMemory)
+          .orderBy(desc(swarmMemory.createdAt))
+          .limit(limit);
 
-  if (symbol && timeframe) {
-    const rows = (await db
-      .select()
-      .from(swarmMemory)
-      .where(
-        and(
-          eq(swarmMemory.symbol, symbol),
-          eq(swarmMemory.timeframe, timeframe),
-        ),
-      )
-      .orderBy(desc(swarmMemory.createdAt))
-      .limit(limit)) as RawMemoryRow[];
-    return rows.map(mapRow);
-  }
-
-  const rows = (await db
-    .select()
-    .from(swarmMemory)
-    .orderBy(desc(swarmMemory.createdAt))
-    .limit(limit)) as RawMemoryRow[];
   return rows.map(mapRow);
 }
 
 export async function getMemorySummary(
   ctx: MarketContext,
 ): Promise<MemorySummary> {
-  await ensureMemoryTable();
-  const rows = (await db
+  const rows = await db
     .select()
     .from(swarmMemory)
     .where(
@@ -226,7 +166,7 @@ export async function getMemorySummary(
       ),
     )
     .orderBy(desc(swarmMemory.createdAt))
-    .limit(MAX_RECALL_CANDIDATES)) as RawMemoryRow[];
+    .limit(MAX_RECALL_CANDIDATES);
 
   const records = rows.map(mapRow);
   const recalls: MemoryRecall[] = records.map((record) => {

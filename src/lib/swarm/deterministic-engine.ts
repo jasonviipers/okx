@@ -69,7 +69,9 @@ function candleDirectionalBias(features: DecisionFeatureVector): number {
   const bodyDirection = features.return1 >= 0 ? 1 : -1;
 
   return clampSigned(
-    bodyDirection * features.candleBodyRatio * 0.5 + closeBias * 0.3 + wickBias * 0.2,
+    bodyDirection * features.candleBodyRatio * 0.5 +
+      closeBias * 0.3 +
+      wickBias * 0.2,
   );
 }
 
@@ -100,8 +102,10 @@ function breakoutScore(features: DecisionFeatureVector): number {
 }
 
 function meanReversionScore(features: DecisionFeatureVector): number {
-  const pullbackBias =
-    -(features.distanceFromVwap * 0.65 + features.distanceFromMean * 0.35);
+  const pullbackBias = -(
+    features.distanceFromVwap * 0.65 +
+    features.distanceFromMean * 0.35
+  );
 
   return clampSigned(
     (pullbackBias + candleDirectionalBias(features) * 0.2) / 0.012,
@@ -227,11 +231,16 @@ function computeExecutionQualityScore(
         : (features.buySlippageBps + features.sellSlippageBps) / 2;
   const slippageQuality = clamp01(1 - slippageBps / 20);
   const depthQuality = clamp01(
-    features.totalBookDepthUsd / Math.max(features.assumedTradeNotionalUsd * 10, 1),
+    features.totalBookDepthUsd /
+      Math.max(features.assumedTradeNotionalUsd * 10, 1),
   );
 
   return Number(
-    (spreadQuality * 0.45 + slippageQuality * 0.35 + depthQuality * 0.2).toFixed(3),
+    (
+      spreadQuality * 0.45 +
+      slippageQuality * 0.35 +
+      depthQuality * 0.2
+    ).toFixed(3),
   );
 }
 
@@ -241,8 +250,10 @@ function computeRiskPenaltyScore(
 ): number {
   const volatilityPenalty = clamp01(features.realizedVolatilityLong / 0.0125);
   const stretchPenalty = clamp01(
-    Math.max(Math.abs(features.distanceFromVwap), Math.abs(features.distanceFromMean)) /
-      0.015,
+    Math.max(
+      Math.abs(features.distanceFromVwap),
+      Math.abs(features.distanceFromMean),
+    ) / 0.015,
   );
   const indecisionPenalty = clamp01(
     features.candleBodyRatio < 0.12
@@ -253,7 +264,9 @@ function computeRiskPenaltyScore(
     directionalSignal === "BUY"
       ? clamp01((features.upperWickRatio - features.lowerWickRatio + 0.2) / 0.8)
       : directionalSignal === "SELL"
-        ? clamp01((features.lowerWickRatio - features.upperWickRatio + 0.2) / 0.8)
+        ? clamp01(
+            (features.lowerWickRatio - features.upperWickRatio + 0.2) / 0.8,
+          )
         : clamp01(Math.abs(features.upperWickRatio - features.lowerWickRatio));
 
   return Number(
@@ -282,7 +295,11 @@ function expectedMoveBps(
         : selectedEngine === "mean_reversion"
           ? 0.8
           : 0.7;
-  const volumeMultiplier = clamp(0.85 + features.volumeExpansion * 0.15, 0.75, 1.3);
+  const volumeMultiplier = clamp(
+    0.85 + features.volumeExpansion * 0.15,
+    0.75,
+    1.3,
+  );
 
   return baseMoveBps * engineMultiplier * volumeMultiplier;
 }
@@ -378,10 +395,11 @@ function buildRejectionReasons(input: {
     process.env.MIN_DIRECTIONAL_EDGE_SCORE,
     DEFAULT_MIN_DIRECTIONAL_EDGE,
   );
-  const minConfidence = parseNumber(
-    process.env.MIN_CONFIDENCE_THRESHOLD,
-    DEFAULT_MIN_CONFIDENCE * 100,
-  ) / 100;
+  const minConfidence =
+    parseNumber(
+      process.env.MIN_CONFIDENCE_THRESHOLD,
+      DEFAULT_MIN_CONFIDENCE * 100,
+    ) / 100;
   const minMarketQuality = parseNumber(
     process.env.MIN_MARKET_QUALITY_SCORE,
     DEFAULT_MIN_MARKET_QUALITY,
@@ -410,7 +428,10 @@ function buildRejectionReasons(input: {
   }
 
   if (input.directionalSignal === "BUY") {
-    if (input.features.maxExecutableBuyUsd < input.features.minimumTradeNotionalUsd) {
+    if (
+      input.features.maxExecutableBuyUsd <
+      input.features.minimumTradeNotionalUsd
+    ) {
       rejections.push({
         layer: "execution",
         code: "buy_budget_or_balance_too_small",
@@ -418,7 +439,9 @@ function buildRejectionReasons(input: {
         detail:
           "Quote buying power does not clear the minimum trade notional for this symbol.",
         metrics: {
-          maxExecutableBuyUsd: Number(input.features.maxExecutableBuyUsd.toFixed(4)),
+          maxExecutableBuyUsd: Number(
+            input.features.maxExecutableBuyUsd.toFixed(4),
+          ),
           minimumTradeNotionalUsd: Number(
             input.features.minimumTradeNotionalUsd.toFixed(4),
           ),
@@ -428,7 +451,10 @@ function buildRejectionReasons(input: {
   }
 
   if (input.directionalSignal === "SELL") {
-    if (input.features.maxExecutableSellUsd < input.features.minimumTradeNotionalUsd) {
+    if (
+      input.features.maxExecutableSellUsd <
+      input.features.minimumTradeNotionalUsd
+    ) {
       const flatSpotAccount = input.features.availableBaseUsd <= 0;
       rejections.push({
         layer: "execution",
@@ -442,7 +468,9 @@ function buildRejectionReasons(input: {
           ? "The engine detected a bearish setup, but there is no base inventory available and spot mode cannot open a synthetic short."
           : "Base inventory does not clear the minimum trade notional for this symbol.",
         metrics: {
-          maxExecutableSellUsd: Number(input.features.maxExecutableSellUsd.toFixed(4)),
+          maxExecutableSellUsd: Number(
+            input.features.maxExecutableSellUsd.toFixed(4),
+          ),
           availableBaseUsd: Number(input.features.availableBaseUsd.toFixed(4)),
           minimumTradeNotionalUsd: Number(
             input.features.minimumTradeNotionalUsd.toFixed(4),
@@ -452,7 +480,10 @@ function buildRejectionReasons(input: {
     }
   }
 
-  if (input.directionalSignal !== "HOLD" && input.directionalEdgeAbs < minDirectionalEdge) {
+  if (
+    input.directionalSignal !== "HOLD" &&
+    input.directionalEdgeAbs < minDirectionalEdge
+  ) {
     rejections.push({
       layer: "expected_value",
       code: "directional_edge_below_threshold",
@@ -582,7 +613,11 @@ export function buildDeterministicConsensus(input: {
     ).toFixed(3),
   );
   const adjustedDirectionalEdge = Number(
-    (rawDirectionalEdge * executionQualityScore * (1 - riskPenaltyScore)).toFixed(3),
+    (
+      rawDirectionalEdge *
+      executionQualityScore *
+      (1 - riskPenaltyScore)
+    ).toFixed(3),
   );
   const directionalEdgeAbs = Math.abs(adjustedDirectionalEdge);
   const expectedGrossEdgeBps =
@@ -606,7 +641,10 @@ export function buildDeterministicConsensus(input: {
         regime.confidence * 0.12,
     ).toFixed(3),
   );
-  const directionalAgreement = computeAgreement(directionalSignal, engineReports);
+  const directionalAgreement = computeAgreement(
+    directionalSignal,
+    engineReports,
+  );
   const riskFlags = buildRiskFlags(
     features,
     regime,
@@ -660,8 +698,7 @@ export function buildDeterministicConsensus(input: {
     netEdgeBps: expectedNetEdgeBps,
     rewardRiskRatio: Number(
       (
-        expectedGrossEdgeBps /
-        Math.max(expectedFeeBps + slippageBps, 0.0001)
+        expectedGrossEdgeBps / Math.max(expectedFeeBps + slippageBps, 0.0001)
       ).toFixed(2),
     ),
     tradeAllowed: rejectionReasons.length === 0 && directionalSignal !== "HOLD",
@@ -674,9 +711,7 @@ export function buildDeterministicConsensus(input: {
   const harness: DecisionHarnessReport = {
     generatedAt: new Date().toISOString(),
     marketQualityScore,
-    liquidityScore: Number(
-      clamp01(1 - features.spreadBps / 18).toFixed(3),
-    ),
+    liquidityScore: Number(clamp01(1 - features.spreadBps / 18).toFixed(3)),
     volatilityPenalty: Number(riskPenaltyScore.toFixed(3)),
     memoryAlignmentScore: 0,
     confidenceAdjustment: Number(

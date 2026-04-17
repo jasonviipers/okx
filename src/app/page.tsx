@@ -1,6 +1,12 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useOptimistic,
+  useState,
+  useTransition,
+} from "react";
 import { WatchlistPanel } from "@/components/terminal/market-panels";
 import {
   MemoryRecentPanel,
@@ -104,6 +110,10 @@ export default function TerminalDashboard() {
   const [activeTab, setActiveTab] = useState<TabId>("consensus");
   const [activeRightTab, setActiveRightTab] = useState<TabId>("stream");
 
+  // useTransition: symbol/timeframe switches are low-priority transitions
+  // so the UI stays responsive during data refetches
+  const [_isSwitchPending, startTransition] = useTransition();
+
   const systemStatus = useSystemStatus();
   const autonomy = useAutonomyStatus();
   const watchlistSymbols =
@@ -119,7 +129,15 @@ export default function TerminalDashboard() {
   const tradeHistory = useTradeHistory(25);
   const memoryRecent = useMemoryRecent(selectedSymbol, selectedTimeframe, 25);
   const memorySummary = useMemorySummary(selectedSymbol, selectedTimeframe);
+
+  // useActionState + useOptimistic: autonomy toggle with optimistic UI
   const autonomyControl = useAutonomyControl();
+
+  // useOptimistic: immediately reflect autonomy toggle in the UI
+  // before the server round-trip confirms the change
+  const [optimisticAutonomyEnabled, setOptimisticAutonomy] = useOptimistic(
+    autonomy.data?.enabled ?? false,
+  );
 
   useEffect(() => {
     if (
@@ -128,13 +146,17 @@ export default function TerminalDashboard() {
     ) {
       const nextSymbol = watchlistSymbols[0];
       if (nextSymbol) {
-        setSelectedSymbol(nextSymbol);
+        startTransition(() => {
+          setSelectedSymbol(nextSymbol);
+        });
       }
     }
   }, [selectedSymbol, watchlistSymbols]);
 
   const handleToggleAutonomy = useCallback(async () => {
-    if (autonomy.data?.enabled) {
+    const isCurrentlyEnabled = autonomy.data?.enabled ?? false;
+    setOptimisticAutonomy(!isCurrentlyEnabled);
+    if (isCurrentlyEnabled) {
       await autonomyControl.stop();
     } else {
       await autonomyControl.start({
@@ -143,7 +165,13 @@ export default function TerminalDashboard() {
       });
     }
     autonomy.refresh();
-  }, [autonomy, autonomyControl, selectedSymbol, selectedTimeframe]);
+  }, [
+    autonomy,
+    autonomyControl,
+    selectedSymbol,
+    selectedTimeframe,
+    setOptimisticAutonomy,
+  ]);
 
   const LEFT_TABS = [
     { id: "trades" as TabId, label: "TRADES" },
@@ -152,8 +180,18 @@ export default function TerminalDashboard() {
   ] as const;
 
   const TIMEFRAMES = [
-    "1m", "3m", "5m", "15m", "30m",
-    "1H", "2H", "4H", "6H", "12H", "1D", "1W",
+    "1m",
+    "3m",
+    "5m",
+    "15m",
+    "30m",
+    "1H",
+    "2H",
+    "4H",
+    "6H",
+    "12H",
+    "1D",
+    "1W",
   ];
 
   const symbolItems = watchlist.data?.items ?? [];
@@ -176,11 +214,12 @@ export default function TerminalDashboard() {
               <button
                 key={sym}
                 type="button"
-                onClick={() => setSelectedSymbol(sym)}
-                className={`flex items-center gap-1 px-1.5 py-0.5 terminal-text-xs whitespace-nowrap transition-colors ${selectedSymbol === sym
+                onClick={() => startTransition(() => setSelectedSymbol(sym))}
+                className={`flex items-center gap-1 px-1.5 py-0.5 terminal-text-xs whitespace-nowrap transition-colors ${
+                  selectedSymbol === sym
                     ? "bg-primary/20 text-primary border border-primary/50"
                     : "text-muted-foreground hover:text-foreground"
-                  }`}
+                }`}
               >
                 <span className={selectedSymbol === sym ? "font-bold" : ""}>
                   {sym.split("-")[0] ?? sym}
@@ -207,11 +246,12 @@ export default function TerminalDashboard() {
             <button
               key={tf}
               type="button"
-              onClick={() => setSelectedTimeframe(tf)}
-              className={`px-1 py-0.5 terminal-text-xs ${selectedTimeframe === tf
+              onClick={() => startTransition(() => setSelectedTimeframe(tf))}
+              className={`px-1 py-0.5 terminal-text-xs ${
+                selectedTimeframe === tf
                   ? "text-primary font-bold"
                   : "text-muted-foreground hover:text-foreground"
-                }`}
+              }`}
             >
               {tf}
             </button>
@@ -274,8 +314,8 @@ export default function TerminalDashboard() {
           </CardHeader>
           <CardContent className="flex-1 overflow-y-auto">
             {swarmStream.error &&
-              !swarmStream.connected &&
-              swarmStream.events.length === 0 ? (
+            !swarmStream.connected &&
+            swarmStream.events.length === 0 ? (
               <ErrorState label="STREAM" error={swarmStream.error} />
             ) : (
               <StreamLog events={swarmStream.events} />
@@ -324,10 +364,11 @@ export default function TerminalDashboard() {
                   key={tab.id}
                   type="button"
                   onClick={() => setActiveTab(tab.id)}
-                  className={`px-1.5 py-0.5 terminal-text-xs ${activeTab === tab.id
+                  className={`px-1.5 py-0.5 terminal-text-xs ${
+                    activeTab === tab.id
                       ? "text-primary font-bold bg-primary/10"
                       : "text-muted-foreground hover:text-foreground"
-                    }`}
+                  }`}
                 >
                   {tab.label}
                 </button>
@@ -408,20 +449,22 @@ export default function TerminalDashboard() {
               <button
                 type="button"
                 onClick={() => setActiveRightTab("systems")}
-                className={`px-1.5 py-0.5 terminal-text-xs ${activeRightTab === "systems"
+                className={`px-1.5 py-0.5 terminal-text-xs ${
+                  activeRightTab === "systems"
                     ? "text-primary font-bold bg-primary/10"
                     : "text-muted-foreground hover:text-foreground"
-                  }`}
+                }`}
               >
                 SYS
               </button>
               <button
                 type="button"
                 onClick={() => setActiveRightTab("watchlist")}
-                className={`px-1.5 py-0.5 terminal-text-xs ${activeRightTab === "watchlist"
+                className={`px-1.5 py-0.5 terminal-text-xs ${
+                  activeRightTab === "watchlist"
                     ? "text-primary font-bold bg-primary/10"
                     : "text-muted-foreground hover:text-foreground"
-                  }`}
+                }`}
               >
                 WATCH
               </button>
@@ -430,12 +473,14 @@ export default function TerminalDashboard() {
               <div className="flex items-center gap-1">
                 {activeRightTab === "systems" && (
                   <Button
-                    variant={autonomy.data?.enabled ? "destructive" : "default"}
+                    variant={
+                      optimisticAutonomyEnabled ? "destructive" : "default"
+                    }
                     size="xs"
                     onClick={handleToggleAutonomy}
                     disabled={autonomyControl.loading}
                   >
-                    {autonomy.data?.enabled ? "■ STOP" : "▶ START"}
+                    {optimisticAutonomyEnabled ? "■ STOP" : "▶ START"}
                   </Button>
                 )}
                 <RefreshButton

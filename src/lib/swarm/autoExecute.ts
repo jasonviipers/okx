@@ -366,7 +366,8 @@ function mapExecutionGuardReason(
           layer: "execution",
           code: "live_budget_exhausted",
           summary: "Live trading budget exhausted.",
-          detail: "The execution guard rejected the trade due to budget limits.",
+          detail:
+            "The execution guard rejected the trade due to budget limits.",
           metrics: response,
         },
       ];
@@ -504,8 +505,7 @@ export async function autoExecuteConsensus(
           layer: "execution",
           code: "circuit_breaker_open",
           summary: "Circuit breaker is open.",
-          detail:
-            "Execution errors exceeded the configured tolerance window.",
+          detail: "Execution errors exceeded the configured tolerance window.",
         },
       ],
     });
@@ -562,9 +562,7 @@ export async function autoExecuteConsensus(
           detail: `Confidence ${confidence.toFixed(2)} is below ${minConfidenceThreshold.toFixed(2)}.`,
           metrics: {
             confidence: Number(confidence.toFixed(4)),
-            minConfidenceThreshold: Number(
-              minConfidenceThreshold.toFixed(4),
-            ),
+            minConfidenceThreshold: Number(minConfidenceThreshold.toFixed(4)),
           },
         },
       ]),
