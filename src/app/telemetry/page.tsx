@@ -520,7 +520,7 @@ export default function TelemetryPage() {
             <CardHeader>
               <CardTitle>Recent Spans</CardTitle>
             </CardHeader>
-            <CardContent className="overflow-auto">
+            <CardContent className="max-h-[420px] overflow-y-auto">
               {spans.length === 0 ? (
                 <div className="px-3 py-4 text-[0.6875rem] text-terminal-dim">
                   No spans captured yet.
@@ -560,7 +560,7 @@ export default function TelemetryPage() {
             <CardHeader>
               <CardTitle>Recent Logs</CardTitle>
             </CardHeader>
-            <CardContent className="overflow-auto">
+            <CardContent className="max-h-[420px] overflow-y-auto">
               {logs.length === 0 ? (
                 <div className="px-3 py-4 text-[0.6875rem] text-terminal-dim">
                   No telemetry logs captured yet.
