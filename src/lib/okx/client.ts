@@ -1,7 +1,14 @@
 import "server-only";
 
 import crypto from "node:crypto";
+import { performance } from "node:perf_hooks";
 import { isOkxDemoMode, OKX_CONFIG } from "@/lib/configs/okx";
+import {
+  error,
+  incrementCounter,
+  observeHistogram,
+  withTelemetrySpan,
+} from "@/lib/telemetry/server";
 
 interface OkxEnvelope<T> {
   code?: string;
@@ -105,69 +112,149 @@ async function requestOkx<T>(
   init: RequestInit = {},
   authenticated = false,
 ): Promise<T[]> {
-  const url = `${OKX_CONFIG.baseUrl}${path}`;
-  const headers = new Headers(init.headers);
-  headers.set("Content-Type", "application/json");
-
-  if (authenticated) {
-    const timestamp = new Date().toISOString();
-    const body = typeof init.body === "string" ? init.body : "";
-    headers.set("OK-ACCESS-KEY", OKX_CONFIG.apiKey);
-    headers.set("OK-ACCESS-PASSPHRASE", OKX_CONFIG.passphrase);
-    headers.set("OK-ACCESS-TIMESTAMP", timestamp);
-    headers.set(
-      "OK-ACCESS-SIGN",
-      createSignature(
-        timestamp,
-        (init.method ?? "GET").toUpperCase(),
+  return withTelemetrySpan(
+    {
+      name: "okx.request",
+      source: "okx.client",
+      attributes: {
         path,
-        body,
-      ),
-    );
-  }
+        method: (init.method ?? "GET").toUpperCase(),
+        authenticated,
+      },
+    },
+    async (span) => {
+      const startedAt = performance.now();
+      const method = (init.method ?? "GET").toUpperCase();
+      const url = `${OKX_CONFIG.baseUrl}${path}`;
+      const headers = new Headers(init.headers);
+      headers.set("Content-Type", "application/json");
 
-  if (isOkxDemoMode()) {
-    headers.set("x-simulated-trading", "1");
-  }
+      if (authenticated) {
+        const timestamp = new Date().toISOString();
+        const body = typeof init.body === "string" ? init.body : "";
+        headers.set("OK-ACCESS-KEY", OKX_CONFIG.apiKey);
+        headers.set("OK-ACCESS-PASSPHRASE", OKX_CONFIG.passphrase);
+        headers.set("OK-ACCESS-TIMESTAMP", timestamp);
+        headers.set(
+          "OK-ACCESS-SIGN",
+          createSignature(timestamp, method, path, body),
+        );
+      }
 
-  const response = await fetch(url, {
-    ...init,
-    headers,
-    cache: "no-store",
-  });
+      if (isOkxDemoMode()) {
+        headers.set("x-simulated-trading", "1");
+      }
 
-  if (!response.ok) {
-    const responseText = await response.text();
-    const parsed = safeParseJson(responseText);
-    const errorFields = pickOkxErrorFields(parsed);
-    throw new OkxRequestError(
-      errorFields.message
-        ? `OKX request failed with status ${response.status}: ${errorFields.message}`
-        : `OKX request failed with status ${response.status}`,
-      response.status,
-      responseText,
-      errorFields.code,
-      errorFields.subCode,
-    );
-  }
+      try {
+        const response = await fetch(url, {
+          ...init,
+          headers,
+          cache: "no-store",
+        });
+        const durationMs = Number((performance.now() - startedAt).toFixed(3));
+        span.setAttribute("statusCode", response.status);
+        observeHistogram(
+          "okx_request_duration_ms",
+          "Duration of OKX HTTP requests in milliseconds.",
+          durationMs,
+          {
+            labels: {
+              method,
+              authenticated,
+              status: response.status,
+            },
+          },
+        );
 
-  const payload = (await response.json()) as OkxEnvelope<T>;
-  const errorFields = pickOkxErrorFields(payload as OkxErrorLike);
-  const topLevelCode = payload.code ?? payload.sCode;
-  const isSuccess = !topLevelCode || topLevelCode === "0";
+        if (!response.ok) {
+          const responseText = await response.text();
+          const parsed = safeParseJson(responseText);
+          const errorFields = pickOkxErrorFields(parsed);
+          incrementCounter(
+            "okx_requests_total",
+            "Total OKX HTTP requests.",
+            1,
+            {
+              method,
+              authenticated,
+              status: response.status,
+              ok: false,
+            },
+          );
+          error("okx.client", "OKX request failed", {
+            path,
+            method,
+            status: response.status,
+            code: errorFields.code,
+            subCode: errorFields.subCode,
+            message: errorFields.message,
+          });
+          throw new OkxRequestError(
+            errorFields.message
+              ? `OKX request failed with status ${response.status}: ${errorFields.message}`
+              : `OKX request failed with status ${response.status}`,
+            response.status,
+            responseText,
+            errorFields.code,
+            errorFields.subCode,
+          );
+        }
 
-  if (!isSuccess) {
-    throw new OkxRequestError(
-      errorFields.message ||
-        `OKX returned error code ${topLevelCode ?? "unknown"}`,
-      response.status,
-      JSON.stringify(payload),
-      errorFields.code,
-      errorFields.subCode,
-    );
-  }
+        const payload = (await response.json()) as OkxEnvelope<T>;
+        const errorFields = pickOkxErrorFields(payload as OkxErrorLike);
+        const topLevelCode = payload.code ?? payload.sCode;
+        const isSuccess = !topLevelCode || topLevelCode === "0";
 
-  return payload.data;
+        if (!isSuccess) {
+          incrementCounter(
+            "okx_requests_total",
+            "Total OKX HTTP requests.",
+            1,
+            {
+              method,
+              authenticated,
+              status: response.status,
+              ok: false,
+            },
+          );
+          error("okx.client", "OKX request returned business error", {
+            path,
+            method,
+            status: response.status,
+            code: errorFields.code,
+            subCode: errorFields.subCode,
+            topLevelCode,
+            message: errorFields.message,
+          });
+          throw new OkxRequestError(
+            errorFields.message ||
+              `OKX returned error code ${topLevelCode ?? "unknown"}`,
+            response.status,
+            JSON.stringify(payload),
+            errorFields.code,
+            errorFields.subCode,
+          );
+        }
+
+        incrementCounter("okx_requests_total", "Total OKX HTTP requests.", 1, {
+          method,
+          authenticated,
+          status: response.status,
+          ok: true,
+        });
+        span.setAttribute("resultCount", payload.data.length);
+        return payload.data;
+      } catch (caughtError) {
+        span.setAttribute(
+          "errorMessage",
+          caughtError instanceof Error
+            ? caughtError.message
+            : String(caughtError),
+        );
+        throw caughtError;
+      }
+    },
+  );
 }
 
 export async function okxPublicGet<T>(

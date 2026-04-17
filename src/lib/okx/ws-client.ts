@@ -1,6 +1,14 @@
 import "server-only";
 
 import { OKX_CONFIG } from "@/lib/configs/okx";
+import {
+  debug,
+  error,
+  incrementCounter,
+  info,
+  setGauge,
+  warn,
+} from "@/lib/telemetry/server";
 
 type OkxWsChannel = "tickers" | "books5";
 
@@ -33,9 +41,52 @@ class OkxPublicWsClient {
   private subscriptions = new Set<SubscriptionKey>();
   private reconnectTimer: NodeJS.Timeout | null = null;
 
+  private syncConnectionGauges() {
+    setGauge(
+      "okx_ws_connected",
+      "Whether the OKX public websocket is currently connected.",
+      this.connectionState === "connected" ? 1 : 0,
+    );
+    setGauge(
+      "okx_ws_subscriptions",
+      "Number of active OKX websocket subscriptions.",
+      this.subscriptions.size,
+    );
+  }
+
+  private setConnectionState(
+    nextState: "idle" | "connecting" | "connected" | "degraded" | "error",
+    message?: string,
+  ) {
+    this.connectionState = nextState;
+    this.syncConnectionGauges();
+
+    if (message) {
+      const attributes = {
+        state: nextState,
+        subscriptions: this.subscriptions.size,
+        message,
+      };
+
+      if (nextState === "connected") {
+        info("okx.ws", message, attributes);
+      } else if (nextState === "error") {
+        error("okx.ws", message, attributes);
+      } else {
+        warn("okx.ws", message, attributes);
+      }
+    }
+  }
+
   subscribe(channel: OkxWsChannel, symbol: string) {
     const key: SubscriptionKey = `${channel}:${symbol}`;
     this.subscriptions.add(key);
+    this.syncConnectionGauges();
+    debug("okx.ws", "Registered websocket subscription", {
+      channel,
+      symbol,
+      subscriptions: this.subscriptions.size,
+    });
     this.ensureConnected();
 
     if (this.connectionState === "connected") {
@@ -62,7 +113,10 @@ class OkxPublicWsClient {
 
   private ensureConnected() {
     if (typeof WebSocket === "undefined") {
-      this.connectionState = "error";
+      this.setConnectionState(
+        "error",
+        "WebSocket runtime is unavailable in this environment.",
+      );
       this.emit({
         event: "error",
         message: "WebSocket runtime is unavailable in this environment.",
@@ -78,11 +132,15 @@ class OkxPublicWsClient {
       return;
     }
 
-    this.connectionState = "connecting";
+    this.setConnectionState("connecting", "Connecting to OKX websocket.");
     this.socket = new WebSocket(OKX_CONFIG.wsUrl);
 
     this.socket.addEventListener("open", () => {
-      this.connectionState = "connected";
+      this.setConnectionState("connected", "Connected to OKX websocket.");
+      incrementCounter(
+        "okx_ws_connections_total",
+        "Total OKX websocket connection openings.",
+      );
       this.emit({ event: "connected" });
       this.sendSubscription(
         "subscribe",
@@ -105,12 +163,23 @@ class OkxPublicWsClient {
     });
 
     this.socket.addEventListener("close", () => {
-      this.connectionState = "degraded";
+      this.setConnectionState(
+        "degraded",
+        "OKX websocket closed; waiting to reconnect.",
+      );
+      incrementCounter(
+        "okx_ws_disconnects_total",
+        "Total OKX websocket disconnects.",
+      );
       this.scheduleReconnect();
     });
 
     this.socket.addEventListener("error", () => {
-      this.connectionState = "error";
+      this.setConnectionState("error", "OKX websocket connection error.");
+      incrementCounter(
+        "okx_ws_errors_total",
+        "Total OKX websocket connection errors.",
+      );
       this.emit({
         event: "error",
         message: "OKX websocket connection error.",
@@ -136,7 +205,14 @@ class OkxPublicWsClient {
 
       if ("event" in payload && payload.event) {
         if (payload.event === "error") {
-          this.connectionState = "error";
+          this.setConnectionState(
+            "error",
+            payload.msg ?? "Unknown OKX websocket error",
+          );
+          incrementCounter(
+            "okx_ws_errors_total",
+            "Total OKX websocket connection errors.",
+          );
           this.emit({
             event: "error",
             message: payload.msg ?? "Unknown OKX websocket error",
@@ -164,7 +240,14 @@ class OkxPublicWsClient {
         data,
       });
     } catch {
-      this.connectionState = "error";
+      this.setConnectionState(
+        "error",
+        "Failed to parse OKX websocket payload.",
+      );
+      incrementCounter(
+        "okx_ws_parse_errors_total",
+        "Total OKX websocket payload parse errors.",
+      );
       this.emit({
         event: "error",
         message: "Failed to parse OKX websocket payload.",
@@ -177,6 +260,10 @@ class OkxPublicWsClient {
       return;
     }
 
+    warn("okx.ws", "Scheduling websocket reconnect.", {
+      delayMs: RECONNECT_DELAY_MS,
+      subscriptions: this.subscriptions.size,
+    });
     this.reconnectTimer = setTimeout(() => {
       this.reconnectTimer = null;
       this.ensureConnected();
@@ -195,6 +282,10 @@ class OkxPublicWsClient {
       return;
     }
 
+    debug("okx.ws", "Sending websocket subscription payload", {
+      operation: op,
+      args,
+    });
     this.socket.send(
       JSON.stringify({
         op,

@@ -1,5 +1,6 @@
 import "server-only";
 
+import { performance } from "node:perf_hooks";
 import { getOkxAccountModeLabel } from "@/lib/configs/okx";
 import { getMarketSnapshot } from "@/lib/market-data/service";
 import { getAccountOverview } from "@/lib/okx/account";
@@ -12,6 +13,14 @@ import {
   updateExecutionIntent,
 } from "@/lib/persistence/execution-intents";
 import { getHistory } from "@/lib/persistence/history";
+import {
+  incrementCounter,
+  observeHistogram,
+  error as telemetryError,
+  info as telemetryInfo,
+  warn as telemetryWarn,
+  withTelemetrySpan,
+} from "@/lib/telemetry/server";
 import type {
   ConsensusResult,
   ExecutionResult,
@@ -303,9 +312,21 @@ function recordExecutionError(timestamp: number) {
     (value) => timestamp - value <= CIRCUIT_BREAKER_WINDOW_MS,
   );
   executionErrorTimestamps.push(timestamp);
+  incrementCounter(
+    "auto_execution_errors_total",
+    "Total autonomous execution errors.",
+  );
 
   if (executionErrorTimestamps.length >= CIRCUIT_BREAKER_ERROR_LIMIT) {
     CIRCUIT_OPEN = true;
+    telemetryError(
+      "swarm.auto_execute",
+      "Circuit breaker opened after repeated execution errors",
+      {
+        errorsInWindow: executionErrorTimestamps.length,
+        windowMs: CIRCUIT_BREAKER_WINDOW_MS,
+      },
+    );
     console.error(
       `[${nowIso()}] [AutoExec] CRITICAL: circuit breaker opened after ${executionErrorTimestamps.length} execution errors within 60 seconds`,
     );
@@ -313,6 +334,34 @@ function recordExecutionError(timestamp: number) {
 }
 
 function logResult(result: ExecutionResult) {
+  const payload = {
+    symbol: result.symbol,
+    decision: result.decision,
+    size: result.size,
+    status: result.status,
+    reason: result.reason,
+    error: result.error,
+    response: result.response,
+    order: result.order,
+    rejectionReasons: result.rejectionReasons,
+  };
+
+  if (result.status === "success") {
+    telemetryInfo(
+      "swarm.auto_execute",
+      "Autonomous execution completed",
+      payload,
+    );
+  } else if (result.status === "hold") {
+    telemetryWarn("swarm.auto_execute", "Autonomous execution held", payload);
+  } else {
+    telemetryError(
+      "swarm.auto_execute",
+      "Autonomous execution failed",
+      payload,
+    );
+  }
+
   console.log(
     `[${result.timestamp}] [AutoExec] symbol=${result.symbol} decision=${result.decision} size=${result.size} status=${result.status} response=${JSON.stringify(result.response ?? result.order ?? result.reason ?? result.error ?? null)}`,
   );
@@ -419,455 +468,552 @@ export async function autoExecuteConsensus(
   consensus: ConsensusResult,
   baseUrl: string,
 ): Promise<ExecutionResult> {
-  const timestamp = nowIso();
-  const decision = normalizeDecision(consensus);
-  const confidence = confidencePercent(consensus);
-  const maxPositionUsd = parseNumber(
-    process.env.MAX_POSITION_USD,
-    DEFAULT_MAX_POSITION_USD,
-  );
-  const liveTradingBudgetUsd = parseNumber(
-    process.env.LIVE_TRADING_BUDGET_USD,
-    DEFAULT_LIVE_TRADING_BUDGET_USD,
-  );
-  const minConfidenceThreshold = parseNumber(
-    process.env.MIN_CONFIDENCE_THRESHOLD,
-    DEFAULT_MIN_CONFIDENCE_THRESHOLD,
-  );
-  const accountMode = getOkxAccountModeLabel();
-  const cappedMaxPositionUsd =
-    accountMode === "live" && liveTradingBudgetUsd > 0
-      ? Math.min(maxPositionUsd, liveTradingBudgetUsd)
-      : maxPositionUsd;
-  const targetNotionalUsd = deriveSize(confidence, cappedMaxPositionUsd);
-  const consensusKey = getConsensusKey(consensus, decision);
-  const executionIntent = await createExecutionIntent(
-    consensus,
-    targetNotionalUsd,
-  );
-
-  const priorResult = executionResults.get(consensusKey);
-  if (priorResult) {
-    console.log(
-      `[${timestamp}] [AutoExec] duplicate consensus detected for ${consensus.symbol} - reusing prior execution result`,
-    );
-    await finalizeExecutionIntent(executionIntent.id, priorResult);
-    return priorResult;
-  }
-
-  if (!parseBoolean(process.env.AUTO_EXECUTE_ENABLED, true)) {
-    const result = buildHoldResult({
-      timestamp,
-      symbol: consensus.symbol,
-      decision,
-      size: targetNotionalUsd,
-      reason: "auto execution disabled",
-      response: { autoExecuteEnabled: false },
-      rejectionReasons: [
-        {
-          layer: "execution",
-          code: "auto_execute_disabled",
-          summary: "Auto execution is disabled.",
-          detail:
-            "AUTO_EXECUTE_ENABLED is false, so the decision was not routed.",
-        },
-      ],
-    });
-    logResult(result);
-    await finalizeExecutionIntent(executionIntent.id, result);
-    executionResults.set(consensusKey, result);
-    return result;
-  }
-
-  if (CIRCUIT_OPEN) {
-    const result = buildErrorResult({
-      timestamp,
-      symbol: consensus.symbol,
-      decision,
-      size: targetNotionalUsd,
-      error: "circuit breaker open",
-      response: { circuitOpen: true },
-      circuitOpen: true,
-      rejectionReasons: [
-        {
-          layer: "execution",
-          code: "circuit_breaker_open",
-          summary: "Circuit breaker is open.",
-          detail: "Execution errors exceeded the configured tolerance window.",
-        },
-      ],
-    });
-    logResult(result);
-    await finalizeExecutionIntent(executionIntent.id, result);
-    return result;
-  }
-
-  if (!consensus.executionEligible || decision === "HOLD") {
-    const result = buildHoldResult({
-      timestamp,
-      symbol: consensus.symbol,
-      decision,
-      size: 0,
-      reason: "consensus not execution eligible",
-      response: {
-        executionEligible: consensus.executionEligible,
+  return withTelemetrySpan(
+    {
+      name: "execution.auto_execute",
+      source: "swarm.auto_execute",
+      attributes: {
+        symbol: consensus.symbol,
+        timeframe: consensus.timeframe,
+        decision: consensus.decision ?? consensus.signal,
       },
-      rejectionReasons:
-        consensus.rejectionReasons.length > 0
-          ? consensus.rejectionReasons
-          : [
-              {
-                layer: "execution",
-                code: "directional_hold",
-                summary: "The decision engine returned HOLD.",
-                detail:
-                  "No executable directional edge was available for this setup.",
-              },
-            ],
-    });
-    logResult(result);
-    await finalizeExecutionIntent(executionIntent.id, result);
-    executionResults.set(consensusKey, result);
-    return result;
-  }
+    },
+    async (span) => {
+      const startedAt = performance.now();
+      const timestamp = nowIso();
+      const decision = normalizeDecision(consensus);
+      const confidence = confidencePercent(consensus);
+      const maxPositionUsd = parseNumber(
+        process.env.MAX_POSITION_USD,
+        DEFAULT_MAX_POSITION_USD,
+      );
+      const liveTradingBudgetUsd = parseNumber(
+        process.env.LIVE_TRADING_BUDGET_USD,
+        DEFAULT_LIVE_TRADING_BUDGET_USD,
+      );
+      const minConfidenceThreshold = parseNumber(
+        process.env.MIN_CONFIDENCE_THRESHOLD,
+        DEFAULT_MIN_CONFIDENCE_THRESHOLD,
+      );
+      const accountMode = getOkxAccountModeLabel();
+      const cappedMaxPositionUsd =
+        accountMode === "live" && liveTradingBudgetUsd > 0
+          ? Math.min(maxPositionUsd, liveTradingBudgetUsd)
+          : maxPositionUsd;
+      const targetNotionalUsd = deriveSize(confidence, cappedMaxPositionUsd);
+      const consensusKey = getConsensusKey(consensus, decision);
+      const executionIntent = await createExecutionIntent(
+        consensus,
+        targetNotionalUsd,
+      );
 
-  if (confidence < minConfidenceThreshold) {
-    const result = buildHoldResult({
-      timestamp,
-      symbol: consensus.symbol,
-      decision,
-      size: targetNotionalUsd,
-      reason: `confidence ${confidence.toFixed(2)} below threshold ${minConfidenceThreshold.toFixed(2)}`,
-      response: {
+      incrementCounter(
+        "auto_execution_attempts_total",
+        "Total autonomous execution attempts.",
+        1,
+        {
+          symbol: consensus.symbol,
+          decision,
+          accountMode,
+        },
+      );
+      span.addAttributes({
+        accountMode,
         confidence,
         minConfidenceThreshold,
-      },
-      rejectionReasons: mergeRejectionReasons(consensus.rejectionReasons, [
-        {
-          layer: "execution",
-          code: "execution_confidence_below_min",
-          summary: "Execution confidence is below the minimum threshold.",
-          detail: `Confidence ${confidence.toFixed(2)} is below ${minConfidenceThreshold.toFixed(2)}.`,
-          metrics: {
-            confidence: Number(confidence.toFixed(4)),
-            minConfidenceThreshold: Number(minConfidenceThreshold.toFixed(4)),
-          },
-        },
-      ]),
-    });
-    logResult(result);
-    await finalizeExecutionIntent(executionIntent.id, result);
-    executionResults.set(consensusKey, result);
-    return result;
-  }
+        targetNotionalUsd,
+      });
 
-  try {
-    const marketSnapshot = await getMarketSnapshot(
-      consensus.symbol,
-      consensus.timeframe,
-    );
-
-    if (accountMode === "live" && !marketSnapshot.status.realtime) {
-      const result = buildHoldResult({
-        timestamp,
-        symbol: consensus.symbol,
-        decision,
-        size: 0,
-        reason: "live trading requires realtime websocket market data",
-        response: {
-          marketStatus: marketSnapshot.status,
+      const finalizeResult = (
+        result: ExecutionResult,
+        extraLabels?: {
+          duplicate?: boolean;
         },
-        rejectionReasons: mergeRejectionReasons(consensus.rejectionReasons, [
+      ) => {
+        const durationMs = Number((performance.now() - startedAt).toFixed(3));
+        observeHistogram(
+          "auto_execution_duration_ms",
+          "Duration of autonomous execution attempts in milliseconds.",
+          durationMs,
           {
-            layer: "market_data",
-            code: "realtime_market_data_required",
-            summary: "Live trading requires realtime websocket market data.",
-            detail:
-              "The execution path rejected the trade because market data was not realtime.",
-            metrics: {
-              realtime: marketSnapshot.status.realtime,
-              connectionState: marketSnapshot.status.connectionState,
+            labels: {
+              decision,
+              status: result.status,
+              accountMode,
+              duplicate: extraLabels?.duplicate ?? false,
             },
           },
-        ]),
-      });
-      logResult(result);
-      await finalizeExecutionIntent(executionIntent.id, result, {
-        response: {
-          marketStatus: marketSnapshot.status,
-        },
-      });
-      executionResults.set(consensusKey, result);
-      return result;
-    }
-
-    if (!marketSnapshot.status.tradeable) {
-      const result = buildHoldResult({
-        timestamp,
-        symbol: consensus.symbol,
-        decision,
-        size: 0,
-        reason: "market data not tradeable",
-        response: {
-          marketStatus: marketSnapshot.status,
-        },
-        rejectionReasons: mergeRejectionReasons(consensus.rejectionReasons, [
+        );
+        incrementCounter(
+          "auto_execution_results_total",
+          "Final results of autonomous execution attempts.",
+          1,
           {
-            layer: "market_data",
-            code: "market_not_tradeable",
-            summary: "Market data status is not tradeable.",
-            detail:
-              "The execution path rejected the trade because the market snapshot was not eligible for trading.",
-            metrics: {
-              realtime: marketSnapshot.status.realtime,
-              stale: marketSnapshot.status.stale,
-              connectionState: marketSnapshot.status.connectionState,
-            },
+            decision,
+            status: result.status,
+            accountMode,
+            duplicate: extraLabels?.duplicate ?? false,
           },
-        ]),
-      });
-      logResult(result);
-      await finalizeExecutionIntent(executionIntent.id, result, {
-        response: {
-          marketStatus: marketSnapshot.status,
-        },
-      });
-      executionResults.set(consensusKey, result);
-      return result;
-    }
-
-    const riskGuard = await checkExecutionRiskGuards(consensus, decision);
-    if (!riskGuard.allowed) {
-      const result = buildHoldResult({
-        timestamp,
-        symbol: consensus.symbol,
-        decision,
-        size: 0,
-        reason: riskGuard.reason ?? "execution risk guard rejected the trade",
-        response: riskGuard.response,
-        rejectionReasons: mergeRejectionReasons(
-          consensus.rejectionReasons,
-          mapExecutionGuardReason(riskGuard.reason, riskGuard.response),
-        ),
-      });
-      logResult(result);
-      await finalizeExecutionIntent(executionIntent.id, result);
-      executionResults.set(consensusKey, result);
-      return result;
-    }
-
-    const executionPlan = await deriveExecutableSize(
-      decision,
-      consensus.symbol,
-      targetNotionalUsd,
-    );
-    if (executionPlan.size <= 0) {
-      const result = buildHoldResult({
-        timestamp,
-        symbol: consensus.symbol,
-        decision,
-        size: 0,
-        reason: executionPlan.reason ?? "no executable size available",
-        response: executionPlan.response,
-        rejectionReasons: mergeRejectionReasons(
-          consensus.rejectionReasons,
-          mapExecutionGuardReason(executionPlan.reason, executionPlan.response),
-        ),
-      });
-      logResult(result);
-      await finalizeExecutionIntent(executionIntent.id, result);
-      executionResults.set(consensusKey, result);
-      return result;
-    }
-
-    const instrumentRules = await getInstrumentRules(consensus.symbol);
-    const normalizedSize = normalizeOrderSize(
-      executionPlan.size,
-      instrumentRules.lotSize,
-    );
-    if (
-      instrumentRules.state !== "live" ||
-      normalizedSize < instrumentRules.minSize ||
-      normalizedSize <= 0
-    ) {
-      const response = {
-        instrumentRules,
-        requestedSize: executionPlan.size,
-        normalizedSize,
+        );
+        span.addAttributes({
+          status: result.status,
+          resultReason: result.reason,
+          resultError: result.error,
+          duplicate: extraLabels?.duplicate ?? false,
+          resultSize: result.size,
+          circuitOpen: result.circuitOpen ?? false,
+        });
+        logResult(result);
+        return result;
       };
-      const result = buildHoldResult({
-        timestamp,
-        symbol: consensus.symbol,
-        decision,
-        size: 0,
-        reason: "instrument rules rejected the order size",
-        response,
-        rejectionReasons: mergeRejectionReasons(
-          consensus.rejectionReasons,
-          mapExecutionGuardReason(
-            "instrument rules rejected the order size",
+
+      const priorResult = executionResults.get(consensusKey);
+      if (priorResult) {
+        telemetryWarn(
+          "swarm.auto_execute",
+          "Duplicate consensus detected; reusing prior execution result",
+          {
+            symbol: consensus.symbol,
+            decision,
+            consensusKey,
+          },
+        );
+        await finalizeExecutionIntent(executionIntent.id, priorResult);
+        return finalizeResult(priorResult, { duplicate: true });
+      }
+
+      if (!parseBoolean(process.env.AUTO_EXECUTE_ENABLED, true)) {
+        const result = buildHoldResult({
+          timestamp,
+          symbol: consensus.symbol,
+          decision,
+          size: targetNotionalUsd,
+          reason: "auto execution disabled",
+          response: { autoExecuteEnabled: false },
+          rejectionReasons: [
+            {
+              layer: "execution",
+              code: "auto_execute_disabled",
+              summary: "Auto execution is disabled.",
+              detail:
+                "AUTO_EXECUTE_ENABLED is false, so the decision was not routed.",
+            },
+          ],
+        });
+        await finalizeExecutionIntent(executionIntent.id, result);
+        executionResults.set(consensusKey, result);
+        return finalizeResult(result);
+      }
+
+      if (CIRCUIT_OPEN) {
+        const result = buildErrorResult({
+          timestamp,
+          symbol: consensus.symbol,
+          decision,
+          size: targetNotionalUsd,
+          error: "circuit breaker open",
+          response: { circuitOpen: true },
+          circuitOpen: true,
+          rejectionReasons: [
+            {
+              layer: "execution",
+              code: "circuit_breaker_open",
+              summary: "Circuit breaker is open.",
+              detail:
+                "Execution errors exceeded the configured tolerance window.",
+            },
+          ],
+        });
+        await finalizeExecutionIntent(executionIntent.id, result);
+        return finalizeResult(result);
+      }
+
+      if (!consensus.executionEligible || decision === "HOLD") {
+        const result = buildHoldResult({
+          timestamp,
+          symbol: consensus.symbol,
+          decision,
+          size: 0,
+          reason: "consensus not execution eligible",
+          response: {
+            executionEligible: consensus.executionEligible,
+          },
+          rejectionReasons:
+            consensus.rejectionReasons.length > 0
+              ? consensus.rejectionReasons
+              : [
+                  {
+                    layer: "execution",
+                    code: "directional_hold",
+                    summary: "The decision engine returned HOLD.",
+                    detail:
+                      "No executable directional edge was available for this setup.",
+                  },
+                ],
+        });
+        await finalizeExecutionIntent(executionIntent.id, result);
+        executionResults.set(consensusKey, result);
+        return finalizeResult(result);
+      }
+
+      if (confidence < minConfidenceThreshold) {
+        const result = buildHoldResult({
+          timestamp,
+          symbol: consensus.symbol,
+          decision,
+          size: targetNotionalUsd,
+          reason: `confidence ${confidence.toFixed(2)} below threshold ${minConfidenceThreshold.toFixed(2)}`,
+          response: {
+            confidence,
+            minConfidenceThreshold,
+          },
+          rejectionReasons: mergeRejectionReasons(consensus.rejectionReasons, [
+            {
+              layer: "execution",
+              code: "execution_confidence_below_min",
+              summary: "Execution confidence is below the minimum threshold.",
+              detail: `Confidence ${confidence.toFixed(2)} is below ${minConfidenceThreshold.toFixed(2)}.`,
+              metrics: {
+                confidence: Number(confidence.toFixed(4)),
+                minConfidenceThreshold: Number(
+                  minConfidenceThreshold.toFixed(4),
+                ),
+              },
+            },
+          ]),
+        });
+        await finalizeExecutionIntent(executionIntent.id, result);
+        executionResults.set(consensusKey, result);
+        return finalizeResult(result);
+      }
+
+      try {
+        const marketSnapshot = await getMarketSnapshot(
+          consensus.symbol,
+          consensus.timeframe,
+        );
+
+        if (accountMode === "live" && !marketSnapshot.status.realtime) {
+          const result = buildHoldResult({
+            timestamp,
+            symbol: consensus.symbol,
+            decision,
+            size: 0,
+            reason: "live trading requires realtime websocket market data",
+            response: {
+              marketStatus: marketSnapshot.status,
+            },
+            rejectionReasons: mergeRejectionReasons(
+              consensus.rejectionReasons,
+              [
+                {
+                  layer: "market_data",
+                  code: "realtime_market_data_required",
+                  summary:
+                    "Live trading requires realtime websocket market data.",
+                  detail:
+                    "The execution path rejected the trade because market data was not realtime.",
+                  metrics: {
+                    realtime: marketSnapshot.status.realtime,
+                    connectionState: marketSnapshot.status.connectionState,
+                  },
+                },
+              ],
+            ),
+          });
+          await finalizeExecutionIntent(executionIntent.id, result, {
+            response: {
+              marketStatus: marketSnapshot.status,
+            },
+          });
+          executionResults.set(consensusKey, result);
+          return finalizeResult(result);
+        }
+
+        if (!marketSnapshot.status.tradeable) {
+          const result = buildHoldResult({
+            timestamp,
+            symbol: consensus.symbol,
+            decision,
+            size: 0,
+            reason: "market data not tradeable",
+            response: {
+              marketStatus: marketSnapshot.status,
+            },
+            rejectionReasons: mergeRejectionReasons(
+              consensus.rejectionReasons,
+              [
+                {
+                  layer: "market_data",
+                  code: "market_not_tradeable",
+                  summary: "Market data status is not tradeable.",
+                  detail:
+                    "The execution path rejected the trade because the market snapshot was not eligible for trading.",
+                  metrics: {
+                    realtime: marketSnapshot.status.realtime,
+                    stale: marketSnapshot.status.stale,
+                    connectionState: marketSnapshot.status.connectionState,
+                  },
+                },
+              ],
+            ),
+          });
+          await finalizeExecutionIntent(executionIntent.id, result, {
+            response: {
+              marketStatus: marketSnapshot.status,
+            },
+          });
+          executionResults.set(consensusKey, result);
+          return finalizeResult(result);
+        }
+
+        const riskGuard = await checkExecutionRiskGuards(consensus, decision);
+        if (!riskGuard.allowed) {
+          const result = buildHoldResult({
+            timestamp,
+            symbol: consensus.symbol,
+            decision,
+            size: 0,
+            reason:
+              riskGuard.reason ?? "execution risk guard rejected the trade",
+            response: riskGuard.response,
+            rejectionReasons: mergeRejectionReasons(
+              consensus.rejectionReasons,
+              mapExecutionGuardReason(riskGuard.reason, riskGuard.response),
+            ),
+          });
+          await finalizeExecutionIntent(executionIntent.id, result);
+          executionResults.set(consensusKey, result);
+          return finalizeResult(result);
+        }
+
+        const executionPlan = await deriveExecutableSize(
+          decision,
+          consensus.symbol,
+          targetNotionalUsd,
+        );
+        if (executionPlan.size <= 0) {
+          const result = buildHoldResult({
+            timestamp,
+            symbol: consensus.symbol,
+            decision,
+            size: 0,
+            reason: executionPlan.reason ?? "no executable size available",
+            response: executionPlan.response,
+            rejectionReasons: mergeRejectionReasons(
+              consensus.rejectionReasons,
+              mapExecutionGuardReason(
+                executionPlan.reason,
+                executionPlan.response,
+              ),
+            ),
+          });
+          await finalizeExecutionIntent(executionIntent.id, result);
+          executionResults.set(consensusKey, result);
+          return finalizeResult(result);
+        }
+
+        const instrumentRules = await getInstrumentRules(consensus.symbol);
+        const normalizedSize = normalizeOrderSize(
+          executionPlan.size,
+          instrumentRules.lotSize,
+        );
+        if (
+          instrumentRules.state !== "live" ||
+          normalizedSize < instrumentRules.minSize ||
+          normalizedSize <= 0
+        ) {
+          const response = {
+            instrumentRules,
+            requestedSize: executionPlan.size,
+            normalizedSize,
+          };
+          const result = buildHoldResult({
+            timestamp,
+            symbol: consensus.symbol,
+            decision,
+            size: 0,
+            reason: "instrument rules rejected the order size",
             response,
-          ),
-        ),
-      });
-      logResult(result);
-      await finalizeExecutionIntent(executionIntent.id, result, {
-        normalizedSize,
-        response,
-      });
-      executionResults.set(consensusKey, result);
-      return result;
-    }
+            rejectionReasons: mergeRejectionReasons(
+              consensus.rejectionReasons,
+              mapExecutionGuardReason(
+                "instrument rules rejected the order size",
+                response,
+              ),
+            ),
+          });
+          await finalizeExecutionIntent(executionIntent.id, result, {
+            normalizedSize,
+            response,
+          });
+          executionResults.set(consensusKey, result);
+          return finalizeResult(result);
+        }
 
-    const url = `${baseUrl}/api/ai/trade/execute`;
-    await updateExecutionIntent(executionIntent.id, {
-      status: "submitted",
-      normalizedSize,
-      response: {
-        marketStatus: marketSnapshot.status,
-        instrumentRules,
-      },
-    });
-    const response = await fetch(url, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      cache: "no-store",
-      body: JSON.stringify({
-        signal: decision,
-        action: decision,
-        symbol: consensus.symbol,
-        size: Number(normalizedSize.toFixed(8)),
-        mode: "ai_only",
-        confirmed: true,
-        source: "swarm_auto",
-        decisionSnapshot: buildTradeDecisionSnapshot(consensus),
-        executionContext: {
-          referencePrice: marketSnapshot.context.ticker.last,
-          targetNotionalUsd: Number(targetNotionalUsd.toFixed(8)),
-          normalizedSize: Number(normalizedSize.toFixed(8)),
-          expectedNetEdgeBps: consensus.expectedNetEdgeBps,
-          marketQualityScore: consensus.marketQualityScore,
-        },
-      }),
-    });
-
-    const payload = (await response.json().catch(() => null)) as {
-      data?: {
-        order?: ExecutionResult["order"];
-        simulated?: boolean;
-        accountMode?: ExecutionResult["accountMode"];
-      };
-      error?: string;
-    } | null;
-
-    if (!response.ok) {
-      recordExecutionError(Date.now());
-      const result = buildErrorResult({
-        timestamp,
-        symbol: consensus.symbol,
-        decision,
-        size: Number(normalizedSize.toFixed(8)),
-        error: payload?.error ?? `Execution request failed: ${response.status}`,
-        response: {
-          ...executionPlan.response,
-          instrumentRules,
+        const url = `${baseUrl}/api/ai/trade/execute`;
+        await updateExecutionIntent(executionIntent.id, {
+          status: "submitted",
           normalizedSize,
-          payload,
-        },
-        circuitOpen: CIRCUIT_OPEN,
-        rejectionReasons: mergeRejectionReasons(consensus.rejectionReasons, [
-          {
-            layer: "execution",
-            code: "execution_request_failed",
-            summary: "Execution request failed.",
-            detail:
-              payload?.error ?? `Execution request failed: ${response.status}`,
-            metrics: {
-              status: response.status,
-              normalizedSize: Number(normalizedSize.toFixed(8)),
-            },
+          response: {
+            marketStatus: marketSnapshot.status,
+            instrumentRules,
           },
-        ]),
-      });
-      console.error(
-        `[${timestamp}] [AutoExec] execution error for ${decision} ${consensus.symbol}: ${JSON.stringify(payload)}`,
-      );
-      logResult(result);
-      await finalizeExecutionIntent(executionIntent.id, result, {
-        normalizedSize,
-        response: {
-          ...executionPlan.response,
-          instrumentRules,
+        });
+        const response = await fetch(url, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          cache: "no-store",
+          body: JSON.stringify({
+            signal: decision,
+            action: decision,
+            symbol: consensus.symbol,
+            size: Number(normalizedSize.toFixed(8)),
+            mode: "ai_only",
+            confirmed: true,
+            source: "swarm_auto",
+            decisionSnapshot: buildTradeDecisionSnapshot(consensus),
+            executionContext: {
+              referencePrice: marketSnapshot.context.ticker.last,
+              targetNotionalUsd: Number(targetNotionalUsd.toFixed(8)),
+              normalizedSize: Number(normalizedSize.toFixed(8)),
+              expectedNetEdgeBps: consensus.expectedNetEdgeBps,
+              marketQualityScore: consensus.marketQualityScore,
+            },
+          }),
+        });
+
+        const payload = (await response.json().catch(() => null)) as {
+          data?: {
+            order?: ExecutionResult["order"];
+            simulated?: boolean;
+            accountMode?: ExecutionResult["accountMode"];
+          };
+          error?: string;
+        } | null;
+
+        if (!response.ok) {
+          recordExecutionError(Date.now());
+          const result = buildErrorResult({
+            timestamp,
+            symbol: consensus.symbol,
+            decision,
+            size: Number(normalizedSize.toFixed(8)),
+            error:
+              payload?.error ?? `Execution request failed: ${response.status}`,
+            response: {
+              ...executionPlan.response,
+              instrumentRules,
+              normalizedSize,
+              payload,
+            },
+            circuitOpen: CIRCUIT_OPEN,
+            rejectionReasons: mergeRejectionReasons(
+              consensus.rejectionReasons,
+              [
+                {
+                  layer: "execution",
+                  code: "execution_request_failed",
+                  summary: "Execution request failed.",
+                  detail:
+                    payload?.error ??
+                    `Execution request failed: ${response.status}`,
+                  metrics: {
+                    status: response.status,
+                    normalizedSize: Number(normalizedSize.toFixed(8)),
+                  },
+                },
+              ],
+            ),
+          });
+          console.error(
+            `[${timestamp}] [AutoExec] execution error for ${decision} ${consensus.symbol}: ${JSON.stringify(payload)}`,
+          );
+          await finalizeExecutionIntent(executionIntent.id, result, {
+            normalizedSize,
+            response: {
+              ...executionPlan.response,
+              instrumentRules,
+              normalizedSize,
+              payload,
+            },
+          });
+          return finalizeResult(result);
+        }
+
+        const result: ExecutionResult = {
+          status: "success",
+          timestamp,
+          symbol: consensus.symbol,
+          decision,
+          size: Number(normalizedSize.toFixed(8)),
+          order: payload?.data?.order,
+          simulated: payload?.data?.simulated,
+          accountMode: payload?.data?.accountMode,
+          response: {
+            ...executionPlan.response,
+            instrumentRules,
+            normalizedSize,
+            payload,
+          },
+        };
+        telemetryInfo("swarm.auto_execute", "Execution request succeeded", {
+          symbol: consensus.symbol,
+          decision,
           normalizedSize,
           payload,
-        },
-      });
-      return result;
-    }
-
-    const result: ExecutionResult = {
-      status: "success",
-      timestamp,
-      symbol: consensus.symbol,
-      decision,
-      size: Number(normalizedSize.toFixed(8)),
-      order: payload?.data?.order,
-      simulated: payload?.data?.simulated,
-      accountMode: payload?.data?.accountMode,
-      response: {
-        ...executionPlan.response,
-        instrumentRules,
-        normalizedSize,
-        payload,
-      },
-    };
-    console.log(
-      `[${timestamp}] [AutoExec] ${decision} executed: ${JSON.stringify(payload)}`,
-    );
-    logResult(result);
-    await finalizeExecutionIntent(executionIntent.id, result, {
-      normalizedSize,
-      response: {
-        ...executionPlan.response,
-        instrumentRules,
-        normalizedSize,
-        payload,
-      },
-    });
-    executionResults.set(consensusKey, result);
-    return result;
-  } catch (error) {
-    recordExecutionError(Date.now());
-    const result = buildErrorResult({
-      timestamp,
-      symbol: consensus.symbol,
-      decision,
-      size: targetNotionalUsd,
-      error: error instanceof Error ? error.message : "Unknown execution error",
-      response: {
-        message:
-          error instanceof Error ? error.message : "Unknown execution error",
-      },
-      circuitOpen: CIRCUIT_OPEN,
-      rejectionReasons: mergeRejectionReasons(consensus.rejectionReasons, [
-        {
-          layer: "execution",
-          code: "unexpected_execution_error",
-          summary: "Unexpected execution error.",
-          detail:
-            error instanceof Error ? error.message : "Unknown execution error",
-        },
-      ]),
-    });
-    console.error(
-      `[${timestamp}] [AutoExec] execution error for ${decision} ${consensus.symbol}:`,
-      error,
-    );
-    logResult(result);
-    await finalizeExecutionIntent(executionIntent.id, result);
-    executionResults.set(consensusKey, result);
-    return result;
-  }
+        });
+        await finalizeExecutionIntent(executionIntent.id, result, {
+          normalizedSize,
+          response: {
+            ...executionPlan.response,
+            instrumentRules,
+            normalizedSize,
+            payload,
+          },
+        });
+        executionResults.set(consensusKey, result);
+        return finalizeResult(result);
+      } catch (caughtError) {
+        recordExecutionError(Date.now());
+        const result = buildErrorResult({
+          timestamp,
+          symbol: consensus.symbol,
+          decision,
+          size: targetNotionalUsd,
+          error:
+            caughtError instanceof Error
+              ? caughtError.message
+              : "Unknown execution error",
+          response: {
+            message:
+              caughtError instanceof Error
+                ? caughtError.message
+                : "Unknown execution error",
+          },
+          circuitOpen: CIRCUIT_OPEN,
+          rejectionReasons: mergeRejectionReasons(consensus.rejectionReasons, [
+            {
+              layer: "execution",
+              code: "unexpected_execution_error",
+              summary: "Unexpected execution error.",
+              detail:
+                caughtError instanceof Error
+                  ? caughtError.message
+                  : "Unknown execution error",
+            },
+          ]),
+        });
+        console.error(
+          `[${timestamp}] [AutoExec] execution error for ${decision} ${consensus.symbol}:`,
+          caughtError,
+        );
+        await finalizeExecutionIntent(executionIntent.id, result);
+        executionResults.set(consensusKey, result);
+        return finalizeResult(result);
+      }
+    },
+  );
 }
