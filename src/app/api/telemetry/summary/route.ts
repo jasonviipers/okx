@@ -3,6 +3,10 @@ import { getExecutionIntents } from "@/lib/persistence/execution-intents";
 import { getHistory } from "@/lib/persistence/history";
 import { getRuntimeStatus } from "@/lib/runtime-status";
 import {
+  getOperatorUnauthorizedResponse,
+  isOperatorAuthorized,
+} from "@/lib/telemetry/auth";
+import {
   getRecentTelemetryEvents,
   getRecentTelemetrySpans,
   getTelemetryMetricsSnapshot,
@@ -11,7 +15,12 @@ import {
 export const dynamic = "force-dynamic";
 
 function parseLimit(request: NextRequest, key: string, fallback: number) {
-  const value = Number(request.nextUrl.searchParams.get(key));
+  const raw = request.nextUrl.searchParams.get(key);
+  if (raw === null || raw.trim() === "") {
+    return fallback;
+  }
+
+  const value = Number(raw);
   if (!Number.isFinite(value)) {
     return fallback;
   }
@@ -20,6 +29,10 @@ function parseLimit(request: NextRequest, key: string, fallback: number) {
 }
 
 export async function GET(request: NextRequest) {
+  if (!isOperatorAuthorized(request)) {
+    return getOperatorUnauthorizedResponse();
+  }
+
   const logLimit = parseLimit(request, "logs", 80);
   const traceLimit = parseLimit(request, "traces", 80);
   const intentLimit = parseLimit(request, "intents", 20);
@@ -35,15 +48,22 @@ export async function GET(request: NextRequest) {
       getHistory(historyLimit),
     ]);
 
-  return NextResponse.json({
-    data: {
-      runtime,
-      metrics,
-      logs,
-      spans,
-      executionIntents,
-      history,
+  return NextResponse.json(
+    {
+      data: {
+        runtime,
+        metrics,
+        logs,
+        spans,
+        executionIntents,
+        history,
+      },
+      timestamp: new Date().toISOString(),
     },
-    timestamp: new Date().toISOString(),
-  });
+    {
+      headers: {
+        "Cache-Control": "no-store",
+      },
+    },
+  );
 }

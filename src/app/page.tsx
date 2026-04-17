@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useRef, useTransition } from "react";
 import { Button } from "@/components/ui/button";
 import { AgentDashboard } from "@/features/dashboard/components/agent-dashboard";
@@ -118,12 +119,12 @@ function DashboardShell() {
         ))}
         <div className="flex-1" />
         <div className="flex items-center gap-1">
-          <a
+          <Link
             href="/telemetry"
             className="px-2 py-1 border border-border text-[0.5625rem] text-terminal-cyan hover:bg-secondary"
           >
             TELEMETRY
-          </a>
+          </Link>
           {COLOR_SCHEMES.map((scheme) => (
             <button
               key={scheme}

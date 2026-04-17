@@ -93,6 +93,7 @@ export async function runSwarm(
         totalElapsedMs: Date.now() - startedAt,
         cached: false,
       };
+      const decisionLabel = consensus.decision ?? consensus.signal;
 
       observeHistogram(
         "swarm_run_duration_ms",
@@ -102,7 +103,7 @@ export async function runSwarm(
           labels: {
             symbol: ctx.symbol,
             timeframe: ctx.timeframe,
-            decision: consensus.decision ?? consensus.signal,
+            decision: decisionLabel,
             blocked: consensus.blocked,
           },
         },
@@ -111,11 +112,11 @@ export async function runSwarm(
         symbol: ctx.symbol,
         timeframe: ctx.timeframe,
         cached: false,
-        decision: consensus.decision ?? consensus.signal,
+        decision: decisionLabel,
         blocked: consensus.blocked,
       });
       span.addAttributes({
-        decision: consensus.decision ?? consensus.signal,
+        decision: decisionLabel,
         blocked: consensus.blocked,
         executionEligible: consensus.executionEligible,
         rejectionCount: consensus.rejectionReasons.length,
@@ -124,7 +125,7 @@ export async function runSwarm(
         warn("swarm.orchestrator", "Swarm result is not executable", {
           symbol: ctx.symbol,
           timeframe: ctx.timeframe,
-          decision: consensus.decision ?? consensus.signal,
+          decision: decisionLabel,
           rejectionReasons: consensus.rejectionReasons,
         });
       }

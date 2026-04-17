@@ -1,10 +1,19 @@
 import { type NextRequest, NextResponse } from "next/server";
+import {
+  getOperatorUnauthorizedResponse,
+  isOperatorAuthorized,
+} from "@/lib/telemetry/auth";
 import { getRecentTelemetrySpans } from "@/lib/telemetry/server";
 
 export const dynamic = "force-dynamic";
 
 function parseLimit(request: NextRequest, fallback: number) {
-  const value = Number(request.nextUrl.searchParams.get("limit"));
+  const raw = request.nextUrl.searchParams.get("limit");
+  if (raw === null || raw.trim() === "") {
+    return fallback;
+  }
+
+  const value = Number(raw);
   if (!Number.isFinite(value)) {
     return fallback;
   }
@@ -13,12 +22,23 @@ function parseLimit(request: NextRequest, fallback: number) {
 }
 
 export async function GET(request: NextRequest) {
+  if (!isOperatorAuthorized(request)) {
+    return getOperatorUnauthorizedResponse();
+  }
+
   const limit = parseLimit(request, 120);
 
-  return NextResponse.json({
-    data: {
-      spans: await getRecentTelemetrySpans(limit),
+  return NextResponse.json(
+    {
+      data: {
+        spans: await getRecentTelemetrySpans(limit),
+      },
+      timestamp: new Date().toISOString(),
     },
-    timestamp: new Date().toISOString(),
-  });
+    {
+      headers: {
+        "Cache-Control": "no-store",
+      },
+    },
+  );
 }

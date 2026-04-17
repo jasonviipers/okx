@@ -486,6 +486,7 @@ export async function getMarketSnapshot(
             symbol,
             timeframe,
             status: "unavailable",
+            source: state.source || "unknown",
           },
         );
         throw new Error(`Market data unavailable for ${symbol} ${timeframe}.`);

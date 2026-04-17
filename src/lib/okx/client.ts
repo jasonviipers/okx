@@ -127,6 +127,10 @@ async function requestOkx<T>(
       const method = (init.method ?? "GET").toUpperCase();
       const url = `${OKX_CONFIG.baseUrl}${path}`;
       const headers = new Headers(init.headers);
+      let response: Response | undefined;
+      let durationRecorded = false;
+      let requestCountRecorded = false;
+      let resultCount: number | undefined;
       headers.set("Content-Type", "application/json");
 
       if (authenticated) {
@@ -146,7 +150,7 @@ async function requestOkx<T>(
       }
 
       try {
-        const response = await fetch(url, {
+        response = await fetch(url, {
           ...init,
           headers,
           cache: "no-store",
@@ -165,6 +169,7 @@ async function requestOkx<T>(
             },
           },
         );
+        durationRecorded = true;
 
         if (!response.ok) {
           const responseText = await response.text();
@@ -181,6 +186,7 @@ async function requestOkx<T>(
               ok: false,
             },
           );
+          requestCountRecorded = true;
           error("okx.client", "OKX request failed", {
             path,
             method,
@@ -217,6 +223,7 @@ async function requestOkx<T>(
               ok: false,
             },
           );
+          requestCountRecorded = true;
           error("okx.client", "OKX request returned business error", {
             path,
             method,
@@ -242,9 +249,46 @@ async function requestOkx<T>(
           status: response.status,
           ok: true,
         });
-        span.setAttribute("resultCount", payload.data.length);
+        requestCountRecorded = true;
+        resultCount = payload.data.length;
+        span.setAttribute("resultCount", resultCount);
         return payload.data;
       } catch (caughtError) {
+        const durationMs = Number((performance.now() - startedAt).toFixed(3));
+        const status = response?.status ?? "unknown";
+        if (!durationRecorded) {
+          observeHistogram(
+            "okx_request_duration_ms",
+            "Duration of OKX HTTP requests in milliseconds.",
+            durationMs,
+            {
+              labels: {
+                method,
+                authenticated,
+                status,
+              },
+            },
+          );
+        }
+        if (!requestCountRecorded) {
+          incrementCounter(
+            "okx_requests_total",
+            "Total OKX HTTP requests.",
+            1,
+            {
+              method,
+              authenticated,
+              status,
+              ok: false,
+            },
+          );
+        }
+        if (response) {
+          span.setAttribute("statusCode", response.status);
+        }
+        if (resultCount !== undefined) {
+          span.setAttribute("resultCount", resultCount);
+        }
         span.setAttribute(
           "errorMessage",
           caughtError instanceof Error
