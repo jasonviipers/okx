@@ -220,42 +220,90 @@ function TradeHistoryPanel({ entries }: { entries: StoredTradeExecution[] }) {
   return (
     <div className="flex flex-col gap-0.5 p-1.5">
       <div className="data-header">TRADES ({entries.length})</div>
-      {entries.slice(0, 15).map((entry) => (
-        <div
-          key={entry.id}
-          className="flex items-baseline gap-2 terminal-text-xs"
-        >
-          <span className="text-muted-foreground">
-            {formatTime(entry.timestamp)}
-          </span>
-          <span className="text-terminal-cyan w-[5rem] truncate">
-            {entry.symbol}
-          </span>
-          <span
-            className={`w-[2.5rem] ${entry.order.side === "buy" ? "text-terminal-green" : "text-terminal-red"}`}
-          >
-            {entry.order.side.toUpperCase()}
-          </span>
-          <span className="tabular-nums">{entry.order.size}</span>
-          {entry.order.filledPrice !== undefined && (
-            <span className="text-muted-foreground">
-              @{entry.order.filledPrice.toFixed(2)}
-            </span>
-          )}
-          <span
-            className={
-              entry.success ? "text-terminal-green" : "text-terminal-red"
-            }
-          >
-            {entry.success ? "OK" : "FAIL"}
-          </span>
-          {entry.order.okxOrderId && (
-            <span className="text-muted-foreground truncate max-w-[4rem]">
-              {entry.order.okxOrderId}
-            </span>
-          )}
-        </div>
-      ))}
+      {entries.slice(0, 15).map((entry) => {
+        const performance = entry.performance;
+        const latestWindow = [...(performance?.outcomeWindows ?? [])]
+          .filter((window) => window.observedAt)
+          .sort((left, right) => right.horizonMinutes - left.horizonMinutes)[0];
+        const latestPnlClass =
+          (performance?.latestPnlUsd ?? 0) >= 0
+            ? "text-terminal-green"
+            : "text-terminal-red";
+
+        return (
+          <div key={entry.id} className="flex flex-col gap-px terminal-text-xs">
+            <div className="flex items-baseline gap-2">
+              <span className="text-muted-foreground">
+                {formatTime(entry.timestamp)}
+              </span>
+              <span className="text-terminal-cyan w-[5rem] truncate">
+                {entry.symbol}
+              </span>
+              <span
+                className={`w-[2.5rem] ${entry.order.side === "buy" ? "text-terminal-green" : "text-terminal-red"}`}
+              >
+                {entry.order.side.toUpperCase()}
+              </span>
+              <span className="tabular-nums">{entry.order.size}</span>
+              {(entry.order.filledPrice ?? entry.order.referencePrice) !==
+                undefined && (
+                <span className="text-muted-foreground">
+                  @
+                  {(
+                    entry.order.filledPrice ?? entry.order.referencePrice ?? 0
+                  ).toFixed(2)}
+                </span>
+              )}
+              <span
+                className={
+                  entry.success ? "text-terminal-green" : "text-terminal-red"
+                }
+              >
+                {entry.success ? "OK" : "FAIL"}
+              </span>
+              {entry.order.okxOrderId && (
+                <span className="text-muted-foreground truncate max-w-[4rem]">
+                  {entry.order.okxOrderId}
+                </span>
+              )}
+            </div>
+            <div className="flex items-baseline gap-2 flex-wrap text-muted-foreground">
+              {entry.decisionSnapshot && (
+                <>
+                  <span>{entry.decisionSnapshot.decision}</span>
+                  <span>
+                    conf:{(entry.decisionSnapshot.confidence * 100).toFixed(0)}%
+                  </span>
+                  {entry.decisionSnapshot.expectedNetEdgeBps !== undefined && (
+                    <span>
+                      ev:{entry.decisionSnapshot.expectedNetEdgeBps.toFixed(1)}
+                    </span>
+                  )}
+                </>
+              )}
+              {performance?.realizedSlippageBps !== undefined && (
+                <span>slp:{performance.realizedSlippageBps.toFixed(1)}bps</span>
+              )}
+              {performance?.latestSignedReturnBps !== undefined && (
+                <span>
+                  ret:{performance.latestSignedReturnBps.toFixed(1)}bps
+                </span>
+              )}
+              {performance?.latestPnlUsd !== undefined && (
+                <span className={latestPnlClass}>
+                  pnl:{formatUsd(performance.latestPnlUsd)}
+                </span>
+              )}
+              {latestWindow && (
+                <span>
+                  {latestWindow.horizonMinutes}m:
+                  {latestWindow.signedReturnBps?.toFixed(1)}bps
+                </span>
+              )}
+            </div>
+          </div>
+        );
+      })}
     </div>
   );
 }

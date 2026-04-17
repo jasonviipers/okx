@@ -1,5 +1,10 @@
 import type { SwarmRunResult } from "@/types/swarm";
-import type { Order } from "@/types/trade";
+import type {
+  Order,
+  TradeDecisionSnapshot,
+  TradeExecutionContext,
+  TradePerformanceMetrics,
+} from "@/types/trade";
 
 export type StoredSwarmRun = {
   id: string;
@@ -19,6 +24,9 @@ export type StoredTradeExecution = {
   symbol: string;
   order: Order;
   success: boolean;
+  decisionSnapshot?: TradeDecisionSnapshot;
+  executionContext?: TradeExecutionContext;
+  performance?: TradePerformanceMetrics;
 };
 
 export type StoredHistoryEntry = StoredSwarmRun | StoredTradeExecution;

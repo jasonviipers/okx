@@ -15,7 +15,16 @@ export const dynamic = "force-dynamic";
 export async function POST(req: NextRequest) {
   try {
     const body: TradeExecutionRequest = await req.json();
-    const { signal, symbol, size, price, mode, confirmed } = body;
+    const {
+      signal,
+      symbol,
+      size,
+      price,
+      mode,
+      confirmed,
+      decisionSnapshot,
+      executionContext,
+    } = body;
 
     if (!signal || !symbol || !size || !mode) {
       return NextResponse.json(
@@ -64,7 +73,10 @@ export async function POST(req: NextRequest) {
       size,
       price,
     });
-    await recordTradeExecution(order);
+    await recordTradeExecution(order, {
+      decisionSnapshot,
+      executionContext,
+    });
 
     return NextResponse.json({
       data: {

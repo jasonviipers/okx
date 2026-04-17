@@ -1,5 +1,5 @@
 import type { AIMode } from "@/lib/configs/models";
-import type { TradeSignal } from "./swarm";
+import type { DecisionSource, RejectionReason, TradeSignal } from "./swarm";
 
 export type OrderSide = "buy" | "sell";
 export type OrderType = "market" | "limit";
@@ -15,6 +15,7 @@ export interface Order {
   notionalUsd?: number;
   price?: number; // limit price (undefined for market orders)
   filledPrice?: number;
+  referencePrice?: number;
   status: OrderStatus;
   createdAt: string; // ISO timestamp
   filledAt?: string; // ISO timestamp
@@ -66,6 +67,53 @@ export interface AccountOverview {
   updatedAt: string;
 }
 
+export interface TradeDecisionSnapshot {
+  signal: TradeSignal;
+  directionalSignal: TradeSignal;
+  decision: TradeSignal;
+  confidence: number;
+  agreement: number;
+  executionEligible: boolean;
+  decisionSource?: DecisionSource;
+  expectedNetEdgeBps?: number;
+  marketQualityScore?: number;
+  riskFlags?: string[];
+  featureSummary?: Record<string, number>;
+  rejectionReasons: RejectionReason[];
+  validatedAt?: string;
+}
+
+export interface TradeExecutionContext {
+  referencePrice?: number;
+  targetNotionalUsd?: number;
+  normalizedSize?: number;
+  expectedNetEdgeBps?: number;
+  marketQualityScore?: number;
+}
+
+export interface TradeOutcomeWindow {
+  horizonMinutes: number;
+  targetTime: string;
+  observedAt?: string;
+  markPrice?: number;
+  signedReturnBps?: number;
+  pnlUsd?: number;
+  pnlPct?: number;
+}
+
+export interface TradePerformanceMetrics {
+  referencePrice?: number;
+  filledPrice?: number;
+  realizedSlippageBps?: number;
+  realizedSlippageUsd?: number;
+  latestMarkPrice?: number;
+  latestObservedAt?: string;
+  latestSignedReturnBps?: number;
+  latestPnlUsd?: number;
+  latestPnlPct?: number;
+  outcomeWindows: TradeOutcomeWindow[];
+}
+
 export interface TradeExecutionRequest {
   signal: TradeSignal;
   symbol: string;
@@ -73,6 +121,8 @@ export interface TradeExecutionRequest {
   price?: number;
   mode: AIMode;
   confirmed?: boolean;
+  decisionSnapshot?: TradeDecisionSnapshot;
+  executionContext?: TradeExecutionContext;
 }
 
 export interface TradeExecutionResult {

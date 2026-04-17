@@ -429,14 +429,21 @@ function buildRejectionReasons(input: {
 
   if (input.directionalSignal === "SELL") {
     if (input.features.maxExecutableSellUsd < input.features.minimumTradeNotionalUsd) {
+      const flatSpotAccount = input.features.availableBaseUsd <= 0;
       rejections.push({
         layer: "execution",
-        code: "sell_inventory_too_small",
-        summary: "SELL is not executable with the available spot inventory.",
-        detail:
-          "Base inventory does not clear the minimum trade notional for this symbol.",
+        code: flatSpotAccount
+          ? "spot_shorting_not_available"
+          : "sell_inventory_too_small",
+        summary: flatSpotAccount
+          ? "Spot account is flat, so the bearish setup resolves to HOLD."
+          : "SELL is not executable with the available spot inventory.",
+        detail: flatSpotAccount
+          ? "The engine detected a bearish setup, but there is no base inventory available and spot mode cannot open a synthetic short."
+          : "Base inventory does not clear the minimum trade notional for this symbol.",
         metrics: {
           maxExecutableSellUsd: Number(input.features.maxExecutableSellUsd.toFixed(4)),
+          availableBaseUsd: Number(input.features.availableBaseUsd.toFixed(4)),
           minimumTradeNotionalUsd: Number(
             input.features.minimumTradeNotionalUsd.toFixed(4),
           ),

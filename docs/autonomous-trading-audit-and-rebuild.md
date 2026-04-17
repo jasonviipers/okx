@@ -48,8 +48,8 @@ Audit scope used for this checklist:
 - [x] Persist execution intents separately from final execution results.
 - [x] Persist trade execution records with order details.
 - [x] Persist pre-trade feature snapshots.
-- [ ] Persist post-trade outcome windows.
-- [ ] Persist realized slippage metrics.
+- [x] Persist post-trade outcome windows.
+- [x] Persist realized slippage metrics.
 - [ ] Persist realized and unrealized strategy performance attribution.
 - [ ] Replace blocked-history bias with outcome-based learning.
 
@@ -60,7 +60,7 @@ Audit scope used for this checklist:
 - [x] Surface structured threshold failures in stream and history responses.
 - [ ] Introduce a dedicated deterministic `DecisionResult` that supersedes the swarm-shaped `ConsensusResult`.
 - [x] Add first-class `riskFlags` to the execution-ready decision payload.
-- [ ] Expose full outcome metrics through persistence and APIs.
+- [x] Expose full outcome metrics through persistence and APIs.
 
 ### Evaluation and tests
 - [ ] Add unit tests for feature calculations, score composition, threshold gating, sizing rules, and inventory-aware `SELL` behavior.
@@ -114,8 +114,8 @@ The memory layer still summarizes blocked decisions and historical suppression r
 ### 4. Portfolio allocation is only partially implemented
 Autonomy now uses inventory state, concentration, quote availability, and per-symbol allocation headroom. That is materially better than the previous score-only selector. The remaining gap is a fuller portfolio allocator with cross-symbol concentration control, budget governance, and capital rotation based on realized performance.
 
-### 5. Post-trade attribution is missing
-The persistence layer now stores decision snapshots, execution intents, and fills, but it still does not store forward outcome windows, realized slippage attribution, or realized and unrealized strategy performance decomposition.
+### 5. Post-trade attribution is only partially implemented
+The persistence layer now stores decision snapshots, execution intents, fills, realized slippage metrics, and forward outcome windows exposed through history APIs. The remaining gap is fuller realized and unrealized strategy performance decomposition across portfolio state, missed trades, and capital rotation.
 
 ### 6. Replay and validation infrastructure is missing
 There is still no offline replay engine, historical order-book playback, rolling forward validation, or release gate that prevents new live logic from shipping before it proves itself on prior data.

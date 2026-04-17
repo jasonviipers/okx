@@ -19,6 +19,7 @@ import type {
   RejectionReason,
   TradeSignal,
 } from "@/types/swarm";
+import type { TradeDecisionSnapshot } from "@/types/trade";
 
 const DEFAULT_MAX_POSITION_USD = 100;
 const DEFAULT_MIN_CONFIDENCE_THRESHOLD = 60;
@@ -62,6 +63,26 @@ function confidencePercent(consensus: ConsensusResult): number {
 
 function deriveSize(confidence: number, maxPositionUsd: number): number {
   return Number(((confidence / 100) * maxPositionUsd).toFixed(8));
+}
+
+function buildTradeDecisionSnapshot(
+  consensus: ConsensusResult,
+): TradeDecisionSnapshot {
+  return {
+    signal: consensus.signal,
+    directionalSignal: consensus.directionalSignal,
+    decision: consensus.decision ?? consensus.signal,
+    confidence: consensus.confidence,
+    agreement: consensus.agreement,
+    executionEligible: consensus.executionEligible,
+    decisionSource: consensus.decisionSource,
+    expectedNetEdgeBps: consensus.expectedNetEdgeBps,
+    marketQualityScore: consensus.marketQualityScore,
+    riskFlags: consensus.riskFlags,
+    featureSummary: consensus.featureSummary,
+    rejectionReasons: consensus.rejectionReasons,
+    validatedAt: consensus.validatedAt,
+  };
 }
 
 function mergeRejectionReasons(
@@ -735,6 +756,14 @@ export async function autoExecuteConsensus(
         mode: "ai_only",
         confirmed: true,
         source: "swarm_auto",
+        decisionSnapshot: buildTradeDecisionSnapshot(consensus),
+        executionContext: {
+          referencePrice: marketSnapshot.context.ticker.last,
+          targetNotionalUsd: Number(targetNotionalUsd.toFixed(8)),
+          normalizedSize: Number(normalizedSize.toFixed(8)),
+          expectedNetEdgeBps: consensus.expectedNetEdgeBps,
+          marketQualityScore: consensus.marketQualityScore,
+        },
       }),
     });
 
