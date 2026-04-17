@@ -15,7 +15,7 @@ export const dynamic = "force-dynamic";
 
 export async function GET(req: NextRequest) {
   try {
-    const { searchParams } = new URL(req.url);
+    const { searchParams, origin } = new URL(req.url);
     const symbol = searchParams.get("symbol") ?? "BTC-USDT";
     const timeframe = (searchParams.get("timeframe") as Timeframe) || "1H";
     const requestedMode =
@@ -27,7 +27,7 @@ export async function GET(req: NextRequest) {
     if (consensus) {
       const execution =
         modeConfig.autoExecute && consensus.executionEligible
-          ? await autoExecuteConsensus(consensus)
+          ? await autoExecuteConsensus(consensus, origin)
           : undefined;
       if (execution) {
         console.log("[SwarmConsensus] Execution result:", execution);
@@ -46,7 +46,7 @@ export async function GET(req: NextRequest) {
     const result = await runSwarm(ctx);
     const execution =
       modeConfig.autoExecute && result.consensus.executionEligible
-        ? await autoExecuteConsensus(result.consensus)
+        ? await autoExecuteConsensus(result.consensus, origin)
         : undefined;
     if (execution) {
       console.log("[SwarmConsensus] Execution result:", execution);
