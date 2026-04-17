@@ -186,6 +186,27 @@ function AutonomyPanel({ status }: { status: RuntimeStatus["autonomy"] }) {
                   mq:{(candidate.marketQualityScore * 100).toFixed(0)}%
                 </span>
               )}
+              {candidate.portfolioFitScore !== undefined && (
+                <span className="text-muted-foreground">
+                  pf:{(candidate.portfolioFitScore * 100).toFixed(0)}%
+                </span>
+              )}
+              {candidate.portfolioConcentrationPct !== undefined && (
+                <span className="text-muted-foreground">
+                  conc:
+                  {(candidate.portfolioConcentrationPct * 100).toFixed(0)}%
+                </span>
+              )}
+              {candidate.symbolBudgetRemainingUsd !== undefined && (
+                <span className="text-muted-foreground">
+                  alloc:${candidate.symbolBudgetRemainingUsd.toFixed(1)}
+                </span>
+              )}
+              {candidate.positionState && (
+                <span className="text-muted-foreground">
+                  pos:{candidate.positionState}
+                </span>
+              )}
               {candidate.symbolThrottleMs !== undefined && (
                 <span className="text-muted-foreground">
                   thr:{(candidate.symbolThrottleMs / 1000).toFixed(0)}s

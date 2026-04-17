@@ -433,7 +433,7 @@ function StreamLog({ events }: { events: SwarmStreamEvent[] }) {
     );
   }
   return (
-    <div className="flex flex-col gap-px overflow-y-auto max-h-48 p-1">
+    <div >
       {events.map((evt, index) => {
         const key = getStreamEventKey(evt, index);
         const ts = formatTime(evt.timestamp);

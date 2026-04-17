@@ -1,0 +1,427 @@
+[
+  {
+    "id": "swarm_1776394560135_zpzgcf",
+    "type": "swarm_run",
+    "timestamp": "2026-04-17T02:56:00.135Z",
+    "symbol": "USDC-EUR",
+    "timeframe": "1H",
+    "cached": false,
+    "totalElapsedMs": 101,
+    "consensus": {
+      "symbol": "USDC-EUR",
+      "timeframe": "1H",
+      "signal": "BUY",
+      "directionalSignal": "BUY",
+      "directionalConfidence": 0.756,
+      "directionalAgreement": 0.632,
+      "decision": "HOLD",
+      "confidence": 0.49,
+      "agreement": 0.52,
+      "decisionSource": "deterministic",
+      "featureSummary": {
+        "return3Bps": 2.3557,
+        "return10Bps": -7.0605,
+        "volatilityShortBps": 6.6906,
+        "volatilityLongBps": 5.6592,
+        "spreadBps": 1.1781,
+        "buySlippageBps": 2.2255,
+        "sellSlippageBps": 0.2924,
+        "orderBookImbalancePct": 99.9052,
+        "topBookPressurePct": 34.0012,
+        "volumeExpansion": 0.0491,
+        "distanceFromVwapBps": -5.8305,
+        "breakoutDistanceBps": 1.7667,
+        "compressionPct": 20.5111,
+        "maxExecutableBuyUsd": 9,
+        "maxExecutableSellUsd": 0
+      },
+      "riskFlags": [
+        "slippage_elevated",
+        "top_book_depth_thin"
+      ],
+      "directionalEdgeScore": 0.455,
+      "executionQualityScore": 0.932,
+      "riskPenaltyScore": 0.03,
+      "expectedNetEdgeBps": -6.48,
+      "marketQualityScore": 0.938,
+      "decisionCadenceMs": 16958,
+      "symbolThrottleMs": 23741,
+      "votes": [],
+      "weightedScores": {
+        "BUY": 0.447,
+        "SELL": 0,
+        "HOLD": 0.567
+      },
+      "validatedAt": "2026-04-17T02:56:00.084Z",
+      "blocked": true,
+      "executionEligible": false,
+      "blockReason": "Expected net edge does not clear the minimum threshold.",
+      "rejectionReasons": [
+        {
+          "layer": "expected_value",
+          "code": "expected_net_edge_below_threshold",
+          "summary": "Expected net edge does not clear the minimum threshold.",
+          "detail": "Expected net edge -6.48 bps is below 6.00 bps.",
+          "metrics": {
+            "expectedNetEdgeBps": -6.48,
+            "minNetEdgeBps": 6
+          }
+        }
+      ],
+      "memory": {
+        "symbol": "USDC-EUR",
+        "timeframe": "1H",
+        "totalMemories": 0,
+        "effectiveSampleSize": 0,
+        "blockedRatio": 0,
+        "averageConfidence": 0,
+        "directionalWeights": {
+          "BUY": 0,
+          "SELL": 0,
+          "HOLD": 0
+        },
+        "dominantSignal": "BUY",
+        "topRecalls": [],
+        "generatedAt": "2026-04-17T02:56:00.020Z"
+      },
+      "harness": {
+        "generatedAt": "2026-04-17T02:56:00.084Z",
+        "marketQualityScore": 0.938,
+        "liquidityScore": 0.935,
+        "volatilityPenalty": 0.03,
+        "memoryAlignmentScore": 0,
+        "confidenceAdjustment": -0.266,
+        "blockedByHarness": true,
+        "notes": [
+          "Execution quality 93.2%.",
+          "Selected engine mean_reversion."
+        ]
+      },
+      "regime": {
+        "regime": "mean_reversion",
+        "confidence": 0.974,
+        "trendScore": 0.028,
+        "breakoutScore": 0.125,
+        "meanReversionScore": 0.974,
+        "volatilityScore": 0.963,
+        "liquidityScore": 0.98,
+        "notes": [
+          "Directional strength is muted; rotational behavior is more likely."
+        ],
+        "generatedAt": "2026-04-17T02:56:00.084Z"
+      },
+      "engineReports": [
+        {
+          "engine": "trend_continuation",
+          "signal": "HOLD",
+          "confidence": 0.003,
+          "supportScore": 0.003,
+          "reasons": [
+            "Return stack favors continuation (2.4 bps over 5 bars).",
+            "Distance from mean is -0.02%."
+          ],
+          "supportingRoles": []
+        },
+        {
+          "engine": "breakout",
+          "signal": "SELL",
+          "confidence": 1,
+          "supportScore": 1,
+          "reasons": [
+            "Compression score is 21%.",
+            "Breakout distance is 1.8 bps."
+          ],
+          "supportingRoles": []
+        },
+        {
+          "engine": "mean_reversion",
+          "signal": "BUY",
+          "confidence": 1,
+          "supportScore": 1,
+          "reasons": [
+            "Distance from VWAP is -5.8 bps.",
+            "Wick balance is 0.75."
+          ],
+          "supportingRoles": []
+        },
+        {
+          "engine": "microstructure",
+          "signal": "BUY",
+          "confidence": 0.715,
+          "supportScore": 0.715,
+          "reasons": [
+            "Order-book imbalance is 99.9%.",
+            "Top-book pressure is 34.0%."
+          ],
+          "supportingRoles": []
+        }
+      ],
+      "metaSelection": {
+        "selectedEngine": "mean_reversion",
+        "suitability": 1,
+        "actionBias": "BUY",
+        "engineScores": {
+          "trend_continuation": 0.003,
+          "breakout": 1,
+          "mean_reversion": 1,
+          "microstructure": 0.715,
+          "none": 0
+        },
+        "notes": [
+          "Deterministic engine selected mean_reversion from regime mean_reversion.",
+          "Adjusted directional edge is 0.455."
+        ],
+        "generatedAt": "2026-04-17T02:56:00.084Z"
+      },
+      "expectedValue": {
+        "grossEdgeBps": 3.74,
+        "estimatedFeeBps": 8,
+        "estimatedSlippageBps": 2.23,
+        "netEdgeBps": -6.48,
+        "rewardRiskRatio": 0.37,
+        "tradeAllowed": false,
+        "notes": [
+          "Execution quality 93.2%.",
+          "Risk penalty 3.0%."
+        ],
+        "generatedAt": "2026-04-17T02:56:00.084Z"
+      }
+    }
+  },
+  {
+    "id": "swarm_1776394560109_q83nyy",
+    "type": "swarm_run",
+    "timestamp": "2026-04-17T02:56:00.109Z",
+    "symbol": "ETH-EUR",
+    "timeframe": "1H",
+    "cached": false,
+    "totalElapsedMs": 93,
+    "consensus": {
+      "symbol": "ETH-EUR",
+      "timeframe": "1H",
+      "signal": "BUY",
+      "directionalSignal": "BUY",
+      "directionalConfidence": 0.596,
+      "directionalAgreement": 0.169,
+      "decision": "HOLD",
+      "confidence": 0.49,
+      "agreement": 0.169,
+      "decisionSource": "deterministic",
+      "featureSummary": {
+        "return3Bps": -76.0166,
+        "return10Bps": 54.4599,
+        "volatilityShortBps": 22.7976,
+        "volatilityLongBps": 58.9453,
+        "spreadBps": 0.0505,
+        "buySlippageBps": 1.2848,
+        "sellSlippageBps": 0,
+        "orderBookImbalancePct": -70.2044,
+        "topBookPressurePct": 56.9885,
+        "volumeExpansion": 0.9464,
+        "distanceFromVwapBps": -11.8922,
+        "breakoutDistanceBps": -25.4763,
+        "compressionPct": 55.1037,
+        "maxExecutableBuyUsd": 9,
+        "maxExecutableSellUsd": 0
+      },
+      "riskFlags": [
+        "slippage_elevated"
+      ],
+      "directionalEdgeScore": 0.065,
+      "executionQualityScore": 0.976,
+      "riskPenaltyScore": 0.3,
+      "expectedNetEdgeBps": -7.43,
+      "marketQualityScore": 0.89,
+      "decisionCadenceMs": 15300,
+      "symbolThrottleMs": 21420,
+      "votes": [],
+      "weightedScores": {
+        "BUY": 0.063,
+        "SELL": 0,
+        "HOLD": 0.974
+      },
+      "validatedAt": "2026-04-17T02:56:00.080Z",
+      "blocked": true,
+      "executionEligible": false,
+      "blockReason": "Directional edge is below the minimum executable threshold.",
+      "rejectionReasons": [
+        {
+          "layer": "expected_value",
+          "code": "directional_edge_below_threshold",
+          "summary": "Directional edge is below the minimum executable threshold.",
+          "detail": "Directional edge 0.065 is below 0.120.",
+          "metrics": {
+            "directionalEdge": 0.065,
+            "minDirectionalEdge": 0.12
+          }
+        },
+        {
+          "layer": "validator",
+          "code": "deterministic_confidence_below_min",
+          "summary": "Deterministic confidence is below the minimum threshold.",
+          "detail": "Confidence 59.60% is below 60.00%.",
+          "metrics": {
+            "confidence": 59.6,
+            "minConfidence": 60
+          }
+        },
+        {
+          "layer": "expected_value",
+          "code": "expected_net_edge_below_threshold",
+          "summary": "Expected net edge does not clear the minimum threshold.",
+          "detail": "Expected net edge -7.43 bps is below 6.00 bps.",
+          "metrics": {
+            "expectedNetEdgeBps": -7.43,
+            "minNetEdgeBps": 6
+          }
+        }
+      ],
+      "memory": {
+        "symbol": "ETH-EUR",
+        "timeframe": "1H",
+        "totalMemories": 0,
+        "effectiveSampleSize": 0,
+        "blockedRatio": 0,
+        "averageConfidence": 0,
+        "directionalWeights": {
+          "BUY": 0,
+          "SELL": 0,
+          "HOLD": 0
+        },
+        "dominantSignal": "BUY",
+        "topRecalls": [],
+        "generatedAt": "2026-04-17T02:56:00.020Z"
+      },
+      "harness": {
+        "generatedAt": "2026-04-17T02:56:00.080Z",
+        "marketQualityScore": 0.89,
+        "liquidityScore": 0.997,
+        "volatilityPenalty": 0.3,
+        "memoryAlignmentScore": 0,
+        "confidenceAdjustment": -0.106,
+        "blockedByHarness": true,
+        "notes": [
+          "Execution quality 97.6%.",
+          "Selected engine breakout."
+        ]
+      },
+      "regime": {
+        "regime": "breakout",
+        "confidence": 0.938,
+        "trendScore": 0.847,
+        "breakoutScore": 0.938,
+        "meanReversionScore": 0.092,
+        "volatilityScore": 0.785,
+        "liquidityScore": 0.999,
+        "notes": [
+          "Range compression plus directional expansion favors breakout logic."
+        ],
+        "generatedAt": "2026-04-17T02:56:00.079Z"
+      },
+      "engineReports": [
+        {
+          "engine": "trend_continuation",
+          "signal": "SELL",
+          "confidence": 0.293,
+          "supportScore": 0.293,
+          "reasons": [
+            "Return stack favors continuation (-42.7 bps over 5 bars).",
+            "Distance from mean is -0.45%."
+          ],
+          "supportingRoles": []
+        },
+        {
+          "engine": "breakout",
+          "signal": "BUY",
+          "confidence": 0.315,
+          "supportScore": 0.315,
+          "reasons": [
+            "Compression score is 55%.",
+            "Breakout distance is -25.5 bps."
+          ],
+          "supportingRoles": []
+        },
+        {
+          "engine": "mean_reversion",
+          "signal": "SELL",
+          "confidence": 1,
+          "supportScore": 1,
+          "reasons": [
+            "Distance from VWAP is -11.9 bps.",
+            "Wick balance is 0.13."
+          ],
+          "supportingRoles": []
+        },
+        {
+          "engine": "microstructure",
+          "signal": "SELL",
+          "confidence": 0.257,
+          "supportScore": 0.257,
+          "reasons": [
+            "Order-book imbalance is -70.2%.",
+            "Top-book pressure is 57.0%."
+          ],
+          "supportingRoles": []
+        }
+      ],
+      "metaSelection": {
+        "selectedEngine": "breakout",
+        "suitability": 0.315,
+        "actionBias": "BUY",
+        "engineScores": {
+          "trend_continuation": 0.293,
+          "breakout": 0.315,
+          "mean_reversion": 1,
+          "microstructure": 0.257,
+          "none": 0
+        },
+        "notes": [
+          "Deterministic engine selected breakout from regime breakout.",
+          "Adjusted directional edge is 0.065."
+        ],
+        "generatedAt": "2026-04-17T02:56:00.080Z"
+      },
+      "expectedValue": {
+        "grossEdgeBps": 1.86,
+        "estimatedFeeBps": 8,
+        "estimatedSlippageBps": 1.28,
+        "netEdgeBps": -7.43,
+        "rewardRiskRatio": 0.2,
+        "tradeAllowed": false,
+        "notes": [
+          "Execution quality 97.6%.",
+          "Risk penalty 30.0%."
+        ],
+        "generatedAt": "2026-04-17T02:56:00.080Z"
+      }
+    }
+  }
+] {
+          "trend_continuation": 0.293,
+          "breakout": 0.315,
+          "mean_reversion": 1,
+          "microstructure": 0.257,
+          "none": 0
+        },
+        "notes": [
+          "Deterministic engine selected breakout from regime breakout.",
+          "Adjusted directional edge is 0.065."
+        ],
+        "generatedAt": "2026-04-17T02:56:00.080Z"
+      },
+      "expectedValue": {
+        "grossEdgeBps": 1.86,
+        "estimatedFeeBps": 8,
+        "estimatedSlippageBps": 1.28,
+        "netEdgeBps": -7.43,
+        "rewardRiskRatio": 0.2,
+        "tradeAllowed": false,
+        "notes": [
+          "Execution quality 97.6%.",
+          "Risk penalty 30.0%."
+        ],
+        "generatedAt": "2026-04-17T02:56:00.080Z"
+      }
+    }
+  }
+]

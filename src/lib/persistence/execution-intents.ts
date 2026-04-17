@@ -11,6 +11,21 @@ type ExecutionIntentStatus =
   | "hold"
   | "error";
 
+type ExecutionIntentDecisionSnapshot = {
+  signal: ConsensusResult["signal"];
+  directionalSignal: ConsensusResult["directionalSignal"];
+  decision: string;
+  confidence: number;
+  agreement: number;
+  executionEligible: boolean;
+  decisionSource?: ConsensusResult["decisionSource"];
+  expectedNetEdgeBps?: ConsensusResult["expectedNetEdgeBps"];
+  marketQualityScore?: ConsensusResult["marketQualityScore"];
+  riskFlags?: ConsensusResult["riskFlags"];
+  featureSummary?: ConsensusResult["featureSummary"];
+  rejectionReasons: ConsensusResult["rejectionReasons"];
+};
+
 export interface ExecutionIntentRecord {
   id: string;
   createdAt: string;
@@ -24,6 +39,7 @@ export interface ExecutionIntentRecord {
   status: ExecutionIntentStatus;
   reason?: string;
   response?: unknown;
+  decisionSnapshot: ExecutionIntentDecisionSnapshot;
 }
 
 const DATA_DIR = path.join(process.cwd(), ".data");
@@ -78,6 +94,20 @@ export async function createExecutionIntent(
     confidence: consensus.confidence,
     targetSize,
     status: "created",
+    decisionSnapshot: {
+      signal: consensus.signal,
+      directionalSignal: consensus.directionalSignal,
+      decision: consensus.decision ?? consensus.signal,
+      confidence: consensus.confidence,
+      agreement: consensus.agreement,
+      executionEligible: consensus.executionEligible,
+      decisionSource: consensus.decisionSource,
+      expectedNetEdgeBps: consensus.expectedNetEdgeBps,
+      marketQualityScore: consensus.marketQualityScore,
+      riskFlags: consensus.riskFlags,
+      featureSummary: consensus.featureSummary,
+      rejectionReasons: consensus.rejectionReasons,
+    },
   };
   entries.unshift(record);
   await writeIntents(entries.slice(0, 500));

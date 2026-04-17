@@ -60,6 +60,11 @@ export interface AutonomyCandidateScore {
   riskFlags?: string[];
   decisionCadenceMs?: number;
   symbolThrottleMs?: number;
+  portfolioFitScore?: number;
+  portfolioConcentrationPct?: number;
+  symbolBudgetRemainingUsd?: number;
+  quoteBudgetAvailableUsd?: number;
+  positionState?: "flat" | "long";
   rejectionReasons: RejectionReason[];
 }
 
