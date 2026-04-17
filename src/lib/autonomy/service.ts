@@ -90,6 +90,16 @@ async function getTodayExecutedNotionalUsd() {
   }, 0);
 }
 
+function resolveInternalBaseUrl(): string {
+  const configured = process.env.NEXT_PUBLIC_APP_URL ?? process.env.APP_URL;
+  if (configured) {
+    return configured.replace(/\/$/, "");
+  }
+
+  // Fallback for local development
+  return "http://localhost:3000";
+}
+
 function toAutonomyStatus(
   state: Awaited<ReturnType<typeof readAutonomyState>>,
   budgetRemainingUsd: number,
@@ -833,6 +843,7 @@ export async function dispatchAutonomyWorker(options?: {
   }
 
   const startedAt = new Date().toISOString();
+  const baseUrl = resolveInternalBaseUrl();
   let execution: ExecutionResult | undefined;
 
   try {
@@ -916,7 +927,7 @@ export async function dispatchAutonomyWorker(options?: {
         ],
       };
     } else {
-      execution = await autoExecuteConsensus(result.consensus);
+      execution = await autoExecuteConsensus(result.consensus, baseUrl);
     }
 
     await updateAutonomyState((current) => ({
