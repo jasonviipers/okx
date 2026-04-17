@@ -9,6 +9,7 @@ export interface OKXTicker {
   low24h: number;
   vol24h: number;
   change24h: number; // percentage
+  open24h?: number;
   timestamp: string; // ISO timestamp
 }
 

@@ -1,5 +1,62 @@
 [
   {
+    "id": "intent_1776411450759_4sjw1k",
+    "createdAt": "2026-04-17T07:37:30.759Z",
+    "updatedAt": "2026-04-17T07:37:30.783Z",
+    "symbol": "BTC-EUR",
+    "timeframe": "5m",
+    "decision": "HOLD",
+    "confidence": 0.49,
+    "targetSize": 4.9,
+    "status": "hold",
+    "decisionSnapshot": {
+      "signal": "BUY",
+      "directionalSignal": "BUY",
+      "decision": "HOLD",
+      "confidence": 0.49,
+      "agreement": 0.52,
+      "executionEligible": false,
+      "decisionSource": "deterministic",
+      "expectedNetEdgeBps": -2.75,
+      "marketQualityScore": 0.991,
+      "riskFlags": [],
+      "featureSummary": {
+        "return3Bps": 1.4137,
+        "return10Bps": 13.4933,
+        "volatilityShortBps": 3.5456,
+        "volatilityLongBps": 5.6432,
+        "spreadBps": 0.0157,
+        "buySlippageBps": 0,
+        "sellSlippageBps": 0.0157,
+        "orderBookImbalancePct": -11.1151,
+        "topBookPressurePct": -19.3524,
+        "volumeExpansion": 0.5072,
+        "distanceFromVwapBps": -0.4783,
+        "breakoutDistanceBps": 3.1656,
+        "compressionPct": 26.123,
+        "maxExecutableBuyUsd": 9,
+        "maxExecutableSellUsd": 0
+      },
+      "rejectionReasons": [
+        {
+          "layer": "expected_value",
+          "code": "expected_net_edge_below_threshold",
+          "summary": "Expected net edge does not clear the minimum threshold.",
+          "detail": "Expected net edge -2.75 bps is below 4.00 bps.",
+          "metrics": {
+            "expectedNetEdgeBps": -2.75,
+            "minNetEdgeBps": 4
+          }
+        }
+      ]
+    },
+    "reason": "consensus not execution eligible",
+    "normalizedSize": 0,
+    "response": {
+      "executionEligible": false
+    }
+  },
+  {
     "id": "intent_1776405397779_mh00oh",
     "createdAt": "2026-04-17T05:56:37.779Z",
     "updatedAt": "2026-04-17T05:56:37.807Z",

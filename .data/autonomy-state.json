@@ -10,19 +10,18 @@
     "DOGE-EUR",
     "USDC-EUR",
     "XRP-EUR",
-    "USDG-EUR"
+    "PEPE-EUR"
   ],
-  "timeframe": "30m",
+  "timeframe": "5m",
   "intervalMs": 60000,
   "cooldownMs": 180000,
   "budgetUsd": 10,
-  "iterationCount": 15,
+  "iterationCount": 17,
   "inFlight": false,
   "symbolThrottleUntil": {
-    "BTC-EUR": "2026-04-17T05:56:55.625Z"
+    "BTC-EUR": "2026-04-17T07:37:42.673Z"
   },
-  "nextRunAt": "2026-04-17T05:57:37.820Z",
-  "lastRunAt": "2026-04-17T05:56:37.348Z",
+  "lastRunAt": "2026-04-17T07:37:29.436Z",
   "lastDecision": "HOLD",
   "lastExecutionStatus": "hold",
   "lastReason": "consensus not execution eligible",
@@ -31,19 +30,17 @@
       "symbol": "BTC-EUR",
       "score": 0,
       "tradeable": false,
-      "realtime": true,
+      "realtime": false,
       "blocked": true,
       "directionalSignal": "BUY",
       "decision": "HOLD",
       "confidence": 0.49,
       "agreement": 0.52,
-      "expectedNetEdgeBps": -3.07,
-      "marketQualityScore": 0.967,
-      "riskFlags": [
-        "slippage_elevated"
-      ],
-      "decisionCadenceMs": 12718,
-      "symbolThrottleMs": 17805,
+      "expectedNetEdgeBps": -2.75,
+      "marketQualityScore": 0.991,
+      "riskFlags": [],
+      "decisionCadenceMs": 8479,
+      "symbolThrottleMs": 11871,
       "portfolioFitScore": 0.903,
       "portfolioConcentrationPct": 0,
       "symbolBudgetRemainingUsd": 10,
@@ -54,9 +51,9 @@
           "layer": "expected_value",
           "code": "expected_net_edge_below_threshold",
           "summary": "Expected net edge does not clear the minimum threshold.",
-          "detail": "Expected net edge -3.07 bps is below 4.00 bps.",
+          "detail": "Expected net edge -2.75 bps is below 4.00 bps.",
           "metrics": {
-            "expectedNetEdgeBps": -3.07,
+            "expectedNetEdgeBps": -2.75,
             "minNetEdgeBps": 4
           }
         }
@@ -66,20 +63,19 @@
       "symbol": "ETH-EUR",
       "score": 0,
       "tradeable": false,
-      "realtime": true,
+      "realtime": false,
       "blocked": true,
-      "directionalSignal": "SELL",
+      "directionalSignal": "BUY",
       "decision": "HOLD",
       "confidence": 0.49,
       "agreement": 0.52,
-      "expectedNetEdgeBps": -13.17,
-      "marketQualityScore": 0.833,
+      "expectedNetEdgeBps": -3.94,
+      "marketQualityScore": 0.982,
       "riskFlags": [
-        "slippage_elevated",
-        "inventory_constrained"
+        "slippage_elevated"
       ],
-      "decisionCadenceMs": 12718,
-      "symbolThrottleMs": 17805,
+      "decisionCadenceMs": 8479,
+      "symbolThrottleMs": 11871,
       "portfolioFitScore": 0.903,
       "portfolioConcentrationPct": 0,
       "symbolBudgetRemainingUsd": 10,
@@ -87,23 +83,12 @@
       "positionState": "flat",
       "rejectionReasons": [
         {
-          "layer": "execution",
-          "code": "spot_shorting_not_available",
-          "summary": "Spot account is flat, so the bearish setup resolves to HOLD.",
-          "detail": "The engine detected a bearish setup, but there is no base inventory available and spot mode cannot open a synthetic short.",
-          "metrics": {
-            "maxExecutableSellUsd": 0,
-            "availableBaseUsd": 0,
-            "minimumTradeNotionalUsd": 5
-          }
-        },
-        {
           "layer": "expected_value",
           "code": "expected_net_edge_below_threshold",
           "summary": "Expected net edge does not clear the minimum threshold.",
-          "detail": "Expected net edge -13.17 bps is below 4.00 bps.",
+          "detail": "Expected net edge -3.94 bps is below 4.00 bps.",
           "metrics": {
-            "expectedNetEdgeBps": -13.17,
+            "expectedNetEdgeBps": -3.94,
             "minNetEdgeBps": 4
           }
         }
@@ -113,23 +98,22 @@
       "symbol": "ORDI-EUR",
       "score": 0,
       "tradeable": false,
-      "realtime": true,
+      "realtime": false,
       "blocked": true,
       "directionalSignal": "SELL",
       "decision": "HOLD",
-      "confidence": 0.471,
+      "confidence": 0.49,
       "agreement": 0.52,
-      "expectedNetEdgeBps": -26.7,
-      "marketQualityScore": 0.348,
+      "expectedNetEdgeBps": -3.96,
+      "marketQualityScore": 0.583,
       "riskFlags": [
-        "regime_stress",
         "slippage_elevated",
         "volatility_elevated",
-        "inventory_constrained",
-        "market_quality_soft"
+        "candle_indecision",
+        "inventory_constrained"
       ],
-      "decisionCadenceMs": 21735,
-      "symbolThrottleMs": 41297,
+      "decisionCadenceMs": 12075,
+      "symbolThrottleMs": 22943,
       "portfolioFitScore": 0.903,
       "portfolioConcentrationPct": 0,
       "symbolBudgetRemainingUsd": 10,
@@ -151,47 +135,21 @@
           "layer": "expected_value",
           "code": "directional_edge_below_threshold",
           "summary": "Directional edge is below the minimum executable threshold.",
-          "detail": "Directional edge 0.016 is below 0.100.",
+          "detail": "Directional edge 0.046 is below 0.100.",
           "metrics": {
-            "directionalEdge": 0.016,
+            "directionalEdge": 0.046,
             "minDirectionalEdge": 0.1
-          }
-        },
-        {
-          "layer": "validator",
-          "code": "deterministic_confidence_below_min",
-          "summary": "Deterministic confidence is below the minimum threshold.",
-          "detail": "Confidence 47.10% is below 55.00%.",
-          "metrics": {
-            "confidence": 47.1,
-            "minConfidence": 55
-          }
-        },
-        {
-          "layer": "market_data",
-          "code": "market_quality_below_threshold",
-          "summary": "Market quality is below the minimum threshold.",
-          "detail": "Market quality 34.80% is below 50.00%.",
-          "metrics": {
-            "marketQualityScore": 34.8,
-            "minMarketQuality": 50
           }
         },
         {
           "layer": "expected_value",
           "code": "expected_net_edge_below_threshold",
           "summary": "Expected net edge does not clear the minimum threshold.",
-          "detail": "Expected net edge -26.70 bps is below 4.00 bps.",
+          "detail": "Expected net edge -3.96 bps is below 4.00 bps.",
           "metrics": {
-            "expectedNetEdgeBps": -26.7,
+            "expectedNetEdgeBps": -3.96,
             "minNetEdgeBps": 4
           }
-        },
-        {
-          "layer": "meta_selector",
-          "code": "stress_regime_rejected",
-          "summary": "Stress regime suppressed the setup.",
-          "detail": "The deterministic engine rejected the trade because realized volatility exceeded the preferred envelope."
         }
       ]
     },
@@ -199,21 +157,21 @@
       "symbol": "SOL-EUR",
       "score": 0,
       "tradeable": false,
-      "realtime": true,
+      "realtime": false,
       "blocked": true,
       "directionalSignal": "SELL",
       "decision": "HOLD",
       "confidence": 0.49,
       "agreement": 0.52,
-      "expectedNetEdgeBps": -17.17,
-      "marketQualityScore": 0.683,
+      "expectedNetEdgeBps": -5.68,
+      "marketQualityScore": 0.935,
       "riskFlags": [
         "slippage_elevated",
         "candle_indecision",
         "inventory_constrained"
       ],
-      "decisionCadenceMs": 14963,
-      "symbolThrottleMs": 28430,
+      "decisionCadenceMs": 8479,
+      "symbolThrottleMs": 11871,
       "portfolioFitScore": 0.903,
       "portfolioConcentrationPct": 0,
       "symbolBudgetRemainingUsd": 10,
@@ -235,9 +193,9 @@
           "layer": "expected_value",
           "code": "expected_net_edge_below_threshold",
           "summary": "Expected net edge does not clear the minimum threshold.",
-          "detail": "Expected net edge -17.17 bps is below 4.00 bps.",
+          "detail": "Expected net edge -5.68 bps is below 4.00 bps.",
           "metrics": {
-            "expectedNetEdgeBps": -17.17,
+            "expectedNetEdgeBps": -5.68,
             "minNetEdgeBps": 4
           }
         }
@@ -247,20 +205,21 @@
       "symbol": "DOGE-EUR",
       "score": 0,
       "tradeable": false,
-      "realtime": true,
+      "realtime": false,
       "blocked": true,
       "directionalSignal": "SELL",
       "decision": "HOLD",
-      "confidence": 0.49,
-      "agreement": 0.52,
-      "expectedNetEdgeBps": -0.91,
-      "marketQualityScore": 0.759,
+      "confidence": 0.476,
+      "agreement": 0.377,
+      "expectedNetEdgeBps": -53.46,
+      "marketQualityScore": 0.638,
       "riskFlags": [
         "slippage_elevated",
+        "candle_indecision",
         "inventory_constrained"
       ],
-      "decisionCadenceMs": 11475,
-      "symbolThrottleMs": 16065,
+      "decisionCadenceMs": 9975,
+      "symbolThrottleMs": 18953,
       "portfolioFitScore": 0.903,
       "portfolioConcentrationPct": 0,
       "symbolBudgetRemainingUsd": 10,
@@ -279,12 +238,22 @@
           }
         },
         {
+          "layer": "validator",
+          "code": "deterministic_confidence_below_min",
+          "summary": "Deterministic confidence is below the minimum threshold.",
+          "detail": "Confidence 47.60% is below 55.00%.",
+          "metrics": {
+            "confidence": 47.6,
+            "minConfidence": 55
+          }
+        },
+        {
           "layer": "expected_value",
           "code": "expected_net_edge_below_threshold",
           "summary": "Expected net edge does not clear the minimum threshold.",
-          "detail": "Expected net edge -0.91 bps is below 4.00 bps.",
+          "detail": "Expected net edge -53.46 bps is below 4.00 bps.",
           "metrics": {
-            "expectedNetEdgeBps": -0.91,
+            "expectedNetEdgeBps": -53.46,
             "minNetEdgeBps": 4
           }
         }
@@ -296,54 +265,20 @@
       "tradeable": false,
       "realtime": false,
       "blocked": true,
-      "directionalSignal": "BUY",
-      "decision": "HOLD",
-      "confidence": 0.49,
-      "agreement": 0.52,
-      "expectedNetEdgeBps": -6.18,
-      "marketQualityScore": 0.941,
-      "riskFlags": [
-        "slippage_elevated",
-        "top_book_depth_thin"
-      ],
-      "decisionCadenceMs": 12718,
-      "symbolThrottleMs": 17805,
-      "portfolioFitScore": 0.903,
-      "portfolioConcentrationPct": 0,
-      "symbolBudgetRemainingUsd": 10,
-      "quoteBudgetAvailableUsd": 9,
-      "positionState": "flat",
-      "rejectionReasons": [
-        {
-          "layer": "expected_value",
-          "code": "expected_net_edge_below_threshold",
-          "summary": "Expected net edge does not clear the minimum threshold.",
-          "detail": "Expected net edge -6.18 bps is below 4.00 bps.",
-          "metrics": {
-            "expectedNetEdgeBps": -6.18,
-            "minNetEdgeBps": 4
-          }
-        }
-      ]
-    },
-    {
-      "symbol": "XRP-EUR",
-      "score": 0,
-      "tradeable": false,
-      "realtime": true,
-      "blocked": true,
       "directionalSignal": "SELL",
       "decision": "HOLD",
       "confidence": 0.49,
       "agreement": 0.52,
-      "expectedNetEdgeBps": -10.11,
-      "marketQualityScore": 0.791,
+      "expectedNetEdgeBps": -6.14,
+      "marketQualityScore": 0.951,
       "riskFlags": [
         "slippage_elevated",
+        "top_book_depth_thin",
+        "candle_indecision",
         "inventory_constrained"
       ],
-      "decisionCadenceMs": 12718,
-      "symbolThrottleMs": 17805,
+      "decisionCadenceMs": 8479,
+      "symbolThrottleMs": 11871,
       "portfolioFitScore": 0.903,
       "portfolioConcentrationPct": 0,
       "symbolBudgetRemainingUsd": 10,
@@ -365,34 +300,68 @@
           "layer": "expected_value",
           "code": "expected_net_edge_below_threshold",
           "summary": "Expected net edge does not clear the minimum threshold.",
-          "detail": "Expected net edge -10.11 bps is below 4.00 bps.",
+          "detail": "Expected net edge -6.14 bps is below 4.00 bps.",
           "metrics": {
-            "expectedNetEdgeBps": -10.11,
+            "expectedNetEdgeBps": -6.14,
             "minNetEdgeBps": 4
           }
         }
       ]
     },
     {
-      "symbol": "USDG-EUR",
+      "symbol": "XRP-EUR",
       "score": 0,
       "tradeable": false,
-      "realtime": true,
+      "realtime": false,
+      "blocked": true,
+      "directionalSignal": "BUY",
+      "decision": "HOLD",
+      "confidence": 0.49,
+      "agreement": 0.52,
+      "expectedNetEdgeBps": -8.58,
+      "marketQualityScore": 0.892,
+      "riskFlags": [
+        "slippage_elevated"
+      ],
+      "decisionCadenceMs": 8479,
+      "symbolThrottleMs": 11871,
+      "portfolioFitScore": 0.903,
+      "portfolioConcentrationPct": 0,
+      "symbolBudgetRemainingUsd": 10,
+      "quoteBudgetAvailableUsd": 9,
+      "positionState": "flat",
+      "rejectionReasons": [
+        {
+          "layer": "expected_value",
+          "code": "expected_net_edge_below_threshold",
+          "summary": "Expected net edge does not clear the minimum threshold.",
+          "detail": "Expected net edge -8.58 bps is below 4.00 bps.",
+          "metrics": {
+            "expectedNetEdgeBps": -8.58,
+            "minNetEdgeBps": 4
+          }
+        }
+      ]
+    },
+    {
+      "symbol": "PEPE-EUR",
+      "score": 0,
+      "tradeable": false,
+      "realtime": false,
       "blocked": true,
       "directionalSignal": "SELL",
       "decision": "HOLD",
       "confidence": 0.49,
       "agreement": 0.52,
-      "expectedNetEdgeBps": -21.79,
-      "marketQualityScore": 0.456,
+      "expectedNetEdgeBps": -33.07,
+      "marketQualityScore": 0.604,
       "riskFlags": [
-        "wide_spread",
+        "slippage_elevated",
         "candle_indecision",
-        "inventory_constrained",
-        "market_quality_soft"
+        "inventory_constrained"
       ],
-      "decisionCadenceMs": 14963,
-      "symbolThrottleMs": 28430,
+      "decisionCadenceMs": 9975,
+      "symbolThrottleMs": 18953,
       "portfolioFitScore": 0.903,
       "portfolioConcentrationPct": 0,
       "symbolBudgetRemainingUsd": 10,
@@ -414,29 +383,19 @@
           "layer": "validator",
           "code": "deterministic_confidence_below_min",
           "summary": "Deterministic confidence is below the minimum threshold.",
-          "detail": "Confidence 51.60% is below 55.00%.",
+          "detail": "Confidence 52.10% is below 55.00%.",
           "metrics": {
-            "confidence": 51.6,
+            "confidence": 52.1,
             "minConfidence": 55
-          }
-        },
-        {
-          "layer": "market_data",
-          "code": "market_quality_below_threshold",
-          "summary": "Market quality is below the minimum threshold.",
-          "detail": "Market quality 45.60% is below 50.00%.",
-          "metrics": {
-            "marketQualityScore": 45.6,
-            "minMarketQuality": 50
           }
         },
         {
           "layer": "expected_value",
           "code": "expected_net_edge_below_threshold",
           "summary": "Expected net edge does not clear the minimum threshold.",
-          "detail": "Expected net edge -21.79 bps is below 4.00 bps.",
+          "detail": "Expected net edge -33.07 bps is below 4.00 bps.",
           "metrics": {
-            "expectedNetEdgeBps": -21.79,
+            "expectedNetEdgeBps": -33.07,
             "minNetEdgeBps": 4
           }
         }
@@ -447,19 +406,17 @@
     "symbol": "BTC-EUR",
     "score": 0,
     "tradeable": false,
-    "realtime": true,
+    "realtime": false,
     "blocked": true,
     "directionalSignal": "BUY",
     "decision": "HOLD",
     "confidence": 0.49,
     "agreement": 0.52,
-    "expectedNetEdgeBps": -3.07,
-    "marketQualityScore": 0.967,
-    "riskFlags": [
-      "slippage_elevated"
-    ],
-    "decisionCadenceMs": 12718,
-    "symbolThrottleMs": 17805,
+    "expectedNetEdgeBps": -2.75,
+    "marketQualityScore": 0.991,
+    "riskFlags": [],
+    "decisionCadenceMs": 8479,
+    "symbolThrottleMs": 11871,
     "portfolioFitScore": 0.903,
     "portfolioConcentrationPct": 0,
     "symbolBudgetRemainingUsd": 10,
@@ -470,9 +427,9 @@
         "layer": "expected_value",
         "code": "expected_net_edge_below_threshold",
         "summary": "Expected net edge does not clear the minimum threshold.",
-        "detail": "Expected net edge -3.07 bps is below 4.00 bps.",
+        "detail": "Expected net edge -2.75 bps is below 4.00 bps.",
         "metrics": {
-          "expectedNetEdgeBps": -3.07,
+          "expectedNetEdgeBps": -2.75,
           "minNetEdgeBps": 4
         }
       }
@@ -483,11 +440,12 @@
       "layer": "expected_value",
       "code": "expected_net_edge_below_threshold",
       "summary": "Expected net edge does not clear the minimum threshold.",
-      "detail": "Expected net edge -3.07 bps is below 4.00 bps.",
+      "detail": "Expected net edge -2.75 bps is below 4.00 bps.",
       "metrics": {
-        "expectedNetEdgeBps": -3.07,
+        "expectedNetEdgeBps": -2.75,
         "minNetEdgeBps": 4
       }
     }
-  ]
+  ],
+  "nextRunAt": "2026-04-17T07:38:30.802Z"
 }
