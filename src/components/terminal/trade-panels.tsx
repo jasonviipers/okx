@@ -17,6 +17,22 @@ function formatUsd(v: number): string {
   return `$${v.toFixed(2)}`;
 }
 
+function formatAssetAmount(value: number, currency?: string): string {
+  if (!currency) {
+    return formatUsd(value);
+  }
+
+  if (Math.abs(value) >= 1_000) {
+    return `${value.toFixed(2)} ${currency}`;
+  }
+
+  if (Math.abs(value) >= 1) {
+    return `${value.toFixed(4)} ${currency}`;
+  }
+
+  return `${value.toFixed(8)} ${currency}`;
+}
+
 function AccountPanel({ overview }: { overview: AccountOverview | null }) {
   if (!overview) {
     return (
@@ -70,14 +86,21 @@ function AccountPanel({ overview }: { overview: AccountOverview | null }) {
         <div className="flex items-baseline gap-2 flex-wrap">
           <span className="terminal-text text-muted-foreground">BUY PWR</span>
           <span className="terminal-text text-terminal-green">
-            {formatUsd(overview.buyingPower.buy)}
+            {formatAssetAmount(
+              overview.buyingPower.buy,
+              overview.buyingPower.quoteCurrency,
+            )}
           </span>
           <span className="terminal-text text-muted-foreground">SELL PWR</span>
           <span className="terminal-text text-terminal-red">
-            {formatUsd(overview.buyingPower.sell)}
+            {formatAssetAmount(
+              overview.buyingPower.sell,
+              overview.buyingPower.baseCurrency,
+            )}
           </span>
           {overview.buyingPower.baseCurrency && (
             <span className="terminal-text-xs text-muted-foreground">
+              quote:{overview.buyingPower.quoteCurrency ?? "?"} base:
               {overview.buyingPower.baseCurrency}
             </span>
           )}

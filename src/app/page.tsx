@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { WatchlistPanel } from "@/components/terminal/market-panels";
 import {
   MemoryRecentPanel,
@@ -106,7 +106,11 @@ export default function TerminalDashboard() {
 
   const systemStatus = useSystemStatus();
   const autonomy = useAutonomyStatus();
-  const watchlist = useWatchlist(DEFAULT_SYMBOLS);
+  const watchlistSymbols =
+    autonomy.data?.candidateSymbols && autonomy.data.candidateSymbols.length > 0
+      ? autonomy.data.candidateSymbols
+      : DEFAULT_SYMBOLS;
+  const watchlist = useWatchlist(watchlistSymbols);
   const account = useAccount(selectedSymbol);
   const positions = usePositions();
   const consensus = useConsensus(selectedSymbol, selectedTimeframe);
@@ -116,6 +120,18 @@ export default function TerminalDashboard() {
   const memoryRecent = useMemoryRecent(selectedSymbol, selectedTimeframe, 25);
   const memorySummary = useMemorySummary(selectedSymbol, selectedTimeframe);
   const autonomyControl = useAutonomyControl();
+
+  useEffect(() => {
+    if (
+      watchlistSymbols.length > 0 &&
+      !watchlistSymbols.includes(selectedSymbol)
+    ) {
+      const nextSymbol = watchlistSymbols[0];
+      if (nextSymbol) {
+        setSelectedSymbol(nextSymbol);
+      }
+    }
+  }, [selectedSymbol, watchlistSymbols]);
 
   const handleToggleAutonomy = useCallback(async () => {
     if (autonomy.data?.enabled) {
@@ -153,7 +169,7 @@ export default function TerminalDashboard() {
           <span className="text-terminal-amber terminal-text-xs">v0.1</span>
         </div>
         <div className="flex-1 flex items-center gap-1 overflow-x-auto no-scrollbar">
-          {DEFAULT_SYMBOLS.slice(0, 8).map((sym) => {
+          {watchlistSymbols.slice(0, 8).map((sym) => {
             const item = symbolItems.find((i) => i.symbol === sym);
             const change = item?.ticker.change24h;
             return (
@@ -167,7 +183,7 @@ export default function TerminalDashboard() {
                   }`}
               >
                 <span className={selectedSymbol === sym ? "font-bold" : ""}>
-                  {sym.replace("-USDT", "")}
+                  {sym.split("-")[0] ?? sym}
                 </span>
                 {item && (
                   <span

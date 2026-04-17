@@ -5,7 +5,12 @@ import {
   getMarketSnapshot,
   getRealtimeMarketContext,
 } from "@/lib/market-data/service";
-import { getAutonomousSymbolUniverse } from "@/lib/okx/instruments";
+import { getAccountOverview } from "@/lib/okx/account";
+import {
+  getAutonomousSymbolUniverse,
+  getConfiguredAutonomousQuoteCurrencies,
+  getQuoteCurrenciesFromBalances,
+} from "@/lib/okx/instruments";
 import type { AutonomySelectionMode } from "@/lib/persistence/autonomy-state";
 import {
   readAutonomyState,
@@ -18,6 +23,7 @@ import { runSwarm } from "@/lib/swarm/orchestrator";
 import type { AutonomyCandidateScore, AutonomyStatus } from "@/types/api";
 import type { Timeframe } from "@/types/market";
 import type { ExecutionResult, SwarmRunResult } from "@/types/swarm";
+import type { AccountOverview } from "@/types/trade";
 
 const WORKER_LEASE_TIMEOUT_MS = 5 * 60_000;
 
@@ -267,17 +273,25 @@ function scoreAutonomyCandidate(
 
 async function resolveAutonomySymbols(
   state: Awaited<ReturnType<typeof readAutonomyState>>,
+  accountOverview: AccountOverview,
 ): Promise<string[]> {
   if (state.selectionMode === "fixed") {
     return [state.symbol];
   }
 
   const configured = parseSymbolList(state.candidateSymbols);
-  if (configured && configured.length > 0) {
-    return configured;
-  }
+  const balanceQuotes = getQuoteCurrenciesFromBalances(
+    accountOverview.tradingBalances,
+  );
+  const quoteCurrencies = [
+    ...balanceQuotes,
+    ...getConfiguredAutonomousQuoteCurrencies(),
+  ];
 
-  return getAutonomousSymbolUniverse();
+  return getAutonomousSymbolUniverse({
+    explicitSymbols: configured,
+    quoteCurrencies,
+  });
 }
 
 async function evaluateAutonomyCandidate(
@@ -351,7 +365,8 @@ async function selectAutonomyRun(
   state: Awaited<ReturnType<typeof readAutonomyState>>,
   budgetRemainingUsd: number,
 ) {
-  const symbols = await resolveAutonomySymbols(state);
+  const accountOverview = await getAccountOverview();
+  const symbols = await resolveAutonomySymbols(state, accountOverview);
   const evaluations: AutonomySymbolEvaluation[] = [];
   const errors: string[] = [];
   const settled = await Promise.allSettled(
