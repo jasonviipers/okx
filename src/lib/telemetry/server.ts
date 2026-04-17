@@ -323,16 +323,13 @@ function summarizeTelemetryRequestContext(
     routerKind:
       typeof context.routerKind === "string" ? context.routerKind : undefined,
     routePath:
-      typeof context.routePath === "string"
-        ? context.routePath
-        : undefined,
+      typeof context.routePath === "string" ? context.routePath : undefined,
     renderSource:
       typeof context.renderSource === "string"
         ? context.renderSource
         : undefined,
     route: typeof context.route === "string" ? context.route : undefined,
-    handler:
-      typeof context.handler === "string" ? context.handler : undefined,
+    handler: typeof context.handler === "string" ? context.handler : undefined,
   });
 }
 

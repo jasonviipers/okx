@@ -88,14 +88,9 @@ function computeSimilarity(record: MemoryRecord, ctx: MarketContext): number {
   const spreadSimilarity =
     1 - Math.min(1, Math.abs(record.spreadBps - spreadBps(ctx)) / 40);
   const volatilitySimilarity =
-    1 -
-    Math.min(1, Math.abs(record.volatilityPct - volatilityPct(ctx)) / 4);
+    1 - Math.min(1, Math.abs(record.volatilityPct - volatilityPct(ctx)) / 4);
   const imbalanceSimilarity =
-    1 -
-    Math.min(
-      1,
-      Math.abs(record.imbalance - orderbookImbalance(ctx)) / 1.2,
-    );
+    1 - Math.min(1, Math.abs(record.imbalance - orderbookImbalance(ctx)) / 1.2);
 
   return clamp(
     priceChangeSimilarity * 0.35 +

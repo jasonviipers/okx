@@ -13,7 +13,7 @@ const DEFAULT_SYMBOLS = [
   "AVAX-USDT",
   "DOT-USDT",
   "LINK-USDT",
-  "MATIC-USDT",
+  "POL-USDT",
 ];
 
 export const dynamic = "force-dynamic";
