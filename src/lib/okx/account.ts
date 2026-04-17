@@ -46,6 +46,19 @@ interface OkxFundingBalanceRow {
   frozenBal?: string;
 }
 
+interface CachedAccountState {
+  balance?: OkxBalanceRow;
+  fundingBalances: OkxFundingBalanceRow[];
+  fetchedAt: number;
+  warning?: string;
+}
+
+const DEFAULT_ACCOUNT_CACHE_TTL_MS = 5_000;
+const DEFAULT_ACCOUNT_STALE_FALLBACK_MS = 120_000;
+
+let cachedAccountState: CachedAccountState | null = null;
+let inFlightAccountState: Promise<CachedAccountState> | null = null;
+
 function parseSpotSymbol(
   symbol?: string,
 ): { base: string; quote: string } | null {
@@ -66,6 +79,35 @@ function parseSpotSymbol(
 
 function toNumber(value: string | undefined): number {
   return Number(value ?? "0");
+}
+
+function parseNumber(value: string | undefined, fallback: number): number {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+function accountCacheTtlMs(): number {
+  return parseNumber(
+    process.env.OKX_ACCOUNT_CACHE_TTL_MS,
+    DEFAULT_ACCOUNT_CACHE_TTL_MS,
+  );
+}
+
+function accountStaleFallbackMs(): number {
+  return parseNumber(
+    process.env.OKX_ACCOUNT_STALE_FALLBACK_MS,
+    DEFAULT_ACCOUNT_STALE_FALLBACK_MS,
+  );
+}
+
+function mergeWarnings(
+  ...warnings: Array<string | undefined>
+): string | undefined {
+  const merged = warnings
+    .map((warning) => warning?.trim())
+    .filter((warning): warning is string => Boolean(warning));
+
+  return merged.length > 0 ? merged.join(" ") : undefined;
 }
 
 function toMarginRatio(imr?: string, mmr?: string): number | undefined {
@@ -112,10 +154,11 @@ function mapFundingBalances(
     .slice(0, 8);
 }
 
-export async function getAccountOverview(
+function buildEmptyOverview(
   symbol?: string,
-): Promise<AccountOverview> {
-  const emptyOverview: AccountOverview = {
+  warning?: string,
+): AccountOverview {
+  return {
     totalEquity: 0,
     availableEquity: 0,
     adjustedEquity: 0,
@@ -132,10 +175,93 @@ export async function getAccountOverview(
     fundingBalances: [],
     accountMode: getOkxAccountModeLabel(),
     updatedAt: new Date().toISOString(),
-    warning: !hasOkxTradingCredentials()
+    warning,
+  };
+}
+
+export function buildUnavailableAccountOverview(
+  symbol?: string,
+  warning?: string,
+): AccountOverview {
+  return buildEmptyOverview(symbol, warning);
+}
+
+async function fetchAccountStateFromOkx(): Promise<CachedAccountState> {
+  const [balanceRows, fundingBalanceRows] = await Promise.all([
+    okxPrivateGet<OkxBalanceRow>(OKX_ENDPOINTS.balance),
+    okxPrivateGet<OkxFundingBalanceRow>(OKX_ENDPOINTS.fundingBalances).catch(
+      (error) => {
+        if (
+          error instanceof OkxRequestError &&
+          (error.status === 400 ||
+            error.status === 401 ||
+            error.status === 403 ||
+            error.status === 404)
+        ) {
+          return [] as OkxFundingBalanceRow[];
+        }
+
+        throw error;
+      },
+    ),
+  ]);
+
+  return {
+    balance: balanceRows[0],
+    fundingBalances: fundingBalanceRows,
+    fetchedAt: Date.now(),
+  };
+}
+
+async function getCachedAccountState(): Promise<CachedAccountState> {
+  if (
+    cachedAccountState &&
+    Date.now() - cachedAccountState.fetchedAt <= accountCacheTtlMs()
+  ) {
+    return cachedAccountState;
+  }
+
+  if (inFlightAccountState) {
+    return inFlightAccountState;
+  }
+
+  inFlightAccountState = (async () => {
+    try {
+      const nextState = await fetchAccountStateFromOkx();
+      cachedAccountState = nextState;
+      return nextState;
+    } catch (error) {
+      if (
+        error instanceof OkxRequestError &&
+        error.status === 429 &&
+        cachedAccountState &&
+        Date.now() - cachedAccountState.fetchedAt <= accountStaleFallbackMs()
+      ) {
+        return {
+          ...cachedAccountState,
+          warning:
+            "Using the last known account snapshot because OKX rate-limited the private account API (429).",
+        };
+      }
+
+      throw error;
+    } finally {
+      inFlightAccountState = null;
+    }
+  })();
+
+  return inFlightAccountState;
+}
+
+export async function getAccountOverview(
+  symbol?: string,
+): Promise<AccountOverview> {
+  const emptyOverview = buildEmptyOverview(
+    symbol,
+    !hasOkxTradingCredentials()
       ? "OKX private credentials are not configured."
       : undefined,
-  };
+  );
 
   if (!hasOkxTradingCredentials()) {
     return emptyOverview;
@@ -143,25 +269,9 @@ export async function getAccountOverview(
 
   try {
     const symbolParts = parseSpotSymbol(symbol);
-    const [balanceRows, fundingBalanceRows] = await Promise.all([
-      okxPrivateGet<OkxBalanceRow>(OKX_ENDPOINTS.balance),
-      okxPrivateGet<OkxFundingBalanceRow>(OKX_ENDPOINTS.fundingBalances).catch(
-        (error) => {
-          if (
-            error instanceof OkxRequestError &&
-            (error.status === 400 ||
-              error.status === 401 ||
-              error.status === 403 ||
-              error.status === 404)
-          ) {
-            return [] as OkxFundingBalanceRow[];
-          }
-
-          throw error;
-        },
-      ),
-    ]);
-    const balance = balanceRows[0];
+    const accountState = await getCachedAccountState();
+    const balance = accountState.balance;
+    const fundingBalanceRows = accountState.fundingBalances;
 
     let maxAvailRows: OkxMaxAvailRow[] = [];
     let buyingPowerWarning: string | undefined;
@@ -224,23 +334,25 @@ export async function getAccountOverview(
       tradingBalances,
       fundingBalances,
       accountMode: getOkxAccountModeLabel(),
-      updatedAt: new Date().toISOString(),
-      warning:
+      updatedAt: new Date(accountState.fetchedAt).toISOString(),
+      warning: mergeWarnings(
         derivedSpotBuyingPower ||
-        maxAvailRows.length > 0 ||
-        fundingBalances.length > 0
+          maxAvailRows.length > 0 ||
+          fundingBalances.length > 0
           ? undefined
           : buyingPowerWarning,
+        accountState.warning,
+      ),
     };
   } catch (error) {
     if (
       error instanceof OkxRequestError &&
       (error.status === 401 || error.status === 403)
     ) {
-      return {
-        ...emptyOverview,
-        warning: `OKX private account request was rejected. ${getOkxPrivateAuthHint()}`,
-      };
+      return buildEmptyOverview(
+        symbol,
+        `OKX private account request was rejected. ${getOkxPrivateAuthHint()}`,
+      );
     }
 
     throw error;
