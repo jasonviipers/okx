@@ -1,6 +1,5 @@
 import "server-only";
 
-import { headers } from "next/headers";
 import { getOkxAccountModeLabel } from "@/lib/configs/okx";
 import { getMarketSnapshot } from "@/lib/market-data/service";
 import { getAccountOverview } from "@/lib/okx/account";
@@ -313,18 +312,6 @@ function recordExecutionError(timestamp: number) {
   }
 }
 
-async function getExecutionUrl() {
-  const headerStore = await headers();
-  const host =
-    headerStore.get("x-forwarded-host") ??
-    headerStore.get("host") ??
-    "localhost:3000";
-  const protocol =
-    headerStore.get("x-forwarded-proto") ??
-    (host.includes("localhost") ? "http" : "https");
-  return `${protocol}://${host}/api/ai/trade/execute`;
-}
-
 function logResult(result: ExecutionResult) {
   console.log(
     `[${result.timestamp}] [AutoExec] symbol=${result.symbol} decision=${result.decision} size=${result.size} status=${result.status} response=${JSON.stringify(result.response ?? result.order ?? result.reason ?? result.error ?? null)}`,
@@ -430,6 +417,7 @@ function mapExecutionGuardReason(
 
 export async function autoExecuteConsensus(
   consensus: ConsensusResult,
+  baseUrl: string,
 ): Promise<ExecutionResult> {
   const timestamp = nowIso();
   const decision = normalizeDecision(consensus);
@@ -731,7 +719,7 @@ export async function autoExecuteConsensus(
       return result;
     }
 
-    const url = await getExecutionUrl();
+    const url = `${baseUrl}/api/ai/trade/execute`;
     await updateExecutionIntent(executionIntent.id, {
       status: "submitted",
       normalizedSize,
