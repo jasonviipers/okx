@@ -21,8 +21,9 @@ import {
   useDashboard,
 } from "@/features/dashboard/dashboard-context";
 import { addLog } from "@/features/dashboard/hooks/use-log-store";
-import { useSystemStatus } from "@/hooks/use-terminal-data";
+import { useAutonomyStatus, useSystemStatus } from "@/hooks/use-terminal-data";
 import { cn } from "@/lib/utils";
+import type { Timeframe } from "@/types/market";
 
 const COLOR_SCHEMES = [
   "phosphor",
@@ -38,13 +39,14 @@ function DashboardShell() {
     selectedSymbol,
     setSelectedSymbol,
     selectedTimeframe,
-    setActiveTab,
-    activeTab,
+    setSelectedTimeframe,
     colorScheme,
     setColorScheme,
   } = useDashboard();
 
   const systemStatus = useSystemStatus();
+  const autonomyStatus = useAutonomyStatus();
+  const syncedAutonomyRef = useRef(false);
 
   const prevStatusSigRef = useRef("");
   const prevErrorRef = useRef<string | undefined>(undefined);
@@ -65,6 +67,29 @@ function DashboardShell() {
       addLog("ERROR", "System", `Status error: ${systemStatus.error}`);
     }
   }, [systemStatus.data, systemStatus.error]);
+
+  useEffect(() => {
+    if (syncedAutonomyRef.current || !autonomyStatus.data) {
+      return;
+    }
+
+    const { symbol, timeframe } = autonomyStatus.data;
+    syncedAutonomyRef.current = true;
+
+    if (symbol && selectedSymbol === "BTC-USDT") {
+      setSelectedSymbol(symbol);
+    }
+
+    if (timeframe && selectedTimeframe === "1H") {
+      setSelectedTimeframe(timeframe as Timeframe);
+    }
+  }, [
+    autonomyStatus.data,
+    selectedSymbol,
+    selectedTimeframe,
+    setSelectedSymbol,
+    setSelectedTimeframe,
+  ]);
 
   const [_isPending, startTransition] = useTransition();
 

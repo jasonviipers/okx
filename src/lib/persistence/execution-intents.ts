@@ -2,45 +2,10 @@ import "server-only";
 
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
+import type { StoredExecutionIntent } from "@/types/history";
 import type { ConsensusResult, ExecutionResult } from "@/types/swarm";
 
-type ExecutionIntentStatus =
-  | "created"
-  | "submitted"
-  | "success"
-  | "hold"
-  | "error";
-
-type ExecutionIntentDecisionSnapshot = {
-  signal: ConsensusResult["signal"];
-  directionalSignal: ConsensusResult["directionalSignal"];
-  decision: string;
-  confidence: number;
-  agreement: number;
-  executionEligible: boolean;
-  decisionSource?: ConsensusResult["decisionSource"];
-  expectedNetEdgeBps?: ConsensusResult["expectedNetEdgeBps"];
-  marketQualityScore?: ConsensusResult["marketQualityScore"];
-  riskFlags?: ConsensusResult["riskFlags"];
-  featureSummary?: ConsensusResult["featureSummary"];
-  rejectionReasons: ConsensusResult["rejectionReasons"];
-};
-
-export interface ExecutionIntentRecord {
-  id: string;
-  createdAt: string;
-  updatedAt: string;
-  symbol: string;
-  timeframe: string;
-  decision: string;
-  confidence: number;
-  targetSize: number;
-  normalizedSize?: number;
-  status: ExecutionIntentStatus;
-  reason?: string;
-  response?: unknown;
-  decisionSnapshot: ExecutionIntentDecisionSnapshot;
-}
+export type ExecutionIntentRecord = StoredExecutionIntent;
 
 const DATA_DIR = path.join(process.cwd(), ".data");
 const EXECUTION_INTENTS_FILE = path.join(DATA_DIR, "execution-intents.json");
@@ -112,6 +77,13 @@ export async function createExecutionIntent(
   entries.unshift(record);
   await writeIntents(entries.slice(0, 500));
   return record;
+}
+
+export async function getExecutionIntents(
+  limit = 100,
+): Promise<ExecutionIntentRecord[]> {
+  const entries = await readIntents();
+  return entries.slice(0, limit);
 }
 
 export async function updateExecutionIntent(

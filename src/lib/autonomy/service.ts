@@ -26,12 +26,18 @@ import type { ExecutionResult, SwarmRunResult } from "@/types/swarm";
 import type { AccountAssetBalance, AccountOverview } from "@/types/trade";
 
 const WORKER_LEASE_TIMEOUT_MS = 5 * 60_000;
+const AUTONOMY_SCHEDULER_TICK_MS = 5_000;
 const DEFAULT_MAX_SYMBOL_ALLOCATION_PCT = 0.35;
 const DEFAULT_PORTFOLIO_BUFFER_PCT = 0.9;
 const DEFAULT_MIN_TRADE_NOTIONAL_USD = 5;
 
+declare global {
+  var __okxAutonomyScheduler: NodeJS.Timeout | undefined;
+}
+
 function autoStartEnabledByEnv(): boolean {
-  return process.env.AUTONOMOUS_TRADING_ENABLED?.toLowerCase() === "true";
+  const val = process.env.AUTONOMOUS_TRADING_ENABLED?.toLowerCase();
+  return val !== "false";
 }
 
 function parseNumber(value: string | undefined, fallback: number): number {
@@ -131,7 +137,27 @@ function shouldRunNow(state: Awaited<ReturnType<typeof readAutonomyState>>) {
   );
 }
 
+function ensureAutonomyScheduler() {
+  if (globalThis.__okxAutonomyScheduler) {
+    return;
+  }
+
+  const timer = setInterval(() => {
+    void maybeDispatchDueAutonomyRun().catch((error) => {
+      console.error(
+        "[AutonomyScheduler] Failed to dispatch due autonomy run:",
+        error,
+      );
+    });
+  }, AUTONOMY_SCHEDULER_TICK_MS);
+
+  timer.unref?.();
+  globalThis.__okxAutonomyScheduler = timer;
+}
+
 export async function ensureAutonomyBootState() {
+  ensureAutonomyScheduler();
+
   if (!autoStartEnabledByEnv()) {
     return;
   }
@@ -150,6 +176,8 @@ export async function ensureAutonomyBootState() {
 }
 
 export async function getAutonomyStatus(): Promise<AutonomyStatus> {
+  ensureAutonomyScheduler();
+
   const [rawState, usedBudgetUsd] = await Promise.all([
     readAutonomyState(),
     getTodayExecutedNotionalUsd(),
@@ -172,6 +200,8 @@ export async function startAutonomyLoop(config?: {
   timeframe?: Timeframe;
   intervalMs?: number;
 }) {
+  ensureAutonomyScheduler();
+
   await updateAutonomyState((state) => ({
     ...state,
     running: true,
@@ -188,18 +218,6 @@ export async function startAutonomyLoop(config?: {
   }));
 
   return getAutonomyStatus();
-}
-
-function parseSymbolList(value: string[] | undefined): string[] | undefined {
-  if (!value || value.length === 0) {
-    return undefined;
-  }
-
-  return [
-    ...new Set(
-      value.map((symbol) => symbol.trim().toUpperCase()).filter(Boolean),
-    ),
-  ];
 }
 
 function clamp01(value: number): number {
@@ -751,6 +769,8 @@ async function selectAutonomyRun(
 }
 
 export async function stopAutonomyLoop() {
+  ensureAutonomyScheduler();
+
   await updateAutonomyState((state) => ({
     ...state,
     running: false,
@@ -767,6 +787,8 @@ export async function dispatchAutonomyWorker(options?: {
   force?: boolean;
   trigger?: "manual_start" | "status_poll" | "scheduler" | "manual";
 }) {
+  ensureAutonomyScheduler();
+
   const rawState = await readAutonomyState();
   const state = normalizeWorkerLeaseState(rawState);
   if (state !== rawState) {

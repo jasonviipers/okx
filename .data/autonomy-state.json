@@ -5,9 +5,9 @@
   "candidateSymbols": [
     "BTC-EUR",
     "ETH-EUR",
-    "ORDI-EUR",
-    "SOL-EUR",
     "DOGE-EUR",
+    "SOL-EUR",
+    "ORDI-EUR",
     "USDC-EUR",
     "XRP-EUR",
     "PEPE-EUR"
@@ -16,12 +16,12 @@
   "intervalMs": 60000,
   "cooldownMs": 180000,
   "budgetUsd": 10,
-  "iterationCount": 17,
+  "iterationCount": 21,
   "inFlight": false,
   "symbolThrottleUntil": {
-    "BTC-EUR": "2026-04-17T07:37:42.673Z"
+    "BTC-EUR": "2026-04-17T18:48:07.245Z"
   },
-  "lastRunAt": "2026-04-17T07:37:29.436Z",
+  "lastRunAt": "2026-04-17T18:47:54.640Z",
   "lastDecision": "HOLD",
   "lastExecutionStatus": "hold",
   "lastReason": "consensus not execution eligible",
@@ -32,15 +32,19 @@
       "tradeable": false,
       "realtime": false,
       "blocked": true,
-      "directionalSignal": "BUY",
+      "directionalSignal": "SELL",
       "decision": "HOLD",
       "confidence": 0.49,
       "agreement": 0.52,
-      "expectedNetEdgeBps": -2.75,
-      "marketQualityScore": 0.991,
-      "riskFlags": [],
-      "decisionCadenceMs": 8479,
-      "symbolThrottleMs": 11871,
+      "expectedNetEdgeBps": -6.49,
+      "marketQualityScore": 0.964,
+      "riskFlags": [
+        "slippage_elevated",
+        "candle_indecision",
+        "inventory_constrained"
+      ],
+      "decisionCadenceMs": 7268,
+      "symbolThrottleMs": 10175,
       "portfolioFitScore": 0.903,
       "portfolioConcentrationPct": 0,
       "symbolBudgetRemainingUsd": 10,
@@ -48,12 +52,23 @@
       "positionState": "flat",
       "rejectionReasons": [
         {
+          "layer": "execution",
+          "code": "spot_shorting_not_available",
+          "summary": "Spot account is flat, so the bearish setup resolves to HOLD.",
+          "detail": "The engine detected a bearish setup, but there is no base inventory available and spot mode cannot open a synthetic short.",
+          "metrics": {
+            "maxExecutableSellUsd": 0,
+            "availableBaseUsd": 0,
+            "minimumTradeNotionalUsd": 5
+          }
+        },
+        {
           "layer": "expected_value",
           "code": "expected_net_edge_below_threshold",
           "summary": "Expected net edge does not clear the minimum threshold.",
-          "detail": "Expected net edge -2.75 bps is below 4.00 bps.",
+          "detail": "Expected net edge -6.49 bps is below 4.00 bps.",
           "metrics": {
-            "expectedNetEdgeBps": -2.75,
+            "expectedNetEdgeBps": -6.49,
             "minNetEdgeBps": 4
           }
         }
@@ -62,20 +77,22 @@
     {
       "symbol": "ETH-EUR",
       "score": 0,
-      "tradeable": false,
-      "realtime": false,
+      "tradeable": true,
+      "realtime": true,
       "blocked": true,
-      "directionalSignal": "BUY",
+      "directionalSignal": "SELL",
       "decision": "HOLD",
       "confidence": 0.49,
       "agreement": 0.52,
-      "expectedNetEdgeBps": -3.94,
-      "marketQualityScore": 0.982,
+      "expectedNetEdgeBps": -10.07,
+      "marketQualityScore": 0.894,
       "riskFlags": [
-        "slippage_elevated"
+        "slippage_elevated",
+        "candle_indecision",
+        "inventory_constrained"
       ],
-      "decisionCadenceMs": 8479,
-      "symbolThrottleMs": 11871,
+      "decisionCadenceMs": 7268,
+      "symbolThrottleMs": 10175,
       "portfolioFitScore": 0.903,
       "portfolioConcentrationPct": 0,
       "symbolBudgetRemainingUsd": 10,
@@ -83,12 +100,23 @@
       "positionState": "flat",
       "rejectionReasons": [
         {
+          "layer": "execution",
+          "code": "spot_shorting_not_available",
+          "summary": "Spot account is flat, so the bearish setup resolves to HOLD.",
+          "detail": "The engine detected a bearish setup, but there is no base inventory available and spot mode cannot open a synthetic short.",
+          "metrics": {
+            "maxExecutableSellUsd": 0,
+            "availableBaseUsd": 0,
+            "minimumTradeNotionalUsd": 5
+          }
+        },
+        {
           "layer": "expected_value",
           "code": "expected_net_edge_below_threshold",
           "summary": "Expected net edge does not clear the minimum threshold.",
-          "detail": "Expected net edge -3.94 bps is below 4.00 bps.",
+          "detail": "Expected net edge -10.07 bps is below 4.00 bps.",
           "metrics": {
-            "expectedNetEdgeBps": -3.94,
+            "expectedNetEdgeBps": -10.07,
             "minNetEdgeBps": 4
           }
         }
@@ -97,305 +125,64 @@
     {
       "symbol": "ORDI-EUR",
       "score": 0,
-      "tradeable": false,
-      "realtime": false,
+      "tradeable": true,
+      "realtime": true,
       "blocked": true,
-      "directionalSignal": "SELL",
+      "directionalSignal": "BUY",
       "decision": "HOLD",
-      "confidence": 0.49,
-      "agreement": 0.52,
-      "expectedNetEdgeBps": -3.96,
-      "marketQualityScore": 0.583,
+      "confidence": 0.46,
+      "agreement": 0.333,
+      "expectedNetEdgeBps": -36.56,
+      "marketQualityScore": 0.303,
       "riskFlags": [
         "slippage_elevated",
-        "volatility_elevated",
-        "candle_indecision",
-        "inventory_constrained"
+        "market_quality_soft"
       ],
-      "decisionCadenceMs": 12075,
-      "symbolThrottleMs": 22943,
+      "decisionCadenceMs": 12600,
+      "symbolThrottleMs": 23940,
       "portfolioFitScore": 0.903,
       "portfolioConcentrationPct": 0,
       "symbolBudgetRemainingUsd": 10,
       "quoteBudgetAvailableUsd": 9,
       "positionState": "flat",
       "rejectionReasons": [
-        {
-          "layer": "execution",
-          "code": "spot_shorting_not_available",
-          "summary": "Spot account is flat, so the bearish setup resolves to HOLD.",
-          "detail": "The engine detected a bearish setup, but there is no base inventory available and spot mode cannot open a synthetic short.",
-          "metrics": {
-            "maxExecutableSellUsd": 0,
-            "availableBaseUsd": 0,
-            "minimumTradeNotionalUsd": 5
-          }
-        },
         {
           "layer": "expected_value",
           "code": "directional_edge_below_threshold",
           "summary": "Directional edge is below the minimum executable threshold.",
-          "detail": "Directional edge 0.046 is below 0.100.",
+          "detail": "Directional edge 0.036 is below 0.100.",
           "metrics": {
-            "directionalEdge": 0.046,
+            "directionalEdge": 0.036,
             "minDirectionalEdge": 0.1
           }
         },
         {
-          "layer": "expected_value",
-          "code": "expected_net_edge_below_threshold",
-          "summary": "Expected net edge does not clear the minimum threshold.",
-          "detail": "Expected net edge -3.96 bps is below 4.00 bps.",
-          "metrics": {
-            "expectedNetEdgeBps": -3.96,
-            "minNetEdgeBps": 4
-          }
-        }
-      ]
-    },
-    {
-      "symbol": "SOL-EUR",
-      "score": 0,
-      "tradeable": false,
-      "realtime": false,
-      "blocked": true,
-      "directionalSignal": "SELL",
-      "decision": "HOLD",
-      "confidence": 0.49,
-      "agreement": 0.52,
-      "expectedNetEdgeBps": -5.68,
-      "marketQualityScore": 0.935,
-      "riskFlags": [
-        "slippage_elevated",
-        "candle_indecision",
-        "inventory_constrained"
-      ],
-      "decisionCadenceMs": 8479,
-      "symbolThrottleMs": 11871,
-      "portfolioFitScore": 0.903,
-      "portfolioConcentrationPct": 0,
-      "symbolBudgetRemainingUsd": 10,
-      "quoteBudgetAvailableUsd": 9,
-      "positionState": "flat",
-      "rejectionReasons": [
-        {
-          "layer": "execution",
-          "code": "spot_shorting_not_available",
-          "summary": "Spot account is flat, so the bearish setup resolves to HOLD.",
-          "detail": "The engine detected a bearish setup, but there is no base inventory available and spot mode cannot open a synthetic short.",
-          "metrics": {
-            "maxExecutableSellUsd": 0,
-            "availableBaseUsd": 0,
-            "minimumTradeNotionalUsd": 5
-          }
-        },
-        {
-          "layer": "expected_value",
-          "code": "expected_net_edge_below_threshold",
-          "summary": "Expected net edge does not clear the minimum threshold.",
-          "detail": "Expected net edge -5.68 bps is below 4.00 bps.",
-          "metrics": {
-            "expectedNetEdgeBps": -5.68,
-            "minNetEdgeBps": 4
-          }
-        }
-      ]
-    },
-    {
-      "symbol": "DOGE-EUR",
-      "score": 0,
-      "tradeable": false,
-      "realtime": false,
-      "blocked": true,
-      "directionalSignal": "SELL",
-      "decision": "HOLD",
-      "confidence": 0.476,
-      "agreement": 0.377,
-      "expectedNetEdgeBps": -53.46,
-      "marketQualityScore": 0.638,
-      "riskFlags": [
-        "slippage_elevated",
-        "candle_indecision",
-        "inventory_constrained"
-      ],
-      "decisionCadenceMs": 9975,
-      "symbolThrottleMs": 18953,
-      "portfolioFitScore": 0.903,
-      "portfolioConcentrationPct": 0,
-      "symbolBudgetRemainingUsd": 10,
-      "quoteBudgetAvailableUsd": 9,
-      "positionState": "flat",
-      "rejectionReasons": [
-        {
-          "layer": "execution",
-          "code": "spot_shorting_not_available",
-          "summary": "Spot account is flat, so the bearish setup resolves to HOLD.",
-          "detail": "The engine detected a bearish setup, but there is no base inventory available and spot mode cannot open a synthetic short.",
-          "metrics": {
-            "maxExecutableSellUsd": 0,
-            "availableBaseUsd": 0,
-            "minimumTradeNotionalUsd": 5
-          }
-        },
-        {
           "layer": "validator",
           "code": "deterministic_confidence_below_min",
           "summary": "Deterministic confidence is below the minimum threshold.",
-          "detail": "Confidence 47.60% is below 55.00%.",
+          "detail": "Confidence 46.00% is below 55.00%.",
           "metrics": {
-            "confidence": 47.6,
+            "confidence": 46,
             "minConfidence": 55
           }
         },
         {
-          "layer": "expected_value",
-          "code": "expected_net_edge_below_threshold",
-          "summary": "Expected net edge does not clear the minimum threshold.",
-          "detail": "Expected net edge -53.46 bps is below 4.00 bps.",
+          "layer": "market_data",
+          "code": "market_quality_below_threshold",
+          "summary": "Market quality is below the minimum threshold.",
+          "detail": "Market quality 30.30% is below 50.00%.",
           "metrics": {
-            "expectedNetEdgeBps": -53.46,
-            "minNetEdgeBps": 4
-          }
-        }
-      ]
-    },
-    {
-      "symbol": "USDC-EUR",
-      "score": 0,
-      "tradeable": false,
-      "realtime": false,
-      "blocked": true,
-      "directionalSignal": "SELL",
-      "decision": "HOLD",
-      "confidence": 0.49,
-      "agreement": 0.52,
-      "expectedNetEdgeBps": -6.14,
-      "marketQualityScore": 0.951,
-      "riskFlags": [
-        "slippage_elevated",
-        "top_book_depth_thin",
-        "candle_indecision",
-        "inventory_constrained"
-      ],
-      "decisionCadenceMs": 8479,
-      "symbolThrottleMs": 11871,
-      "portfolioFitScore": 0.903,
-      "portfolioConcentrationPct": 0,
-      "symbolBudgetRemainingUsd": 10,
-      "quoteBudgetAvailableUsd": 9,
-      "positionState": "flat",
-      "rejectionReasons": [
-        {
-          "layer": "execution",
-          "code": "spot_shorting_not_available",
-          "summary": "Spot account is flat, so the bearish setup resolves to HOLD.",
-          "detail": "The engine detected a bearish setup, but there is no base inventory available and spot mode cannot open a synthetic short.",
-          "metrics": {
-            "maxExecutableSellUsd": 0,
-            "availableBaseUsd": 0,
-            "minimumTradeNotionalUsd": 5
+            "marketQualityScore": 30.3,
+            "minMarketQuality": 50
           }
         },
         {
           "layer": "expected_value",
           "code": "expected_net_edge_below_threshold",
           "summary": "Expected net edge does not clear the minimum threshold.",
-          "detail": "Expected net edge -6.14 bps is below 4.00 bps.",
+          "detail": "Expected net edge -36.56 bps is below 4.00 bps.",
           "metrics": {
-            "expectedNetEdgeBps": -6.14,
-            "minNetEdgeBps": 4
-          }
-        }
-      ]
-    },
-    {
-      "symbol": "XRP-EUR",
-      "score": 0,
-      "tradeable": false,
-      "realtime": false,
-      "blocked": true,
-      "directionalSignal": "BUY",
-      "decision": "HOLD",
-      "confidence": 0.49,
-      "agreement": 0.52,
-      "expectedNetEdgeBps": -8.58,
-      "marketQualityScore": 0.892,
-      "riskFlags": [
-        "slippage_elevated"
-      ],
-      "decisionCadenceMs": 8479,
-      "symbolThrottleMs": 11871,
-      "portfolioFitScore": 0.903,
-      "portfolioConcentrationPct": 0,
-      "symbolBudgetRemainingUsd": 10,
-      "quoteBudgetAvailableUsd": 9,
-      "positionState": "flat",
-      "rejectionReasons": [
-        {
-          "layer": "expected_value",
-          "code": "expected_net_edge_below_threshold",
-          "summary": "Expected net edge does not clear the minimum threshold.",
-          "detail": "Expected net edge -8.58 bps is below 4.00 bps.",
-          "metrics": {
-            "expectedNetEdgeBps": -8.58,
-            "minNetEdgeBps": 4
-          }
-        }
-      ]
-    },
-    {
-      "symbol": "PEPE-EUR",
-      "score": 0,
-      "tradeable": false,
-      "realtime": false,
-      "blocked": true,
-      "directionalSignal": "SELL",
-      "decision": "HOLD",
-      "confidence": 0.49,
-      "agreement": 0.52,
-      "expectedNetEdgeBps": -33.07,
-      "marketQualityScore": 0.604,
-      "riskFlags": [
-        "slippage_elevated",
-        "candle_indecision",
-        "inventory_constrained"
-      ],
-      "decisionCadenceMs": 9975,
-      "symbolThrottleMs": 18953,
-      "portfolioFitScore": 0.903,
-      "portfolioConcentrationPct": 0,
-      "symbolBudgetRemainingUsd": 10,
-      "quoteBudgetAvailableUsd": 9,
-      "positionState": "flat",
-      "rejectionReasons": [
-        {
-          "layer": "execution",
-          "code": "spot_shorting_not_available",
-          "summary": "Spot account is flat, so the bearish setup resolves to HOLD.",
-          "detail": "The engine detected a bearish setup, but there is no base inventory available and spot mode cannot open a synthetic short.",
-          "metrics": {
-            "maxExecutableSellUsd": 0,
-            "availableBaseUsd": 0,
-            "minimumTradeNotionalUsd": 5
-          }
-        },
-        {
-          "layer": "validator",
-          "code": "deterministic_confidence_below_min",
-          "summary": "Deterministic confidence is below the minimum threshold.",
-          "detail": "Confidence 52.10% is below 55.00%.",
-          "metrics": {
-            "confidence": 52.1,
-            "minConfidence": 55
-          }
-        },
-        {
-          "layer": "expected_value",
-          "code": "expected_net_edge_below_threshold",
-          "summary": "Expected net edge does not clear the minimum threshold.",
-          "detail": "Expected net edge -33.07 bps is below 4.00 bps.",
-          "metrics": {
-            "expectedNetEdgeBps": -33.07,
+            "expectedNetEdgeBps": -36.56,
             "minNetEdgeBps": 4
           }
         }
@@ -408,15 +195,19 @@
     "tradeable": false,
     "realtime": false,
     "blocked": true,
-    "directionalSignal": "BUY",
+    "directionalSignal": "SELL",
     "decision": "HOLD",
     "confidence": 0.49,
     "agreement": 0.52,
-    "expectedNetEdgeBps": -2.75,
-    "marketQualityScore": 0.991,
-    "riskFlags": [],
-    "decisionCadenceMs": 8479,
-    "symbolThrottleMs": 11871,
+    "expectedNetEdgeBps": -6.49,
+    "marketQualityScore": 0.964,
+    "riskFlags": [
+      "slippage_elevated",
+      "candle_indecision",
+      "inventory_constrained"
+    ],
+    "decisionCadenceMs": 7268,
+    "symbolThrottleMs": 10175,
     "portfolioFitScore": 0.903,
     "portfolioConcentrationPct": 0,
     "symbolBudgetRemainingUsd": 10,
@@ -424,12 +215,23 @@
     "positionState": "flat",
     "rejectionReasons": [
       {
+        "layer": "execution",
+        "code": "spot_shorting_not_available",
+        "summary": "Spot account is flat, so the bearish setup resolves to HOLD.",
+        "detail": "The engine detected a bearish setup, but there is no base inventory available and spot mode cannot open a synthetic short.",
+        "metrics": {
+          "maxExecutableSellUsd": 0,
+          "availableBaseUsd": 0,
+          "minimumTradeNotionalUsd": 5
+        }
+      },
+      {
         "layer": "expected_value",
         "code": "expected_net_edge_below_threshold",
         "summary": "Expected net edge does not clear the minimum threshold.",
-        "detail": "Expected net edge -2.75 bps is below 4.00 bps.",
+        "detail": "Expected net edge -6.49 bps is below 4.00 bps.",
         "metrics": {
-          "expectedNetEdgeBps": -2.75,
+          "expectedNetEdgeBps": -6.49,
           "minNetEdgeBps": 4
         }
       }
@@ -437,15 +239,26 @@
   },
   "lastRejectedReasons": [
     {
+      "layer": "execution",
+      "code": "spot_shorting_not_available",
+      "summary": "Spot account is flat, so the bearish setup resolves to HOLD.",
+      "detail": "The engine detected a bearish setup, but there is no base inventory available and spot mode cannot open a synthetic short.",
+      "metrics": {
+        "maxExecutableSellUsd": 0,
+        "availableBaseUsd": 0,
+        "minimumTradeNotionalUsd": 5
+      }
+    },
+    {
       "layer": "expected_value",
       "code": "expected_net_edge_below_threshold",
       "summary": "Expected net edge does not clear the minimum threshold.",
-      "detail": "Expected net edge -2.75 bps is below 4.00 bps.",
+      "detail": "Expected net edge -6.49 bps is below 4.00 bps.",
       "metrics": {
-        "expectedNetEdgeBps": -2.75,
+        "expectedNetEdgeBps": -6.49,
         "minNetEdgeBps": 4
       }
     }
   ],
-  "nextRunAt": "2026-04-17T07:38:30.802Z"
+  "nextRunAt": "2026-04-17T18:48:57.070Z"
 }

@@ -1,5 +1,9 @@
 import type { ApiEnvelope, AutonomyStatus, RuntimeStatus } from "@/types/api";
-import type { StoredSwarmRun, StoredTradeExecution } from "@/types/history";
+import type {
+  StoredExecutionIntent,
+  StoredSwarmRun,
+  StoredTradeExecution,
+} from "@/types/history";
 import type {
   Candle,
   MarketFeedStatus,
@@ -152,6 +156,12 @@ export function getTradeHistory(limit = 25) {
   return fetchJson<
     ApiEnvelope<{ entries: StoredTradeExecution[]; count: number }>
   >(`/api/ai/trade/history?limit=${limit}`);
+}
+
+export function getExecutionIntents(limit = 25) {
+  return fetchJson<
+    ApiEnvelope<{ entries: StoredExecutionIntent[]; count: number }>
+  >(`/api/ai/trade/intents?limit=${limit}`);
 }
 
 export function getMemoryRecent(

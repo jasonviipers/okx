@@ -28,6 +28,9 @@ export function PositionsPanel() {
 
   const positions: Position[] = positionsData.data?.positions ?? [];
   const overview: AccountOverview | undefined = accountData.data?.overview;
+  const spotHoldings = (overview?.tradingBalances ?? []).filter(
+    (balance) => balance.availableBalance > 0,
+  );
 
   const totalPnl = useMemo(() => {
     return positions.reduce(
@@ -126,7 +129,7 @@ export function PositionsPanel() {
           </div>
           {positions.length === 0 ? (
             <div className="px-2 py-3 text-[0.625rem] text-terminal-dim text-center">
-              No open positions
+              No open derivative-style positions
             </div>
           ) : (
             positions.map((pos: Position, index: number) => {
@@ -172,6 +175,38 @@ export function PositionsPanel() {
                 </div>
               );
             })
+          )}
+        </div>
+
+        <div className="border-t border-border">
+          <div className="grid grid-cols-4 text-[0.5rem] uppercase tracking-wider text-terminal-dim px-2 py-0.5 border-b border-border bg-secondary">
+            <span>Asset</span>
+            <span className="text-right">Available</span>
+            <span className="text-right">Equity</span>
+            <span className="text-right">USD</span>
+          </div>
+          {spotHoldings.length === 0 ? (
+            <div className="px-2 py-3 text-[0.625rem] text-terminal-dim text-center">
+              No spot holdings visible
+            </div>
+          ) : (
+            spotHoldings.map((balance) => (
+              <div
+                key={balance.currency}
+                className="grid grid-cols-4 text-[0.5625rem] font-mono px-2 py-px border-b border-border/50 hover:bg-secondary/50"
+              >
+                <span className="font-semibold">{balance.currency}</span>
+                <span className="text-right tabular-nums">
+                  {balance.availableBalance.toFixed(6)}
+                </span>
+                <span className="text-right tabular-nums">
+                  {balance.equity.toFixed(6)}
+                </span>
+                <span className="text-right tabular-nums">
+                  {formatUsd(balance.usdValue)}
+                </span>
+              </div>
+            ))
           )}
         </div>
       </CardContent>

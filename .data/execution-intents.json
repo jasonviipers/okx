@@ -1,5 +1,265 @@
 [
   {
+    "id": "intent_1776451677034_dplks2",
+    "createdAt": "2026-04-17T18:47:57.034Z",
+    "updatedAt": "2026-04-17T18:47:57.058Z",
+    "symbol": "BTC-EUR",
+    "timeframe": "5m",
+    "decision": "HOLD",
+    "confidence": 0.49,
+    "targetSize": 4.9,
+    "status": "hold",
+    "decisionSnapshot": {
+      "signal": "SELL",
+      "directionalSignal": "SELL",
+      "decision": "HOLD",
+      "confidence": 0.49,
+      "agreement": 0.52,
+      "executionEligible": false,
+      "decisionSource": "deterministic",
+      "expectedNetEdgeBps": -6.49,
+      "marketQualityScore": 0.964,
+      "riskFlags": [
+        "slippage_elevated",
+        "candle_indecision",
+        "inventory_constrained"
+      ],
+      "featureSummary": {
+        "return3Bps": 17.2143,
+        "return10Bps": -17.0945,
+        "volatilityShortBps": 6.3527,
+        "volatilityLongBps": 9.7266,
+        "spreadBps": 0.0152,
+        "buySlippageBps": 0,
+        "sellSlippageBps": 1.752,
+        "orderBookImbalancePct": 86.4195,
+        "topBookPressurePct": 0,
+        "volumeExpansion": 0.123,
+        "distanceFromVwapBps": 2.2623,
+        "breakoutDistanceBps": 0.8227,
+        "compressionPct": 82.6633,
+        "maxExecutableBuyUsd": 9,
+        "maxExecutableSellUsd": 0
+      },
+      "rejectionReasons": [
+        {
+          "layer": "execution",
+          "code": "spot_shorting_not_available",
+          "summary": "Spot account is flat, so the bearish setup resolves to HOLD.",
+          "detail": "The engine detected a bearish setup, but there is no base inventory available and spot mode cannot open a synthetic short.",
+          "metrics": {
+            "maxExecutableSellUsd": 0,
+            "availableBaseUsd": 0,
+            "minimumTradeNotionalUsd": 5
+          }
+        },
+        {
+          "layer": "expected_value",
+          "code": "expected_net_edge_below_threshold",
+          "summary": "Expected net edge does not clear the minimum threshold.",
+          "detail": "Expected net edge -6.49 bps is below 4.00 bps.",
+          "metrics": {
+            "expectedNetEdgeBps": -6.49,
+            "minNetEdgeBps": 4
+          }
+        }
+      ]
+    },
+    "reason": "consensus not execution eligible",
+    "normalizedSize": 0,
+    "response": {
+      "executionEligible": false
+    }
+  },
+  {
+    "id": "intent_1776451511430_ptylfj",
+    "createdAt": "2026-04-17T18:45:11.430Z",
+    "updatedAt": "2026-04-17T18:45:11.471Z",
+    "symbol": "BTC-EUR",
+    "timeframe": "5m",
+    "decision": "HOLD",
+    "confidence": 0.49,
+    "targetSize": 4.9,
+    "status": "hold",
+    "decisionSnapshot": {
+      "signal": "BUY",
+      "directionalSignal": "BUY",
+      "decision": "HOLD",
+      "confidence": 0.49,
+      "agreement": 0.52,
+      "executionEligible": false,
+      "decisionSource": "deterministic",
+      "expectedNetEdgeBps": -7.82,
+      "marketQualityScore": 0.946,
+      "riskFlags": [
+        "slippage_elevated"
+      ],
+      "featureSummary": {
+        "return3Bps": 16.919,
+        "return10Bps": -18.85,
+        "volatilityShortBps": 5.8599,
+        "volatilityLongBps": 10.5836,
+        "spreadBps": 0.0152,
+        "buySlippageBps": 3.2441,
+        "sellSlippageBps": 0,
+        "orderBookImbalancePct": 83.6927,
+        "topBookPressurePct": -20.001,
+        "volumeExpansion": 0.1156,
+        "distanceFromVwapBps": 1.757,
+        "breakoutDistanceBps": 0.495,
+        "compressionPct": 74.4646,
+        "maxExecutableBuyUsd": 9,
+        "maxExecutableSellUsd": 0
+      },
+      "rejectionReasons": [
+        {
+          "layer": "expected_value",
+          "code": "expected_net_edge_below_threshold",
+          "summary": "Expected net edge does not clear the minimum threshold.",
+          "detail": "Expected net edge -7.82 bps is below 4.00 bps.",
+          "metrics": {
+            "expectedNetEdgeBps": -7.82,
+            "minNetEdgeBps": 4
+          }
+        }
+      ]
+    },
+    "reason": "consensus not execution eligible",
+    "normalizedSize": 0,
+    "response": {
+      "executionEligible": false
+    }
+  },
+  {
+    "id": "intent_1776451448958_t3gnp2",
+    "createdAt": "2026-04-17T18:44:08.958Z",
+    "updatedAt": "2026-04-17T18:44:09.000Z",
+    "symbol": "BTC-EUR",
+    "timeframe": "5m",
+    "decision": "HOLD",
+    "confidence": 0.49,
+    "targetSize": 4.9,
+    "status": "hold",
+    "decisionSnapshot": {
+      "signal": "BUY",
+      "directionalSignal": "BUY",
+      "decision": "HOLD",
+      "confidence": 0.49,
+      "agreement": 0.52,
+      "executionEligible": false,
+      "decisionSource": "deterministic",
+      "expectedNetEdgeBps": -4.15,
+      "marketQualityScore": 0.982,
+      "riskFlags": [],
+      "featureSummary": {
+        "return3Bps": 16.919,
+        "return10Bps": -18.85,
+        "volatilityShortBps": 5.8599,
+        "volatilityLongBps": 10.5836,
+        "spreadBps": 0.0152,
+        "buySlippageBps": 0.0152,
+        "sellSlippageBps": 0,
+        "orderBookImbalancePct": 89.687,
+        "topBookPressurePct": 21.5484,
+        "volumeExpansion": 0.1156,
+        "distanceFromVwapBps": 1.757,
+        "breakoutDistanceBps": 0.495,
+        "compressionPct": 74.4646,
+        "maxExecutableBuyUsd": 9,
+        "maxExecutableSellUsd": 0
+      },
+      "rejectionReasons": [
+        {
+          "layer": "expected_value",
+          "code": "expected_net_edge_below_threshold",
+          "summary": "Expected net edge does not clear the minimum threshold.",
+          "detail": "Expected net edge -4.15 bps is below 4.00 bps.",
+          "metrics": {
+            "expectedNetEdgeBps": -4.15,
+            "minNetEdgeBps": 4
+          }
+        }
+      ]
+    },
+    "reason": "consensus not execution eligible",
+    "normalizedSize": 0,
+    "response": {
+      "executionEligible": false
+    }
+  },
+  {
+    "id": "intent_1776451086651_s679kj",
+    "createdAt": "2026-04-17T18:38:06.651Z",
+    "updatedAt": "2026-04-17T18:38:06.673Z",
+    "symbol": "BTC-EUR",
+    "timeframe": "5m",
+    "decision": "HOLD",
+    "confidence": 0.49,
+    "targetSize": 4.9,
+    "status": "hold",
+    "decisionSnapshot": {
+      "signal": "SELL",
+      "directionalSignal": "SELL",
+      "decision": "HOLD",
+      "confidence": 0.49,
+      "agreement": 0.52,
+      "executionEligible": false,
+      "decisionSource": "deterministic",
+      "expectedNetEdgeBps": -4.63,
+      "marketQualityScore": 0.984,
+      "riskFlags": [
+        "slippage_elevated",
+        "candle_indecision",
+        "inventory_constrained"
+      ],
+      "featureSummary": {
+        "return3Bps": 5.4053,
+        "return10Bps": -43.3051,
+        "volatilityShortBps": 4.5116,
+        "volatilityLongBps": 9.713,
+        "spreadBps": 0.0153,
+        "buySlippageBps": 9.3396,
+        "sellSlippageBps": 0,
+        "orderBookImbalancePct": 95.2067,
+        "topBookPressurePct": 0.3377,
+        "volumeExpansion": 0.0218,
+        "distanceFromVwapBps": -18.3463,
+        "breakoutDistanceBps": -19.5186,
+        "compressionPct": 59.1604,
+        "maxExecutableBuyUsd": 9,
+        "maxExecutableSellUsd": 0
+      },
+      "rejectionReasons": [
+        {
+          "layer": "execution",
+          "code": "spot_shorting_not_available",
+          "summary": "Spot account is flat, so the bearish setup resolves to HOLD.",
+          "detail": "The engine detected a bearish setup, but there is no base inventory available and spot mode cannot open a synthetic short.",
+          "metrics": {
+            "maxExecutableSellUsd": 0,
+            "availableBaseUsd": 0,
+            "minimumTradeNotionalUsd": 5
+          }
+        },
+        {
+          "layer": "expected_value",
+          "code": "expected_net_edge_below_threshold",
+          "summary": "Expected net edge does not clear the minimum threshold.",
+          "detail": "Expected net edge -4.63 bps is below 4.00 bps.",
+          "metrics": {
+            "expectedNetEdgeBps": -4.63,
+            "minNetEdgeBps": 4
+          }
+        }
+      ]
+    },
+    "reason": "consensus not execution eligible",
+    "normalizedSize": 0,
+    "response": {
+      "executionEligible": false
+    }
+  },
+  {
     "id": "intent_1776411450759_4sjw1k",
     "createdAt": "2026-04-17T07:37:30.759Z",
     "updatedAt": "2026-04-17T07:37:30.783Z",

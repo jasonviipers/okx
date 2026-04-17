@@ -3,19 +3,31 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { useTradeHistory } from "@/hooks/use-terminal-data";
+import {
+  useExecutionIntents,
+  useTradeHistory,
+} from "@/hooks/use-terminal-data";
 import { cn } from "@/lib/utils";
-import type { StoredTradeExecution } from "@/types/history";
+import type {
+  StoredExecutionIntent,
+  StoredTradeExecution,
+} from "@/types/history";
 
 export function OrdersAndHistory() {
   const tradeHistory = useTradeHistory(50);
-  const [activeTab, setActiveTab] = useState<"fills" | "trades">("fills");
+  const executionIntents = useExecutionIntents(50);
+  const [activeTab, setActiveTab] = useState<"fills" | "trades" | "attempts">(
+    "fills",
+  );
 
   const fills: StoredTradeExecution[] = tradeHistory.data?.entries ?? [];
+  const intents: StoredExecutionIntent[] = executionIntents.data?.entries ?? [];
   const filledFills = fills.filter(
     (fill: StoredTradeExecution) =>
       fill.success && fill.order.status === "filled",
   );
+  const priceHeader = activeTab === "attempts" ? "Edge" : "Price";
+  const infoHeader = activeTab === "attempts" ? "Reason" : "Info";
 
   return (
     <Card size="sm" className="h-full flex flex-col overflow-hidden">
@@ -23,7 +35,7 @@ export function OrdersAndHistory() {
         <CardTitle className="flex items-center justify-between w-full">
           <span>Trade History</span>
           <div className="flex gap-1">
-            {(["fills", "trades"] as const).map((tab) => (
+            {(["fills", "trades", "attempts"] as const).map((tab) => (
               <Button
                 key={tab}
                 variant={activeTab === tab ? "default" : "ghost"}
@@ -31,7 +43,11 @@ export function OrdersAndHistory() {
                 className="text-[0.5625rem]"
                 onClick={() => setActiveTab(tab)}
               >
-                {tab === "fills" ? "Filled" : "All"}
+                {tab === "fills"
+                  ? "Filled"
+                  : tab === "trades"
+                    ? "All"
+                    : "Attempts"}
               </Button>
             ))}
           </div>
@@ -43,9 +59,9 @@ export function OrdersAndHistory() {
           <span>Symbol</span>
           <span>Side</span>
           <span className="text-right">Qty</span>
-          <span className="text-right">Price</span>
+          <span className="text-right">{priceHeader}</span>
           <span className="text-right">Status</span>
-          <span className="text-right">Info</span>
+          <span className="text-right">{infoHeader}</span>
         </div>
 
         {activeTab === "fills" &&
@@ -133,6 +149,61 @@ export function OrdersAndHistory() {
                 </span>
                 <span className="text-right tabular-nums text-terminal-dim">
                   {fill.performance?.realizedSlippageBps?.toFixed(1) ?? "—"}
+                </span>
+              </div>
+            ))
+          ))}
+
+        {activeTab === "attempts" &&
+          (intents.length === 0 ? (
+            <div className="px-2 py-3 text-[0.625rem] text-terminal-dim text-center">
+              No execution attempts yet
+            </div>
+          ) : (
+            intents.map((intent: StoredExecutionIntent) => (
+              <div
+                key={intent.id}
+                className="grid grid-cols-7 text-[0.5625rem] font-mono px-2 py-px border-b border-border/50 hover:bg-secondary/50"
+              >
+                <span className="text-terminal-dim">
+                  {new Date(intent.updatedAt).toLocaleTimeString()}
+                </span>
+                <span>{intent.symbol}</span>
+                <span
+                  className={
+                    intent.decision === "BUY"
+                      ? "text-terminal-green"
+                      : intent.decision === "SELL"
+                        ? "text-terminal-red"
+                        : "text-terminal-amber"
+                  }
+                >
+                  {intent.decision}
+                </span>
+                <span className="text-right tabular-nums">
+                  {intent.normalizedSize?.toFixed(4) ??
+                    intent.targetSize.toFixed(4)}
+                </span>
+                <span className="text-right tabular-nums">
+                  {(intent.decisionSnapshot.expectedNetEdgeBps ?? 0).toFixed(2)}
+                </span>
+                <span
+                  className={cn(
+                    "text-right uppercase",
+                    intent.status === "success"
+                      ? "text-terminal-green"
+                      : intent.status === "error"
+                        ? "text-terminal-red"
+                        : "text-terminal-amber",
+                  )}
+                >
+                  {intent.status}
+                </span>
+                <span
+                  className="text-right truncate text-terminal-dim"
+                  title={intent.reason}
+                >
+                  {intent.reason ?? "—"}
                 </span>
               </div>
             ))

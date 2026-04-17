@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -11,7 +11,7 @@ import {
 } from "@/components/ui/card";
 import { useDashboard } from "@/features/dashboard/dashboard-context";
 import {
-  useAutonomyControl,
+  useAutonomyStatus,
   useSwarmHistory,
   useSwarmStream,
 } from "@/hooks/use-terminal-data";
@@ -138,15 +138,14 @@ export function AgentDashboard() {
   const { selectedSymbol, selectedTimeframe } = useDashboard();
   const swarmStream = useSwarmStream(selectedSymbol, selectedTimeframe);
   const swarmHistory = useSwarmHistory(25);
-  const autonomy = useAutonomyControl();
+  const autonomyStatus = useAutonomyStatus();
   const [activeTab, setActiveTab] = useState<"feed" | "status" | "decisions">(
     "feed",
   );
-  const [_isPending, startTransition] = useTransition();
 
   const events = swarmStream.events ?? [];
   const historyEntries = swarmHistory.data?.entries ?? [];
-  const isAutonomyRunning = autonomy.optimisticEnabled;
+  const isAutonomyRunning = autonomyStatus.data?.running ?? true;
 
   const agentStatuses = useMemo(() => {
     const latestEvents = new Map<
@@ -200,8 +199,14 @@ export function AgentDashboard() {
   const tradeDecisions = useMemo(() => {
     return historyEntries
       .filter(
-        (e: { consensus: { signal: string; executionEligible: boolean } }) =>
-          e.consensus.signal !== "HOLD" && e.consensus.executionEligible,
+        (e: {
+          consensus: {
+            signal: string;
+            rejectionReasons?: Array<{ summary: string }>;
+          };
+        }) =>
+          e.consensus.signal !== "HOLD" ||
+          (e.consensus.rejectionReasons?.length ?? 0) > 0,
       )
       .slice(0, 20);
   }, [historyEntries]);
@@ -223,25 +228,6 @@ export function AgentDashboard() {
             <span className="text-[0.5625rem] font-mono">
               {isAutonomyRunning ? "ACTIVE" : "IDLE"}
             </span>
-            <Button
-              variant={isAutonomyRunning ? "destructive" : "default"}
-              size="xs"
-              onClick={() => {
-                if (isAutonomyRunning) {
-                  startTransition(() => autonomy.stop());
-                } else {
-                  startTransition(() =>
-                    autonomy.start({
-                      symbol: selectedSymbol,
-                      timeframe: selectedTimeframe,
-                    }),
-                  );
-                }
-              }}
-              disabled={autonomy.loading}
-            >
-              {isAutonomyRunning ? "STOP" : "START"}
-            </Button>
           </div>
         </CardTitle>
         <CardAction>
@@ -353,7 +339,7 @@ export function AgentDashboard() {
           <div className="flex flex-col">
             {tradeDecisions.length === 0 ? (
               <div className="px-2 py-3 text-[0.625rem] text-terminal-dim text-center">
-                No eligible trade decisions yet
+                No recent trade decisions yet
               </div>
             ) : (
               tradeDecisions.map(
@@ -367,6 +353,7 @@ export function AgentDashboard() {
                       confidence: number;
                       agreement: number;
                       blocked: boolean;
+                      executionEligible: boolean;
                       blockReason?: string;
                       votes: AgentVote[];
                     };
@@ -397,6 +384,18 @@ export function AgentDashboard() {
                         </span>
                         <span className="text-terminal-dim">
                           {(c.agreement * 100).toFixed(0)}% agree
+                        </span>
+                        <span
+                          className={cn(
+                            "text-[0.5rem] border px-1 rounded",
+                            c.blocked || !c.executionEligible
+                              ? "text-terminal-amber border-terminal-amber/30"
+                              : "text-terminal-green border-terminal-green/30",
+                          )}
+                        >
+                          {c.blocked || !c.executionEligible
+                            ? "BLOCKED"
+                            : "ELIGIBLE"}
                         </span>
                       </div>
                       {c.blocked && (
@@ -431,9 +430,9 @@ export function AgentDashboard() {
           </div>
         )}
 
-        {autonomy.error && (
+        {autonomyStatus.data?.lastError && (
           <div className="px-2 py-1 text-[0.5625rem] text-terminal-red border-t border-border bg-terminal-red/5">
-            Autonomy error: {autonomy.error}
+            Autonomy error: {autonomyStatus.data.lastError}
           </div>
         )}
       </CardContent>
