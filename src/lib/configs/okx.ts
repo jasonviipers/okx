@@ -63,6 +63,7 @@ export const OKX_ENDPOINTS = {
   maxAvailSize: "/api/v5/account/max-avail-size",
   instruments: "/api/v5/public/instruments",
   ticker: "/api/v5/market/ticker",
+  tickers: "/api/v5/market/tickers",
   candles: "/api/v5/market/candles",
   orderbook: "/api/v5/market/books",
   placeOrder: "/api/v5/trade/order",

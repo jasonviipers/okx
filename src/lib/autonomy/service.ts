@@ -278,8 +278,6 @@ async function resolveAutonomySymbols(
   if (state.selectionMode === "fixed") {
     return [state.symbol];
   }
-
-  const configured = parseSymbolList(state.candidateSymbols);
   const balanceQuotes = getQuoteCurrenciesFromBalances(
     accountOverview.tradingBalances,
   );
@@ -289,8 +287,8 @@ async function resolveAutonomySymbols(
   ];
 
   return getAutonomousSymbolUniverse({
-    explicitSymbols: configured,
     quoteCurrencies,
+    balances: accountOverview.tradingBalances,
   });
 }
 

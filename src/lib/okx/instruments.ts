@@ -15,6 +15,14 @@ interface OkxInstrumentRow {
   state?: string;
 }
 
+interface OkxTickerRow {
+  instId: string;
+  last: string;
+  bidPx?: string;
+  askPx?: string;
+  vol24h?: string;
+}
+
 export interface InstrumentRules {
   symbol: string;
   tickSize: number;
@@ -36,6 +44,8 @@ const DEFAULT_AUTONOMOUS_SYMBOLS = [
 const DEFAULT_AUTONOMOUS_QUOTES = ["USDT", "EUR", "USDC"] as const;
 const INSTRUMENTS_CACHE_KEY = "okx:spot-instruments";
 const INSTRUMENTS_CACHE_TTL_SECONDS = 300;
+const TICKERS_CACHE_KEY = "okx:spot-tickers";
+const TICKERS_CACHE_TTL_SECONDS = 30;
 
 function toNumber(value: string | undefined, fallback = 0): number {
   const parsed = Number(value);
@@ -90,6 +100,14 @@ function extractBaseAsset(symbol: string): string {
   return symbol.split("-")[0]?.trim().toUpperCase() ?? symbol.trim().toUpperCase();
 }
 
+function extractQuoteAsset(symbol: string): string {
+  return symbol.split("-")[1]?.trim().toUpperCase() ?? "";
+}
+
+function isLeveragedToken(baseAsset: string): boolean {
+  return /(BULL|BEAR|[235]L|[235]S)$/i.test(baseAsset);
+}
+
 function getDefaultAutonomousBases(): string[] {
   return DEFAULT_AUTONOMOUS_SYMBOLS.map(extractBaseAsset);
 }
@@ -139,6 +157,30 @@ export function getQuoteCurrenciesFromBalances(
     .map((balance) => balance.currency.trim().toUpperCase());
 }
 
+function getHeldBaseAssetsFromBalances(
+  balances: AccountAssetBalance[],
+  quoteCurrencies: string[],
+): string[] {
+  const quotes = new Set(quoteCurrencies.map((quote) => quote.toUpperCase()));
+
+  return uniqueUppercase(
+    balances
+      .filter(
+        (balance) =>
+          balance.availableBalance > 0 &&
+          !quotes.has(balance.currency.trim().toUpperCase()),
+      )
+      .sort((left, right) => {
+        const leftRank =
+          left.usdValue > 0 ? left.usdValue : left.availableBalance;
+        const rightRank =
+          right.usdValue > 0 ? right.usdValue : right.availableBalance;
+        return rightRank - leftRank;
+      })
+      .map((balance) => balance.currency),
+  );
+}
+
 async function listSpotInstrumentRows(): Promise<OkxInstrumentRow[]> {
   const cached = await getCachedJson<OkxInstrumentRow[]>(INSTRUMENTS_CACHE_KEY);
   if (cached) {
@@ -153,6 +195,63 @@ async function listSpotInstrumentRows(): Promise<OkxInstrumentRow[]> {
   );
   await setCachedJson(INSTRUMENTS_CACHE_KEY, rows, INSTRUMENTS_CACHE_TTL_SECONDS);
   return rows;
+}
+
+async function listSpotTickerRows(): Promise<OkxTickerRow[]> {
+  const cached = await getCachedJson<OkxTickerRow[]>(TICKERS_CACHE_KEY);
+  if (cached) {
+    return cached;
+  }
+
+  const rows = await okxPublicGet<OkxTickerRow>(
+    OKX_ENDPOINTS.tickers,
+    new URLSearchParams({
+      instType: "SPOT",
+    }),
+  );
+  await setCachedJson(TICKERS_CACHE_KEY, rows, TICKERS_CACHE_TTL_SECONDS);
+  return rows;
+}
+
+function estimateQuoteVolume(row: OkxTickerRow): number {
+  const last = toNumber(row.last, 0);
+  const vol24h = toNumber(row.vol24h, 0);
+  return last * vol24h;
+}
+
+function getDynamicBaseAssetsFromMarket(
+  rows: OkxInstrumentRow[],
+  tickers: OkxTickerRow[],
+  quoteCurrencies: string[],
+  limit: number,
+): string[] {
+  const liveSymbols = new Set(
+    rows
+      .filter((row) => (row.state ?? "live") === "live")
+      .map((row) => row.instId.trim().toUpperCase()),
+  );
+  const quoteSet = new Set(quoteCurrencies.map((quote) => quote.toUpperCase()));
+
+  return uniqueUppercase(
+    tickers
+      .filter((row) => {
+        const symbol = row.instId.trim().toUpperCase();
+        const base = extractBaseAsset(symbol);
+        const quote = extractQuoteAsset(symbol);
+
+        return (
+          liveSymbols.has(symbol) &&
+          quoteSet.has(quote) &&
+          base.length > 0 &&
+          quote.length > 0 &&
+          base !== quote &&
+          !isLeveragedToken(base)
+        );
+      })
+      .sort((left, right) => estimateQuoteVolume(right) - estimateQuoteVolume(left))
+      .slice(0, Math.max(limit * 4, 24))
+      .map((row) => extractBaseAsset(row.instId)),
+  );
 }
 
 export async function listSpotInstruments(quoteCurrency = "USDT") {
@@ -173,6 +272,7 @@ export async function listSpotInstruments(quoteCurrency = "USDT") {
 export async function getAutonomousSymbolUniverse(options?: {
   explicitSymbols?: string[];
   quoteCurrencies?: string[];
+  balances?: AccountAssetBalance[];
   limit?: number;
 }): Promise<string[]> {
   const limit = Math.max(
@@ -182,12 +282,27 @@ export async function getAutonomousSymbolUniverse(options?: {
       options?.limit ?? parseNumber(process.env.AUTONOMOUS_SYMBOL_LIMIT, 8),
     ),
   );
-  const baseAssets = getConfiguredAutonomousBaseAssets(options?.explicitSymbols);
+  const manualBaseAssets = getConfiguredAutonomousBaseAssets(options?.explicitSymbols);
   const quoteCurrencies = uniqueUppercase([
     ...(options?.quoteCurrencies ?? []),
     ...getConfiguredAutonomousQuoteCurrencies(),
   ]);
   const rows = await listSpotInstrumentRows();
+  const tickers = await listSpotTickerRows();
+  const heldBaseAssets = options?.balances
+    ? getHeldBaseAssetsFromBalances(options.balances, quoteCurrencies)
+    : [];
+  const dynamicBaseAssets = getDynamicBaseAssetsFromMarket(
+    rows,
+    tickers,
+    quoteCurrencies,
+    limit,
+  );
+  const baseAssets = uniqueUppercase([
+    ...heldBaseAssets,
+    ...dynamicBaseAssets,
+    ...manualBaseAssets,
+  ]);
   const rankedSymbols: string[] = [];
 
   for (const quoteCurrency of quoteCurrencies) {
