@@ -339,7 +339,7 @@ export async function getAccountOverview(
     const finalBuyingPower =
       requestBuyingPower.buy > 0 || requestBuyingPower.sell > 0
         ? requestBuyingPower
-        : fallbackBuyingPower ?? requestBuyingPower;
+        : (fallbackBuyingPower ?? requestBuyingPower);
 
     const totalAvailableEquity = toNumber(balance?.availEq);
     const derivedAvailableEquity =

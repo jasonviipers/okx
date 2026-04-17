@@ -20,13 +20,9 @@ export const DEFAULT_SYMBOLS = [
   "AVAX-USDT",
   "DOT-USDT",
   "LINK-USDT",
-  "MATIC-USDT",
+  "POL-USDT",
   "SUI-USDT",
   "PEPE-USDT",
-  "AAPL-USDT",
-  "TSLA-USDT",
-  "NVDA-USDT",
-  "MSFT-USDT",
 ] as const;
 
 export const DEFAULT_TIMEFRAME: Timeframe = "1H";

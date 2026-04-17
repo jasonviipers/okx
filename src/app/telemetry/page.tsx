@@ -424,7 +424,7 @@ export default function TelemetryPage() {
             <CardHeader>
               <CardTitle>Recent Execution Intents</CardTitle>
             </CardHeader>
-            <CardContent className="overflow-auto">
+            <CardContent className="max-h-[260px] overflow-y-auto">
               {executionIntents.length === 0 ? (
                 <div className="px-3 py-4 text-[0.6875rem] text-terminal-dim">
                   No execution intents have been recorded yet.
@@ -476,7 +476,7 @@ export default function TelemetryPage() {
             <CardHeader>
               <CardTitle>Current Autonomy Blockers</CardTitle>
             </CardHeader>
-            <CardContent className="overflow-auto">
+            <CardContent className="max-h-[260px] overflow-y-auto">
               {!runtime ? (
                 <div className="px-3 py-4 text-[0.6875rem] text-terminal-dim">
                   Loading blocker snapshot...
