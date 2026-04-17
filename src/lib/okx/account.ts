@@ -341,9 +341,15 @@ export async function getAccountOverview(
         ? requestBuyingPower
         : fallbackBuyingPower ?? requestBuyingPower;
 
+    const totalAvailableEquity = toNumber(balance?.availEq);
+    const derivedAvailableEquity =
+      totalAvailableEquity > 0
+        ? totalAvailableEquity
+        : tradingBalances.reduce((sum, b) => sum + b.availableBalance, 0);
+
     return {
       totalEquity: toNumber(balance?.totalEq),
-      availableEquity: toNumber(balance?.availEq),
+      availableEquity: derivedAvailableEquity,
       adjustedEquity: toNumber(balance?.adjEq),
       isoEquity: toNumber(balance?.isoEq),
       unrealizedPnl: toNumber(balance?.upl),
