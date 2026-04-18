@@ -9,7 +9,6 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { useDashboard } from "@/features/dashboard/dashboard-context";
 import {
   useAutonomyStatus,
   useSwarmHistory,
@@ -135,10 +134,14 @@ function VoteBadge({ vote }: { vote: AgentVote }) {
 }
 
 export function AgentDashboard() {
-  const { selectedSymbol, selectedTimeframe } = useDashboard();
-  const swarmStream = useSwarmStream(selectedSymbol, selectedTimeframe);
-  const swarmHistory = useSwarmHistory(25);
   const autonomyStatus = useAutonomyStatus();
+  const swarmSymbol =
+    autonomyStatus.data?.lastSelectedCandidate?.symbol ??
+    autonomyStatus.data?.symbol ??
+    "BTC-USDT";
+  const swarmTimeframe = autonomyStatus.data?.timeframe ?? "1H";
+  const swarmStream = useSwarmStream(swarmSymbol, swarmTimeframe);
+  const swarmHistory = useSwarmHistory(25);
   const [activeTab, setActiveTab] = useState<"feed" | "status" | "decisions">(
     "feed",
   );
@@ -215,7 +218,12 @@ export function AgentDashboard() {
     <Card size="sm" className="h-full flex flex-col overflow-hidden">
       <CardHeader>
         <CardTitle className="flex items-center justify-between w-full">
-          <span>Agent Swarm</span>
+          <div className="flex flex-col">
+            <span>Agent Swarm</span>
+            <span className="text-[0.5rem] font-mono text-terminal-dim">
+              Focus: {swarmSymbol} / {swarmTimeframe}
+            </span>
+          </div>
           <div className="flex items-center gap-2">
             <div
               className={cn(

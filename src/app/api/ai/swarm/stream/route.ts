@@ -1,10 +1,8 @@
 import type { NextRequest } from "next/server";
 import { getRealtimeMarketContext } from "@/lib/market-data/service";
-import { getMemorySummary, storeSwarmMemory } from "@/lib/memory/aging-memory";
-import { recordSwarmRun } from "@/lib/persistence/history";
-import { setCachedSwarmResult } from "@/lib/redis/swarm-cache";
-import { buildSwarmDecision } from "@/lib/swarm/pipeline";
+import { getMemorySummary } from "@/lib/memory/aging-memory";
 import { collectDiagnosticVotes } from "@/lib/swarm/orchestrator";
+import { buildSwarmDecision } from "@/lib/swarm/pipeline";
 import type { Timeframe } from "@/types/market";
 import type { SwarmStreamEvent } from "@/types/swarm";
 
@@ -32,7 +30,6 @@ export async function GET(req: NextRequest) {
       };
 
       try {
-        const startedAt = Date.now();
         sendEvent({
           type: "status",
           timestamp: new Date().toISOString(),
@@ -183,18 +180,6 @@ export async function GET(req: NextRequest) {
           timeframe,
           consensus,
         });
-
-        const result = {
-          consensus,
-          marketContext: ctx,
-          totalElapsedMs: Date.now() - startedAt,
-          cached: false,
-        };
-        await Promise.all([
-          setCachedSwarmResult(symbol, timeframe, consensus),
-          recordSwarmRun(result),
-          storeSwarmMemory(result),
-        ]);
       } catch (error) {
         sendEvent({
           type: "error",

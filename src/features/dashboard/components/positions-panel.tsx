@@ -61,9 +61,9 @@ export function PositionsPanel() {
               </div>
             </div>
             <div className="bg-card px-2 py-1.5">
-              <div className="text-terminal-dim uppercase">Available</div>
+              <div className="text-terminal-dim uppercase">Cash Available</div>
               <div className="font-mono tabular-nums">
-                {formatUsd(overview.availableEquity)}
+                {formatUsd(overview.cashAvailableUsd)}
               </div>
             </div>
             <div className="bg-card px-2 py-1.5">

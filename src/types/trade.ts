@@ -54,6 +54,7 @@ export interface SpotBuyingPower {
 export interface AccountOverview {
   totalEquity: number;
   availableEquity: number;
+  cashAvailableUsd: number;
   adjustedEquity: number;
   isoEquity: number;
   unrealizedPnl: number;
