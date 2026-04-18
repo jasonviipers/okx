@@ -2,6 +2,7 @@ import "server-only";
 
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { parseNumber } from "@/lib/runtime-utils";
 import type { AutonomyCandidateScore } from "@/types/api";
 import type { Timeframe } from "@/types/market";
 import type { RejectionReason } from "@/types/swarm";
@@ -44,11 +45,6 @@ export interface StoredAutonomyState {
 
 const DATA_DIR = path.join(process.cwd(), ".data");
 const AUTONOMY_FILE = path.join(DATA_DIR, "autonomy-state.json");
-
-function parseNumber(value: string | undefined, fallback: number): number {
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : fallback;
-}
 
 function parseSelectionMode(value: string | undefined): AutonomySelectionMode {
   return value?.toLowerCase() === "fixed" ? "fixed" : "auto";

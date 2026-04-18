@@ -3,6 +3,7 @@ import "server-only";
 import { OKX_ENDPOINTS } from "@/lib/configs/okx";
 import { okxPublicGet } from "@/lib/okx/client";
 import { getCachedJson, setCachedJson } from "@/lib/redis/swarm-cache";
+import { parseNumber } from "@/lib/runtime-utils";
 import type { AccountAssetBalance } from "@/types/trade";
 
 interface OkxInstrumentRow {
@@ -47,11 +48,6 @@ const INSTRUMENTS_CACHE_TTL_SECONDS = 300;
 const TICKERS_CACHE_KEY = "okx:spot-tickers";
 const TICKERS_CACHE_TTL_SECONDS = 30;
 
-function toNumber(value: string | undefined, fallback = 0): number {
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : fallback;
-}
-
 export async function getInstrumentRules(
   symbol: string,
 ): Promise<InstrumentRules> {
@@ -65,9 +61,9 @@ export async function getInstrumentRules(
 
   return {
     symbol,
-    tickSize: toNumber(row?.tickSz, 0.00000001),
-    lotSize: toNumber(row?.lotSz, 0.00000001),
-    minSize: toNumber(row?.minSz, 0),
+    tickSize: parseNumber(row?.tickSz, 0.00000001),
+    lotSize: parseNumber(row?.lotSz, 0.00000001),
+    minSize: parseNumber(row?.minSz, 0),
     state: row?.state ?? "live",
   };
 }
@@ -85,11 +81,6 @@ function parseSymbolList(value: string | undefined): string[] {
     .split(",")
     .map((symbol) => symbol.trim().toUpperCase())
     .filter(Boolean);
-}
-
-function parseNumber(value: string | undefined, fallback: number): number {
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : fallback;
 }
 
 function uniqueUppercase(values: string[]): string[] {
@@ -222,8 +213,8 @@ async function listSpotTickerRows(): Promise<OkxTickerRow[]> {
 }
 
 function estimateQuoteVolume(row: OkxTickerRow): number {
-  const last = toNumber(row.last, 0);
-  const vol24h = toNumber(row.vol24h, 0);
+  const last = parseNumber(row.last, 0);
+  const vol24h = parseNumber(row.vol24h, 0);
   return last * vol24h;
 }
 

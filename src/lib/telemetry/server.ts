@@ -13,6 +13,7 @@ import {
 import path from "node:path";
 import { monitorEventLoopDelay, performance } from "node:perf_hooks";
 import type { Instrumentation } from "next";
+import { nowIso } from "@/lib/runtime-utils";
 import type {
   TelemetryEventRecord,
   TelemetryHistogramBucket,
@@ -23,7 +24,6 @@ import type {
   TelemetrySpanRecord,
   TelemetrySpanStatus,
 } from "@/lib/telemetry/types";
-import { nowIso } from "../swarm/autoExecute";
 
 type TelemetryLabels = Record<
   string,

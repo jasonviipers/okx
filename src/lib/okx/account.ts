@@ -8,6 +8,8 @@ import {
 } from "@/lib/configs/okx";
 import { OkxRequestError, okxPrivateGet } from "@/lib/okx/client";
 import { getConfiguredAutonomousQuoteCurrencies } from "@/lib/okx/instruments";
+import { parseNumber } from "@/lib/runtime-utils";
+import { approximateAvailableUsd, parseSpotSymbol } from "@/lib/trade-utils";
 import type {
   AccountAssetBalance,
   AccountOverview,
@@ -70,33 +72,6 @@ const DEFAULT_CASH_LIKE_CURRENCIES = [
 let cachedAccountState: CachedAccountState | null = null;
 let inFlightAccountState: Promise<CachedAccountState> | null = null;
 
-function parseSpotSymbol(
-  symbol?: string,
-): { base: string; quote: string } | null {
-  if (!symbol) {
-    return null;
-  }
-
-  const parts = symbol.split("-");
-  if (parts.length !== 2 || !parts[0] || !parts[1]) {
-    return null;
-  }
-
-  return {
-    base: parts[0],
-    quote: parts[1],
-  };
-}
-
-function toNumber(value: string | undefined): number {
-  return Number(value ?? "0");
-}
-
-function parseNumber(value: string | undefined, fallback: number): number {
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : fallback;
-}
-
 function accountCacheTtlMs(): number {
   return parseNumber(
     process.env.OKX_ACCOUNT_CACHE_TTL_MS,
@@ -122,8 +97,8 @@ function mergeWarnings(
 }
 
 function toMarginRatio(imr?: string, mmr?: string): number | undefined {
-  const initial = toNumber(imr);
-  const maintenance = toNumber(mmr);
+  const initial = parseNumber(imr, 0);
+  const maintenance = parseNumber(mmr, 0);
   if (initial <= 0 || maintenance <= 0) {
     return undefined;
   }
@@ -135,29 +110,17 @@ function toCurrencyKey(currency: string | undefined): string {
   return currency?.trim().toUpperCase() ?? "";
 }
 
-function approximateAvailableUsd(balance?: AccountAssetBalance): number {
-  if (!balance || balance.availableBalance <= 0) {
-    return 0;
-  }
-
-  if (balance.equity > 0 && balance.usdValue > 0) {
-    return balance.usdValue * (balance.availableBalance / balance.equity);
-  }
-
-  return balance.availableBalance;
-}
-
 function mapTradingBalances(
   details: OkxBalanceDetailRow[] | undefined,
 ): AccountAssetBalance[] {
   return (details ?? [])
     .map((detail) => ({
       currency: detail.ccy,
-      equity: toNumber(detail.cashBal),
-      availableBalance: toNumber(detail.availBal),
-      availableEquity: toNumber(detail.availEq),
-      usdValue: toNumber(detail.disEq),
-      unrealizedPnl: toNumber(detail.upl),
+      equity: parseNumber(detail.cashBal, 0),
+      availableBalance: parseNumber(detail.availBal, 0),
+      availableEquity: parseNumber(detail.availEq, 0),
+      usdValue: parseNumber(detail.disEq, 0),
+      unrealizedPnl: parseNumber(detail.upl, 0),
     }))
     .filter((detail) => detail.equity !== 0 || detail.availableBalance !== 0)
     .sort((a, b) => b.usdValue - a.usdValue);
@@ -169,9 +132,9 @@ function mapFundingBalances(
   return (rows ?? [])
     .map((row) => ({
       currency: row.ccy,
-      equity: toNumber(row.bal),
-      availableBalance: toNumber(row.availBal ?? row.bal),
-      availableEquity: toNumber(row.availBal ?? row.bal),
+      equity: parseNumber(row.bal, 0),
+      availableBalance: parseNumber(row.availBal ?? row.bal, 0),
+      availableEquity: parseNumber(row.availBal ?? row.bal, 0),
       usdValue: 0,
       unrealizedPnl: 0,
     }))
@@ -368,8 +331,8 @@ export async function getAccountOverview(
       symbol,
       quoteCurrency: symbolParts?.quote,
       baseCurrency: symbolParts?.base,
-      buy: toNumber(buyingPower?.availBuy),
-      sell: toNumber(buyingPower?.availSell),
+      buy: parseNumber(buyingPower?.availBuy, 0),
+      sell: parseNumber(buyingPower?.availSell, 0),
     };
 
     const fallbackBuyingPower: SpotBuyingPower | undefined =
@@ -391,7 +354,7 @@ export async function getAccountOverview(
         ? requestBuyingPower
         : (fallbackBuyingPower ?? requestBuyingPower);
 
-    const totalAvailableEquity = toNumber(balance?.availEq);
+    const totalAvailableEquity = parseNumber(balance?.availEq, 0);
     const derivedAvailableEquity =
       totalAvailableEquity > 0
         ? totalAvailableEquity
@@ -402,14 +365,14 @@ export async function getAccountOverview(
     const cashAvailableUsd = buildCashAvailableUsd(tradingBalances, symbol);
 
     return {
-      totalEquity: toNumber(balance?.totalEq),
+      totalEquity: parseNumber(balance?.totalEq, 0),
       availableEquity: derivedAvailableEquity,
       cashAvailableUsd,
-      adjustedEquity: toNumber(balance?.adjEq),
-      isoEquity: toNumber(balance?.isoEq),
-      unrealizedPnl: toNumber(balance?.upl),
+      adjustedEquity: parseNumber(balance?.adjEq, 0),
+      isoEquity: parseNumber(balance?.isoEq, 0),
+      unrealizedPnl: parseNumber(balance?.upl, 0),
       marginRatio: toMarginRatio(balance?.imr, balance?.mmr),
-      notionalUsd: toNumber(balance?.notionalUsd),
+      notionalUsd: parseNumber(balance?.notionalUsd, 0),
       buyingPower: derivedSpotBuyingPower ?? finalBuyingPower,
       tradingBalances,
       fundingBalances,

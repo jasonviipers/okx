@@ -1,10 +1,11 @@
-import { classifyMarketRegime } from "@/lib/swarm/regime";
+import { parseNumber } from "@/lib/runtime-utils";
 import {
   buildDecisionFeatures,
   buildFeatureSummary,
-  deriveDecisionCadence,
   type DecisionFeatureVector,
+  deriveDecisionCadence,
 } from "@/lib/swarm/decision-features";
+import { classifyMarketRegime } from "@/lib/swarm/regime";
 import type { MarketContext } from "@/types/market";
 import type { DecisionHarnessReport, MemorySummary } from "@/types/memory";
 import type {
@@ -31,11 +32,6 @@ type EngineScoreCard = {
   meanReversion: number;
   microstructure: number;
 };
-
-function parseNumber(value: string | undefined, fallback: number): number {
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : fallback;
-}
 
 function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));

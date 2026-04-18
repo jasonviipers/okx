@@ -3,6 +3,7 @@ import "server-only";
 import { OKX_ENDPOINTS, OKX_TIMEFRAME_MAP } from "@/lib/configs/okx";
 import { OkxRequestError, okxPublicGet } from "@/lib/okx/client";
 import { getCachedJson, setCachedJson } from "@/lib/redis/swarm-cache";
+import { nowIso, parseBoolean, parseNumber } from "@/lib/runtime-utils";
 import type {
   Candle,
   MarketContext,
@@ -13,12 +14,10 @@ import type {
 } from "@/types/market";
 
 function allowSyntheticMarketFallback() {
-  const value = process.env.ALLOW_SYNTHETIC_MARKET_FALLBACK;
-  if (value !== undefined) {
-    return value.toLowerCase() === "true";
-  }
-
-  return process.env.NODE_ENV !== "production";
+  return parseBoolean(
+    process.env.ALLOW_SYNTHETIC_MARKET_FALLBACK,
+    process.env.NODE_ENV !== "production",
+  );
 }
 
 interface OkxTickerRow {
@@ -45,10 +44,6 @@ interface OkxBookRow {
 
 function toIso(ts: string): string {
   return new Date(Number(ts)).toISOString();
-}
-
-function parseNumber(value: string | undefined): number {
-  return Number(value ?? "0");
 }
 
 function rethrowLiveMarketError(
@@ -138,7 +133,7 @@ function buildFallbackTicker(symbol: string): OKXTicker {
     low24h: last * 0.972,
     vol24h: 18000,
     change24h: 1.84,
-    timestamp: new Date().toISOString(),
+    timestamp: nowIso(),
   };
 }
 
@@ -160,25 +155,25 @@ function buildFallbackOrderBook(symbol: string): OrderBook {
     symbol,
     bids: makeSide("bid").sort((a, b) => b.price - a.price),
     asks: makeSide("ask").sort((a, b) => a.price - b.price),
-    timestamp: new Date().toISOString(),
+    timestamp: nowIso(),
   };
 }
 
 function mapTicker(row: OkxTickerRow): OKXTicker {
-  const open24h = parseNumber(row.sodUtc0);
-  const last = parseNumber(row.last);
+  const open24h = parseNumber(row.sodUtc0, 0);
+  const last = parseNumber(row.last, 0);
   const change24h = open24h > 0 ? ((last - open24h) / open24h) * 100 : 0;
 
   return {
     symbol: row.instId,
     last,
-    bid: parseNumber(row.bidPx),
-    ask: parseNumber(row.askPx),
-    bidSize: parseNumber(row.bidSz),
-    askSize: parseNumber(row.askSz),
-    high24h: parseNumber(row.high24h),
-    low24h: parseNumber(row.low24h),
-    vol24h: parseNumber(row.vol24h),
+    bid: parseNumber(row.bidPx, 0),
+    ask: parseNumber(row.askPx, 0),
+    bidSize: parseNumber(row.bidSz, 0),
+    askSize: parseNumber(row.askSz, 0),
+    high24h: parseNumber(row.high24h, 0),
+    low24h: parseNumber(row.low24h, 0),
+    vol24h: parseNumber(row.vol24h, 0),
     change24h,
     timestamp: toIso(row.ts),
   };
@@ -187,12 +182,12 @@ function mapTicker(row: OkxTickerRow): OKXTicker {
 function mapCandle(row: OkxCandleRow): Candle {
   return {
     timestamp: toIso(row[0]),
-    open: parseNumber(row[1]),
-    high: parseNumber(row[2]),
-    low: parseNumber(row[3]),
-    close: parseNumber(row[4]),
-    volume: parseNumber(row[5]),
-    quoteVolume: parseNumber(row[6]),
+    open: parseNumber(row[1], 0),
+    high: parseNumber(row[2], 0),
+    low: parseNumber(row[3], 0),
+    close: parseNumber(row[4], 0),
+    volume: parseNumber(row[5], 0),
+    quoteVolume: parseNumber(row[6], 0),
   };
 }
 
@@ -200,9 +195,9 @@ function mapOrderBook(symbol: string, row: OkxBookRow): OrderBook {
   const mapEntry = (
     level: [string, string, string, string],
   ): OrderBookEntry => ({
-    price: parseNumber(level[0]),
-    size: parseNumber(level[1]),
-    count: parseNumber(level[3]),
+    price: parseNumber(level[0], 0),
+    size: parseNumber(level[1], 0),
+    count: parseNumber(level[3], 0),
   });
 
   return {

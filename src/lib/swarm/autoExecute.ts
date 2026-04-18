@@ -13,6 +13,7 @@ import {
   updateExecutionIntent,
 } from "@/lib/persistence/execution-intents";
 import { getHistory } from "@/lib/persistence/history";
+import { nowIso, parseBoolean, parseNumber } from "@/lib/runtime-utils";
 import {
   incrementCounter,
   observeHistogram,
@@ -50,23 +51,6 @@ const executionResults = new Map<
     validatedAt: string;
   }
 >();
-
-export function nowIso(): string {
-  return new Date().toISOString();
-}
-
-function parseBoolean(value: string | undefined, fallback: boolean): boolean {
-  if (value === undefined) {
-    return fallback;
-  }
-
-  return value.toLowerCase() === "true";
-}
-
-function parseNumber(value: string | undefined, fallback: number): number {
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : fallback;
-}
 
 function normalizeDecision(consensus: ConsensusResult): TradeSignal {
   return consensus.decision ?? consensus.signal;

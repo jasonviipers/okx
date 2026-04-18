@@ -23,6 +23,7 @@ import {
   writeAutonomyState,
 } from "@/lib/persistence/autonomy-state";
 import { getHistory } from "@/lib/persistence/history";
+import { parseNumber } from "@/lib/runtime-utils";
 import { autoExecuteConsensus } from "@/lib/swarm/autoExecute";
 import { runSwarm } from "@/lib/swarm/orchestrator";
 import {
@@ -34,6 +35,7 @@ import {
   warn,
   withTelemetrySpan,
 } from "@/lib/telemetry/server";
+import { approximateAvailableUsd, parseSpotSymbol } from "@/lib/trade-utils";
 import type {
   AutonomyCandidateScore,
   AutonomyStatus,
@@ -62,11 +64,6 @@ function autoStartEnabledByEnv(): boolean {
 
 function toAutonomySymbolKey(symbol: string) {
   return symbol.trim().toUpperCase();
-}
-
-function parseNumber(value: string | undefined, fallback: number): number {
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : fallback;
 }
 
 function getDegradedSnapshotSuppressionThreshold(): number {
@@ -469,36 +466,6 @@ function clamp01(value: number): number {
   return Math.min(1, Math.max(0, value));
 }
 
-function parseSpotSymbol(
-  symbol: string,
-): { baseCurrency: string; quoteCurrency: string } | null {
-  const parts = symbol.split("-");
-  if (parts.length !== 2 || !parts[0] || !parts[1]) {
-    return null;
-  }
-
-  return {
-    baseCurrency: parts[0],
-    quoteCurrency: parts[1],
-  };
-}
-
-function approximateAvailableUsd(balance?: AccountAssetBalance): number {
-  if (!balance) {
-    return 0;
-  }
-
-  if (balance.availableBalance <= 0) {
-    return 0;
-  }
-
-  if (balance.equity > 0 && balance.usdValue > 0) {
-    return balance.usdValue * (balance.availableBalance / balance.equity);
-  }
-
-  return balance.availableBalance;
-}
-
 function findTradingBalance(
   accountOverview: AccountOverview,
   currency?: string,
@@ -559,14 +526,8 @@ function buildPortfolioState(
     process.env.AUTONOMY_MAX_SYMBOL_ALLOCATION_PCT,
     DEFAULT_MAX_SYMBOL_ALLOCATION_PCT,
   );
-  const baseBalance = findTradingBalance(
-    accountOverview,
-    symbolParts?.baseCurrency,
-  );
-  const quoteBalance = findTradingBalance(
-    accountOverview,
-    symbolParts?.quoteCurrency,
-  );
+  const baseBalance = findTradingBalance(accountOverview, symbolParts?.base);
+  const quoteBalance = findTradingBalance(accountOverview, symbolParts?.quote);
   const minimumTradeNotionalUsd = parseNumber(
     process.env.MIN_TRADE_NOTIONAL,
     DEFAULT_MIN_TRADE_NOTIONAL_USD,
@@ -593,8 +554,8 @@ function buildPortfolioState(
   );
 
   return {
-    baseCurrency: symbolParts?.baseCurrency,
-    quoteCurrency: symbolParts?.quoteCurrency,
+    baseCurrency: symbolParts?.base,
+    quoteCurrency: symbolParts?.quote,
     positionState: (baseBalance?.availableBalance ?? 0) > 0 ? "long" : "flat",
     totalTradingEquityUsd,
     currentBaseInventoryUsd,

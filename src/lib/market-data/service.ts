@@ -7,6 +7,7 @@ import {
   getTicker as getRestTicker,
 } from "@/lib/okx/market";
 import { getOkxPublicWsClient, type OkxWsChannel } from "@/lib/okx/ws-client";
+import { nowIso, parseBoolean, parseNumber } from "@/lib/runtime-utils";
 import {
   error,
   incrementCounter,
@@ -62,19 +63,6 @@ const REQUIRED_WEBSOCKET_CHANNELS: OkxWsChannel[] = ["tickers", "books5"];
 const states = new Map<string, SymbolState>();
 let listenerAttached = false;
 
-function parseBoolean(value: string | undefined, fallback: boolean) {
-  if (value === undefined) {
-    return fallback;
-  }
-
-  return value.toLowerCase() === "true";
-}
-
-function parseNumber(value: string | undefined, fallback: number) {
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : fallback;
-}
-
 function requireRealtimeMarketData() {
   return parseBoolean(process.env.REQUIRE_REALTIME_MARKET_DATA, false);
 }
@@ -109,7 +97,7 @@ function getCandleRefreshMs() {
 
 function toIso(ts: string | number | undefined) {
   if (!ts) {
-    return new Date().toISOString();
+    return nowIso();
   }
 
   return new Date(Number(ts)).toISOString();
@@ -300,7 +288,7 @@ function ensureWsListenerAttached() {
     state.activeChannels.add(event.channel);
     state.connectionState =
       state.disabledChannels.size > 0 ? "degraded" : "connected";
-    state.lastEventAt = new Date().toISOString();
+    state.lastEventAt = nowIso();
     state.lastError = undefined;
 
     if (event.channel === "tickers") {
@@ -324,7 +312,7 @@ async function refreshCandles(symbol: string, timeframe: Timeframe) {
   const candles = await getRestCandles(symbol, timeframe, 20);
   state.candlesByTimeframe.set(timeframe, {
     candles,
-    updatedAt: new Date().toISOString(),
+    updatedAt: nowIso(),
   });
 
   if (state.source === "unknown") {
@@ -383,7 +371,7 @@ function ensurePolling(symbol: string, timeframe: Timeframe) {
           state.orderbook = orderbook;
           state.lastTickerAt = ticker.timestamp;
           state.lastOrderBookAt = orderbook.timestamp;
-          state.lastEventAt = new Date().toISOString();
+          state.lastEventAt = nowIso();
           state.source = state.activeChannels.size > 0 ? "mixed" : "rest";
           if (state.connectionState !== "connected") {
             state.connectionState = "degraded";

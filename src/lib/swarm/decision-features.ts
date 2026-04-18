@@ -1,3 +1,4 @@
+import { parseNumber } from "@/lib/runtime-utils";
 import type { MarketContext, OrderBookEntry, Timeframe } from "@/types/market";
 import type { AccountOverview } from "@/types/trade";
 
@@ -32,11 +33,6 @@ export interface DecisionFeatureVector {
   maxExecutableSellUsd: number;
   assumedTradeNotionalUsd: number;
   minimumTradeNotionalUsd: number;
-}
-
-function parseNumber(value: string | undefined, fallback: number): number {
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : fallback;
 }
 
 function clamp(value: number, min: number, max: number): number {
