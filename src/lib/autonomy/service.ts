@@ -1041,6 +1041,25 @@ function getDegradedSnapshotReason(
   );
 }
 
+function summarizeAutonomyCandidateBlockers(
+  candidateScores: AutonomyCandidateScore[],
+): string | undefined {
+  const summary = candidateScores
+    .slice(0, 3)
+    .map((candidate) => {
+      const rejectionSummary = candidate.rejectionReasons
+        .slice(0, 2)
+        .map((reason) => reason.summary)
+        .join(" | ");
+      return rejectionSummary
+        ? `${candidate.symbol} (${candidate.decision}, score=${candidate.score.toFixed(3)}): ${rejectionSummary}`
+        : `${candidate.symbol} (${candidate.decision}, score=${candidate.score.toFixed(3)})`;
+    })
+    .join("; ");
+
+  return summary || undefined;
+}
+
 function isMarketDataEvaluationError(reason: unknown): reason is Error {
   if (!(reason instanceof Error)) {
     return false;
@@ -1191,29 +1210,47 @@ async function selectAutonomyRun(
         };
       }
 
+      const rankedEvaluations = [...evaluations].sort(
+        (left, right) => right.score - left.score,
+      );
       const best =
-        evaluations
-          .filter((evaluation) => evaluation.score > 0)
-          .sort((left, right) => right.score - left.score)[0] ??
-        evaluations.sort((left, right) => right.score - left.score)[0];
-
-      const candidateScores = evaluations
+        rankedEvaluations.find((evaluation) => evaluation.score > 0) ?? null;
+      const candidateScores = rankedEvaluations
         .map(toAutonomyCandidateScore)
         .sort((left, right) => right.score - left.score);
+      const topCandidate = candidateScores[0];
 
       span.addAttributes({
         candidateCount: candidateScores.length,
-        bestSymbol: best.symbol,
-        bestScore: best.score,
+        bestSymbol: best?.symbol,
+        bestScore: best?.score ?? 0,
         errors: errors.length,
       });
-      if (best.score <= 0) {
-        warn("autonomy", "Autonomy selected a non-executable candidate", {
-          bestSymbol: best.symbol,
+      if (!best) {
+        const blockerSummary =
+          summarizeAutonomyCandidateBlockers(candidateScores) ??
+          "No candidate blocker summary was available.";
+        const reason = `Autonomy evaluated ${candidateScores.length} candidate(s), but none were execution-eligible. Top blockers: ${blockerSummary}`;
+        warn("autonomy", "Autonomy found no executable candidate", {
+          bestSymbol: topCandidate?.symbol,
           timeframe: state.timeframe,
           candidateScores: candidateScores.slice(0, 3),
           errors,
+          reason,
         });
+        span.addAttributes({
+          reason,
+        });
+
+        return {
+          best: null,
+          symbols,
+          errors,
+          candidateScores,
+          degradedSnapshotCounts: marketHealthState.degradedSnapshotCounts,
+          suppressedSymbols: marketHealthState.suppressedSymbols,
+          reason,
+        };
       }
 
       return {
@@ -1670,7 +1707,18 @@ export async function maybeDispatchDueAutonomyRun(
   if (state !== rawState) {
     await writeAutonomyState(state);
   }
-  if (!shouldRunNow(state)) {
+  const due = shouldRunNow(state);
+  info("autonomy", "Autonomy scheduler heartbeat", {
+    trigger,
+    running: state.running,
+    due,
+    intervalMs: state.intervalMs,
+    nextRunAt: state.nextRunAt,
+    lastRunAt: state.lastRunAt,
+    inFlight: state.inFlight,
+    leaseId: state.leaseId,
+  });
+  if (!due) {
     return false;
   }
 
