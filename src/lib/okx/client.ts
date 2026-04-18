@@ -23,15 +23,7 @@ interface OkxErrorLike {
   msg?: string;
   sCode?: string;
   sMsg?: string;
-  data?: Array<
-    | {
-        code?: string;
-        msg?: string;
-        sCode?: string;
-        sMsg?: string;
-      }
-    | Record<string, unknown>
-  >;
+  data?: unknown;
 }
 
 export class OkxRequestError extends Error {
@@ -73,26 +65,81 @@ function pickOkxErrorFields(payload?: OkxErrorLike | null): {
     return {};
   }
 
-  const detail = payload.data?.find((row) => {
-    if (!row || typeof row !== "object") {
-      return false;
-    }
-
-    return "sCode" in row || "code" in row || "sMsg" in row || "msg" in row;
-  }) as
+  const detail = hasDataArray<
     | {
         code?: string;
         msg?: string;
         sCode?: string;
         sMsg?: string;
       }
-    | undefined;
+    | Record<string, unknown>
+  >(payload)
+    ? (payload.data.find((row) => {
+        if (!row || typeof row !== "object") {
+          return false;
+        }
+
+        return "sCode" in row || "code" in row || "sMsg" in row || "msg" in row;
+      }) as
+        | {
+            code?: string;
+            msg?: string;
+            sCode?: string;
+            sMsg?: string;
+          }
+        | undefined)
+    : undefined;
 
   return {
     code: payload.code || detail?.code,
     subCode: payload.sCode || detail?.sCode,
     message: payload.msg || payload.sMsg || detail?.sMsg || detail?.msg,
   };
+}
+
+function hasDataArray<T>(payload: unknown): payload is OkxEnvelope<T> {
+  return Boolean(
+    payload &&
+      typeof payload === "object" &&
+      Array.isArray((payload as { data?: unknown }).data),
+  );
+}
+
+function resolveOkxMetricCode(input: {
+  responseOk: boolean;
+  topLevelCode?: string;
+  code?: string;
+  caughtError?: unknown;
+}): string {
+  if (!input.responseOk) {
+    if (!input.code && input.caughtError) {
+      if (input.caughtError instanceof OkxRequestError) {
+        return input.caughtError.code ?? "unknown";
+      }
+
+      return "transport_error";
+    }
+
+    return input.code ?? "http_error";
+  }
+
+  if (input.topLevelCode) {
+    return input.topLevelCode;
+  }
+
+  if (input.code) {
+    return input.code;
+  }
+
+  if (input.caughtError instanceof SyntaxError) {
+    return "parse_error";
+  }
+
+  if (input.caughtError instanceof OkxRequestError) {
+    return input.caughtError.code ?? "unknown";
+  }
+
+  return input.responseOk ? "0" : "transport_error";
 }
 
 function createSignature(
@@ -126,6 +173,7 @@ async function requestOkx<T>(
       const startedAt = performance.now();
       const method = (init.method ?? "GET").toUpperCase();
       const url = `${OKX_CONFIG.baseUrl}${path}`;
+      const endpoint = path.split("?")[0] ?? path;
       const headers = new Headers(init.headers);
       let response: Response | undefined;
       let durationRecorded = false;
@@ -163,6 +211,7 @@ async function requestOkx<T>(
           durationMs,
           {
             labels: {
+              endpoint,
               method,
               authenticated,
               status: response.status,
@@ -175,6 +224,14 @@ async function requestOkx<T>(
           const responseText = await response.text();
           const parsed = safeParseJson(responseText);
           const errorFields = pickOkxErrorFields(parsed);
+          const okxCode = resolveOkxMetricCode({
+            responseOk: false,
+            code: errorFields.code,
+          });
+          span.addAttributes({
+            okxCode,
+            okxSubCode: errorFields.subCode,
+          });
           incrementCounter(
             "okx_requests_total",
             "Total OKX HTTP requests.",
@@ -184,6 +241,8 @@ async function requestOkx<T>(
               authenticated,
               status: response.status,
               ok: false,
+              endpoint,
+              okxCode,
             },
           );
           requestCountRecorded = true;
@@ -206,10 +265,19 @@ async function requestOkx<T>(
           );
         }
 
-        const payload = (await response.json()) as OkxEnvelope<T>;
-        const errorFields = pickOkxErrorFields(payload as OkxErrorLike);
+        const payload = (await response.json()) as OkxErrorLike;
+        const errorFields = pickOkxErrorFields(payload);
         const topLevelCode = payload.code ?? payload.sCode;
         const isSuccess = !topLevelCode || topLevelCode === "0";
+        const okxCode = resolveOkxMetricCode({
+          responseOk: true,
+          topLevelCode,
+          code: errorFields.code,
+        });
+        span.addAttributes({
+          okxCode,
+          okxSubCode: errorFields.subCode,
+        });
 
         if (!isSuccess) {
           incrementCounter(
@@ -221,6 +289,8 @@ async function requestOkx<T>(
               authenticated,
               status: response.status,
               ok: false,
+              endpoint,
+              okxCode,
             },
           );
           requestCountRecorded = true;
@@ -238,7 +308,31 @@ async function requestOkx<T>(
               `OKX returned error code ${topLevelCode ?? "unknown"}`,
             response.status,
             JSON.stringify(payload),
-            errorFields.code,
+            topLevelCode ?? errorFields.code,
+            errorFields.subCode,
+          );
+        }
+
+        if (!hasDataArray<T>(payload)) {
+          incrementCounter(
+            "okx_requests_total",
+            "Total OKX HTTP requests.",
+            1,
+            {
+              method,
+              authenticated,
+              status: response.status,
+              ok: false,
+              endpoint,
+              okxCode: "malformed_response",
+            },
+          );
+          requestCountRecorded = true;
+          throw new OkxRequestError(
+            "OKX response payload is missing a data array.",
+            response.status,
+            JSON.stringify(payload),
+            "malformed_response",
             errorFields.subCode,
           );
         }
@@ -248,6 +342,8 @@ async function requestOkx<T>(
           authenticated,
           status: response.status,
           ok: true,
+          endpoint,
+          okxCode,
         });
         requestCountRecorded = true;
         resultCount = payload.data.length;
@@ -263,6 +359,7 @@ async function requestOkx<T>(
             durationMs,
             {
               labels: {
+                endpoint,
                 method,
                 authenticated,
                 status,
@@ -271,6 +368,14 @@ async function requestOkx<T>(
           );
         }
         if (!requestCountRecorded) {
+          const okxCode = resolveOkxMetricCode({
+            responseOk: Boolean(response?.ok),
+            code:
+              caughtError instanceof OkxRequestError
+                ? caughtError.code
+                : undefined,
+            caughtError,
+          });
           incrementCounter(
             "okx_requests_total",
             "Total OKX HTTP requests.",
@@ -280,14 +385,32 @@ async function requestOkx<T>(
               authenticated,
               status,
               ok: false,
+              endpoint,
+              okxCode,
             },
           );
+          error("okx.client", "OKX request failed before a valid payload", {
+            path,
+            method,
+            statusCode: response?.status,
+            okxCode,
+            error:
+              caughtError instanceof Error
+                ? caughtError.message
+                : String(caughtError),
+          });
         }
         if (response) {
           span.setAttribute("statusCode", response.status);
         }
         if (resultCount !== undefined) {
           span.setAttribute("resultCount", resultCount);
+        }
+        if (caughtError instanceof OkxRequestError) {
+          span.addAttributes({
+            okxCode: caughtError.code,
+            okxSubCode: caughtError.subCode,
+          });
         }
         span.setAttribute(
           "errorMessage",

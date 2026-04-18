@@ -41,7 +41,7 @@ export interface MarketDataStatus {
   detail: string;
   symbol?: string;
   timeframe?: string;
-  source?: "websocket" | "rest" | "fallback" | "unknown";
+  source?: "websocket" | "rest" | "mixed" | "fallback" | "unknown";
   lastEventAt?: string;
 }
 
@@ -68,6 +68,13 @@ export interface AutonomyCandidateScore {
   rejectionReasons: RejectionReason[];
 }
 
+export interface AutonomySuppressedSymbol {
+  symbol: string;
+  until: string;
+  reason: string;
+  consecutiveDegradedSnapshots: number;
+}
+
 export interface AutonomyStatus {
   enabled: boolean;
   configured: boolean;
@@ -92,6 +99,7 @@ export interface AutonomyStatus {
   lastCandidateScores?: AutonomyCandidateScore[];
   lastSelectedCandidate?: AutonomyCandidateScore;
   lastRejectedReasons?: RejectionReason[];
+  suppressedSymbols?: AutonomySuppressedSymbol[];
 }
 
 export interface RuntimeStatus {
