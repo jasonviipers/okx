@@ -8,6 +8,7 @@ import { AssetDetail } from "@/features/dashboard/components/asset-detail";
 import { CandlestickChart } from "@/features/dashboard/components/candlestick-chart";
 import { ErrorBoundary } from "@/features/dashboard/components/error-boundary";
 import { MemoryPanel } from "@/features/dashboard/components/memory-panel";
+import { MobileTabBar } from "@/features/dashboard/components/mobile-tab-bar";
 import { OrderBookAndTrades } from "@/features/dashboard/components/order-book";
 import { OrdersAndHistory } from "@/features/dashboard/components/orders-history";
 import { PositionsPanel } from "@/features/dashboard/components/positions-panel";
@@ -34,6 +35,78 @@ const COLOR_SCHEMES = [
   "matrix",
   "synthwave",
 ];
+
+function MobilePanelContent() {
+  const { activeTab } = useDashboard();
+
+  return (
+    <div className="mobile-panel">
+      {activeTab === "chart" && (
+        <div className="mobile-panel-stack">
+          <ErrorBoundary label="Chart">
+            <div className="flex-[2] min-h-0">
+              <CandlestickChart />
+            </div>
+          </ErrorBoundary>
+          <ErrorBoundary label="Orders">
+            <div className="flex-1 min-h-[120px]">
+              <OrdersAndHistory />
+            </div>
+          </ErrorBoundary>
+        </div>
+      )}
+      {activeTab === "trade" && (
+        <div className="mobile-panel-stack">
+          <ErrorBoundary label="Asset Detail">
+            <div className="mobile-panel-half">
+              <AssetDetail />
+            </div>
+          </ErrorBoundary>
+          <ErrorBoundary label="Order Book">
+            <div className="mobile-panel-half">
+              <OrderBookAndTrades />
+            </div>
+          </ErrorBoundary>
+        </div>
+      )}
+      {activeTab === "positions" && (
+        <div className="mobile-panel-stack">
+          <ErrorBoundary label="Positions">
+            <div className="mobile-panel-half">
+              <PositionsPanel />
+            </div>
+          </ErrorBoundary>
+          <ErrorBoundary label="Memory">
+            <div className="mobile-panel-half">
+              <MemoryPanel />
+            </div>
+          </ErrorBoundary>
+        </div>
+      )}
+      {activeTab === "agent" && (
+        <div className="mobile-panel-stack">
+          <div className="flex flex-col gap-px flex-1 min-h-0 overflow-auto">
+            <ErrorBoundary label="Agent">
+              <div className="flex-1 min-h-0 overflow-auto">
+                <AgentDashboard />
+              </div>
+            </ErrorBoundary>
+            <ErrorBoundary label="Logs">
+              <div className="flex-1 min-h-0 overflow-auto">
+                <SystemLogs />
+              </div>
+            </ErrorBoundary>
+            <ErrorBoundary label="Connections">
+              <div className="min-h-0 overflow-auto">
+                <ConnectionStatus />
+              </div>
+            </ErrorBoundary>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 
 function DashboardShell() {
   const {
@@ -95,14 +168,14 @@ function DashboardShell() {
   const [_isPending, startTransition] = useTransition();
 
   return (
-    <div className="flex flex-col h-screen bg-background text-foreground font-mono overflow-hidden">
+    <div className="flex flex-col h-dvh bg-background text-foreground font-mono overflow-hidden">
       {/* Top bar: Ticker Tape */}
       <ErrorBoundary label="Ticker">
         <TickerTape />
       </ErrorBoundary>
 
       {/* Symbol selector bar */}
-      <div className="flex items-center gap-1 px-2 py-0.5 border-b border-border bg-secondary/50 overflow-x-auto">
+      <div className="flex items-center gap-1 px-2 py-0.5 border-b border-border bg-secondary/50 overflow-x-auto shrink-0">
         {DEFAULT_SYMBOLS.map((sym) => (
           <Button
             key={sym}
@@ -145,8 +218,14 @@ function DashboardShell() {
         </div>
       </div>
 
-      {/* Main dashboard grid */}
-      <div className="flex-1 grid grid-cols-[260px_1fr_280px] grid-rows-[1fr_auto] gap-px bg-border overflow-hidden p-0 m-0">
+      {/* ── Mobile: Single panel with tab bar ── */}
+      <div className="flex-1 min-h-0 lg:hidden">
+        <MobilePanelContent />
+      </div>
+      <MobileTabBar />
+
+      {/* ── Desktop: Multi-column grid ── */}
+      <div className="hidden lg:grid flex-1 grid-cols-[260px_1fr_280px] grid-rows-[1fr_auto] gap-px bg-border overflow-hidden p-0 m-0 min-h-0">
         {/* Left column: Asset Detail + Order Book */}
         <div className="flex flex-col gap-px bg-border overflow-hidden">
           <ErrorBoundary label="Asset Detail">
@@ -188,14 +267,11 @@ function DashboardShell() {
             </div>
           </ErrorBoundary>
         </div>
-
-        {/* Bottom row: Agent + Logs + Connections, spanning full width */}
-        {/* This is handled inside the grid rows */}
       </div>
 
-      {/* Bottom panels: Agent + Logs + Connections */}
+      {/* Desktop bottom panels */}
       <div
-        className="grid grid-cols-[1fr_1fr_260px] gap-px bg-border border-t border-border"
+        className="hidden lg:grid grid-cols-[1fr_1fr_260px] gap-px bg-border border-t border-border"
         style={{ height: "200px" }}
       >
         <ErrorBoundary label="Agent">

@@ -37,12 +37,14 @@ export const TIMEFRAMES: Timeframe[] = [
   "1W",
 ];
 
+export type MobileTab = "chart" | "trade" | "positions" | "agent";
+
 interface DashboardState {
   selectedSymbol: string;
   selectedTimeframe: Timeframe;
   colorScheme: string;
   sidebarOpen: boolean;
-  activeTab: string;
+  activeTab: MobileTab;
 }
 
 interface DashboardActions {
@@ -50,7 +52,7 @@ interface DashboardActions {
   setSelectedTimeframe: (tf: Timeframe) => void;
   setColorScheme: (scheme: string) => void;
   toggleSidebar: () => void;
-  setActiveTab: (tab: string) => void;
+  setActiveTab: (tab: MobileTab) => void;
 }
 
 type DashboardContextValue = DashboardState & DashboardActions;
@@ -63,7 +65,7 @@ export function DashboardProvider({ children }: { children: ReactNode }) {
     selectedTimeframe: DEFAULT_TIMEFRAME,
     colorScheme: "phosphor",
     sidebarOpen: false,
-    activeTab: "chart",
+    activeTab: "chart" as MobileTab,
   });
 
   useEffect(() => {
@@ -94,7 +96,7 @@ export function DashboardProvider({ children }: { children: ReactNode }) {
     setState((s) => ({ ...s, sidebarOpen: !s.sidebarOpen }));
   }, []);
 
-  const setActiveTab = useCallback((tab: string) => {
+  const setActiveTab = useCallback((tab: MobileTab) => {
     setState((s) => ({ ...s, activeTab: tab }));
   }, []);
 

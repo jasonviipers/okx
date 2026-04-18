@@ -348,6 +348,75 @@ textarea {
   animation: slide-in-top 0.3s ease-out;
 }
 
+/* ─── Mobile Tab Bar ─────────────────────────────────────────────────────── */
+.mobile-tab-bar {
+  display: flex;
+  width: 100%;
+  height: 56px;
+  background: var(--card);
+  border-top: 1px solid var(--border);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+  flex-shrink: 0;
+}
+
+.mobile-tab-item {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  color: var(--muted-foreground);
+  transition: color 0.15s ease;
+  cursor: pointer;
+  border: none;
+  background: transparent;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.mobile-tab-item--active {
+  color: var(--primary);
+}
+
+.mobile-tab-item--active .mobile-tab-label {
+  text-shadow: 0 0 4px var(--primary);
+}
+
+.mobile-tab-label {
+  font-size: 0.5625rem;
+  font-family: var(--font-mono);
+  line-height: 1;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+/* ─── Mobile layout overrides ─────────────────────────────────────────── */
+
+@media (max-width: 1023px) {
+  .mobile-panel {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    min-height: 0;
+    overflow: auto;
+  }
+
+  .mobile-panel-stack {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    flex: 1;
+    min-height: 0;
+    overflow: auto;
+  }
+
+  .mobile-panel-half {
+    flex: 1;
+    min-height: 0;
+    overflow: auto;
+  }
+}
+
 /* ─── Reduced motion ───────────────────────────────────────────────────── */
 @media (prefers-reduced-motion: reduce) {
   .flash-up,
