@@ -5,11 +5,14 @@ import {
   CandlestickSeries,
   ColorType,
   createChart,
+  createSeriesMarkers,
   type HistogramData,
   HistogramSeries,
   type IChartApi,
   type ISeriesApi,
+  type ISeriesMarkersPluginApi,
   LineSeries,
+  type SeriesMarker,
   type Time,
 } from "lightweight-charts";
 import { useEffect, useRef, useState } from "react";
@@ -26,6 +29,7 @@ import {
   useDashboard,
 } from "@/features/dashboard/dashboard-context";
 import { useMarketSnapshot } from "@/features/dashboard/hooks/use-market-data";
+import { useTradeMarkers } from "@/features/dashboard/hooks/use-trade-markers";
 
 function computeEMA(data: number[], period: number): number[] {
   const ema: number[] = [];
@@ -76,6 +80,7 @@ export function CandlestickChart() {
   const bbUpperRef = useRef<ISeriesApi<"Line"> | null>(null);
   const bbLowerRef = useRef<ISeriesApi<"Line"> | null>(null);
   const bbMiddleRef = useRef<ISeriesApi<"Line"> | null>(null);
+  const markersPluginRef = useRef<ISeriesMarkersPluginApi<Time> | null>(null);
   const [ohlcTooltip, setOhlcTooltip] = useState<{
     open: number;
     high: number;
@@ -87,7 +92,9 @@ export function CandlestickChart() {
   const [showEMA9, setShowEMA9] = useState(false);
   const [showEMA21, setShowEMA21] = useState(false);
   const [showBB, setShowBB] = useState(false);
+  const [showTrades, setShowTrades] = useState(true);
   const prevDataKeyRef = useRef("");
+  const { markers: tradeMarkers } = useTradeMarkers(selectedSymbol);
 
   useEffect(() => {
     if (!chartContainerRef.current) return;
@@ -139,6 +146,8 @@ export function CandlestickChart() {
       wickUpColor: "#00d4aa",
       wickDownColor: "#ff4444",
     });
+
+    const markersPlugin = createSeriesMarkers(candleSeries, []);
 
     const volumeSeries = chart.addSeries(HistogramSeries, {
       priceFormat: { type: "volume" },
@@ -221,6 +230,7 @@ export function CandlestickChart() {
 
     chartRef.current = chart;
     candleSeriesRef.current = candleSeries;
+    markersPluginRef.current = markersPlugin;
     volumeSeriesRef.current = volumeSeries;
     ema9SeriesRef.current = ema9Series;
     ema21SeriesRef.current = ema21Series;
@@ -354,6 +364,27 @@ export function CandlestickChart() {
     showBB,
   ]);
 
+  useEffect(() => {
+    if (!markersPluginRef.current) return;
+
+    if (!showTrades) {
+      markersPluginRef.current.setMarkers([]);
+      return;
+    }
+
+    const chartMarkers: SeriesMarker<Time>[] = tradeMarkers.map((t) => ({
+      time: t.time as Time,
+      position: t.side === "buy" ? "belowBar" : "aboveBar",
+      shape: t.side === "buy" ? "arrowUp" : "arrowDown",
+      color: t.side === "buy" ? "#00d4aa" : "#ff4444",
+      text: `${t.side === "buy" ? "B" : "S"} ${t.size}@${t.price.toFixed(2)}`,
+      id: t.id,
+      size: 1,
+    }));
+
+    markersPluginRef.current.setMarkers(chartMarkers);
+  }, [tradeMarkers, showTrades]);
+
   return (
     <Card size="sm" className="h-full flex flex-col">
       <CardHeader>
@@ -398,6 +429,14 @@ export function CandlestickChart() {
               className="text-[0.5625rem]"
             >
               BB
+            </Button>
+            <Button
+              variant={showTrades ? "default" : "ghost"}
+              size="xs"
+              onClick={() => setShowTrades(!showTrades)}
+              className="text-[0.5625rem]"
+            >
+              Trades
             </Button>
           </div>
         </CardAction>
