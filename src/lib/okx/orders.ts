@@ -39,6 +39,7 @@ interface OkxPositionRow {
 export async function placeOrder(input: PlaceOrderInput): Promise<Order> {
   const referencePrice = input.price ?? (await getTicker(input.symbol)).last;
   const notionalUsd = Number((referencePrice * input.size).toFixed(8));
+  const orderType = input.type === "market" ? "market" : "limit";
 
   if (!hasOkxTradingCredentials()) {
     return {
@@ -62,9 +63,12 @@ export async function placeOrder(input: PlaceOrderInput): Promise<Order> {
     instId: input.symbol,
     tdMode: "cash",
     side: input.side,
-    ordType: input.type === "market" ? "market" : "limit",
+    ordType: orderType,
     sz: String(input.size),
     px: input.price ? String(input.price) : undefined,
+    // The execution layer computes `size` in base units. For SPOT market
+    // orders, OKX defaults BUY quantities to quote_ccy unless tgtCcy is set.
+    tgtCcy: orderType === "market" ? "base_ccy" : undefined,
   });
 
   return {
