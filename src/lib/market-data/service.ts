@@ -6,7 +6,7 @@ import {
   getOrderBook as getRestOrderBook,
   getTicker as getRestTicker,
 } from "@/lib/okx/market";
-import { getOkxPublicWsClient } from "@/lib/okx/ws-client";
+import { getOkxPublicWsClient, type OkxWsChannel } from "@/lib/okx/ws-client";
 import {
   error,
   incrementCounter,
@@ -32,6 +32,8 @@ type SymbolState = {
   symbol: string;
   connectionState: MarketFeedStatus["connectionState"];
   source: MarketDataSource;
+  activeChannels: Set<OkxWsChannel>;
+  disabledChannels: Set<OkxWsChannel>;
   ticker?: OKXTicker;
   orderbook?: OrderBook;
   lastTickerAt?: string;
@@ -70,13 +72,6 @@ function parseBoolean(value: string | undefined, fallback: boolean) {
 function parseNumber(value: string | undefined, fallback: number) {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : fallback;
-}
-
-function allowSyntheticFallback() {
-  return parseBoolean(
-    process.env.ALLOW_SYNTHETIC_MARKET_FALLBACK,
-    process.env.NODE_ENV !== "production",
-  );
 }
 
 function requireRealtimeMarketData() {
@@ -178,6 +173,8 @@ function getOrCreateState(symbol: string): SymbolState {
     symbol,
     connectionState: "idle",
     source: "unknown",
+    activeChannels: new Set(),
+    disabledChannels: new Set(),
     candlesByTimeframe: new Map(),
     pollTimer: null,
   };
@@ -197,15 +194,80 @@ function ensureWsListenerAttached() {
       if (event.event === "connected") {
         info("market.data", "Market data websocket connected");
         for (const state of states.values()) {
-          state.connectionState = "connected";
+          if (state.connectionState !== "idle") {
+            state.connectionState =
+              state.activeChannels.size > 0 && state.disabledChannels.size === 0
+                ? "connected"
+                : state.activeChannels.size > 0
+                  ? "degraded"
+                  : "connecting";
+            state.lastError = undefined;
+          }
+        }
+      } else if (event.event === "disconnected") {
+        warn("market.data", "Market data websocket disconnected", {
+          message: event.message,
+        });
+        for (const state of states.values()) {
+          state.activeChannels.clear();
+          if (state.connectionState !== "idle") {
+            state.connectionState = "degraded";
+            state.lastError = event.message;
+            if (state.source === "websocket") {
+              state.source = "rest";
+            }
+          }
         }
       } else if (event.event === "error") {
         warn("market.data", "Market data websocket reported an error", {
           message: event.message,
         });
         for (const state of states.values()) {
-          state.connectionState = "error";
-          state.lastError = event.message;
+          state.activeChannels.clear();
+          if (state.connectionState !== "idle") {
+            state.connectionState = "error";
+            state.lastError = event.message;
+            if (state.source === "websocket") {
+              state.source = "rest";
+            }
+          }
+        }
+      } else if (
+        event.event === "subscribed" &&
+        event.instId &&
+        event.channel
+      ) {
+        const state = states.get(event.instId);
+        if (!state) {
+          return;
+        }
+        state.activeChannels.add(event.channel);
+        state.connectionState =
+          state.disabledChannels.size > 0 ? "degraded" : "connected";
+        state.lastError = undefined;
+      } else if (event.event === "subscription_error") {
+        warn("market.data", "Market data websocket subscription failed", {
+          symbol: event.instId,
+          channel: event.channel,
+          code: event.code,
+          message: event.message,
+        });
+        if (!event.instId) {
+          return;
+        }
+        const state = states.get(event.instId);
+        if (!state) {
+          return;
+        }
+        if (event.channel) {
+          state.activeChannels.delete(event.channel);
+          state.disabledChannels.add(event.channel);
+          client.unsubscribe(event.channel, event.instId);
+        }
+        state.connectionState = "degraded";
+        state.lastError = event.message;
+        if (state.source === "websocket") {
+          state.source = "rest";
         }
       }
       return;
@@ -216,9 +278,12 @@ function ensureWsListenerAttached() {
       return;
     }
 
-    state.connectionState = "connected";
+    state.activeChannels.add(event.channel);
+    state.connectionState =
+      state.disabledChannels.size > 0 ? "degraded" : "connected";
     state.source = "websocket";
     state.lastEventAt = new Date().toISOString();
+    state.lastError = undefined;
 
     if (event.channel === "tickers") {
       const ticker = mapWsTicker(event.instId, event.data);
@@ -259,12 +324,7 @@ async function bootstrapState(symbol: string, timeframe: Timeframe) {
   state.lastTickerAt = ticker.timestamp;
   state.lastOrderBookAt = orderbook.timestamp;
   state.lastEventAt = new Date().toISOString();
-  state.source =
-    state.connectionState === "connected"
-      ? "websocket"
-      : allowSyntheticFallback()
-        ? "rest"
-        : "rest";
+  state.source = "rest";
 
   info("market.data", "Bootstrapped market state", {
     symbol,
@@ -300,9 +360,9 @@ function ensurePolling(symbol: string, timeframe: Timeframe) {
           state.lastTickerAt = ticker.timestamp;
           state.lastOrderBookAt = orderbook.timestamp;
           state.lastEventAt = new Date().toISOString();
+          state.source = "rest";
           if (state.connectionState !== "connected") {
             state.connectionState = "degraded";
-            state.source = "rest";
           }
         }
 
@@ -341,11 +401,20 @@ function ensurePolling(symbol: string, timeframe: Timeframe) {
 async function ensureSymbolState(symbol: string, timeframe: Timeframe) {
   ensureWsListenerAttached();
   const state = getOrCreateState(symbol);
+  const client = getOkxPublicWsClient();
 
   if (state.connectionState === "idle") {
     state.connectionState = "connecting";
-    const client = getOkxPublicWsClient();
+  } else if (
+    state.connectionState !== "connected" &&
+    client.getState() === "connected"
+  ) {
+    state.connectionState = "connecting";
+  }
+  if (!state.disabledChannels.has("tickers")) {
     client.subscribe("tickers", symbol);
+  }
+  if (!state.disabledChannels.has("books5")) {
     client.subscribe("books5", symbol);
   }
 
@@ -379,6 +448,11 @@ function buildStatus(
   }
   if (state.source === "fallback") {
     warnings.add("Synthetic fallback market data is active.");
+  }
+  if (state.disabledChannels.size > 0) {
+    warnings.add(
+      `Websocket subscription rejected for ${[...state.disabledChannels].join(", ")}; using REST for those feeds.`,
+    );
   }
   if (state.lastError) {
     warnings.add(state.lastError);

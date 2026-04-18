@@ -23,6 +23,8 @@ import {
 import type { MarketContext } from "@/types/market";
 import type { AgentVote, SwarmRunResult } from "@/types/swarm";
 
+const DEFAULT_DIAGNOSTIC_VOTE_TIMEOUT_MS = 5_000;
+
 for (const modelId of ACTIVE_SWARM_MODELS) {
   assertCanReason(modelId);
 
@@ -38,6 +40,41 @@ for (const modelId of ACTIVE_SWARM_MODELS) {
     throw new Error(
       `ACTIVE_SWARM_MODELS contains "${modelId}" which has no SwarmRole in MODEL_SWARM_ROLE_MAP. Assign a SwarmRole or remove the model from ACTIVE_SWARM_MODELS.`,
     );
+  }
+}
+
+function getDiagnosticVoteTimeoutMs() {
+  const parsed = Number(process.env.SWARM_DIAGNOSTIC_VOTE_TIMEOUT_MS);
+  return Number.isFinite(parsed) && parsed > 0
+    ? parsed
+    : DEFAULT_DIAGNOSTIC_VOTE_TIMEOUT_MS;
+}
+
+async function withVoteTimeout<T>(
+  modelId: string,
+  promise: Promise<T>,
+  timeoutMs: number,
+): Promise<T> {
+  let timeoutHandle: NodeJS.Timeout | null = null;
+
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<T>((_, reject) => {
+        timeoutHandle = setTimeout(() => {
+          reject(
+            new Error(
+              `Diagnostic vote timed out for ${modelId} after ${timeoutMs}ms.`,
+            ),
+          );
+        }, timeoutMs);
+        timeoutHandle.unref?.();
+      }),
+    ]);
+  } finally {
+    if (timeoutHandle) {
+      clearTimeout(timeoutHandle);
+    }
   }
 }
 
@@ -156,10 +193,15 @@ export async function collectDiagnosticVotes(
     async () => {
       const resolvedMemorySummary =
         options?.memorySummary ?? (await getMemorySummary(ctx));
+      const timeoutMs = getDiagnosticVoteTimeoutMs();
       const settled = await Promise.allSettled(
         ACTIVE_SWARM_MODELS.map((modelId) => {
           const roleConfig = getRoleForModel(modelId);
-          return createAgent(modelId, roleConfig)(ctx, resolvedMemorySummary);
+          return withVoteTimeout(
+            modelId,
+            createAgent(modelId, roleConfig)(ctx, resolvedMemorySummary),
+            timeoutMs,
+          );
         }),
       );
       const votes: AgentVote[] = [];
@@ -192,6 +234,15 @@ export async function collectDiagnosticVotes(
           symbol: ctx.symbol,
           timeframe: ctx.timeframe,
           missingVetos,
+        });
+      }
+
+      if (errors.length > 0) {
+        warn("swarm.orchestrator", "Diagnostic vote collection had failures", {
+          symbol: ctx.symbol,
+          timeframe: ctx.timeframe,
+          timeoutMs,
+          errors,
         });
       }
 

@@ -8,6 +8,12 @@ import type { RejectionReason } from "@/types/swarm";
 
 export type AutonomySelectionMode = "fixed" | "auto";
 
+export interface StoredAutonomySuppressedSymbol {
+  until: string;
+  reason: string;
+  consecutiveDegradedSnapshots: number;
+}
+
 export interface StoredAutonomyState {
   running: boolean;
   symbol: string;
@@ -30,6 +36,8 @@ export interface StoredAutonomyState {
   lastSelectedCandidate?: AutonomyCandidateScore;
   lastRejectedReasons?: RejectionReason[];
   symbolThrottleUntil?: Record<string, string>;
+  degradedSnapshotCounts?: Record<string, number>;
+  suppressedSymbols?: Record<string, StoredAutonomySuppressedSymbol>;
   leaseId?: string;
   leaseAcquiredAt?: string;
 }
@@ -68,6 +76,8 @@ export function getDefaultAutonomyState(): StoredAutonomyState {
     iterationCount: 0,
     inFlight: false,
     symbolThrottleUntil: {},
+    degradedSnapshotCounts: {},
+    suppressedSymbols: {},
   };
 }
 

@@ -1,7 +1,7 @@
 import "server-only";
 
 import { OKX_ENDPOINTS, OKX_TIMEFRAME_MAP } from "@/lib/configs/okx";
-import { okxPublicGet } from "@/lib/okx/client";
+import { OkxRequestError, okxPublicGet } from "@/lib/okx/client";
 import { getCachedJson, setCachedJson } from "@/lib/redis/swarm-cache";
 import type {
   Candle,
@@ -49,6 +49,42 @@ function toIso(ts: string): string {
 
 function parseNumber(value: string | undefined): number {
   return Number(value ?? "0");
+}
+
+function rethrowLiveMarketError(
+  resource: "ticker" | "candles" | "order book",
+  symbol: string,
+  timeframeOrSize: Timeframe | number | undefined,
+  caughtError: unknown,
+): never {
+  if (caughtError instanceof OkxRequestError) {
+    throw caughtError;
+  }
+
+  if (resource === "candles") {
+    throw new Error(
+      `Live candles unavailable for ${symbol} ${timeframeOrSize as Timeframe} and synthetic fallback is disabled.`,
+      {
+        cause: caughtError instanceof Error ? caughtError : undefined,
+      },
+    );
+  }
+
+  if (resource === "order book") {
+    throw new Error(
+      `Live order book unavailable for ${symbol} and synthetic fallback is disabled.`,
+      {
+        cause: caughtError instanceof Error ? caughtError : undefined,
+      },
+    );
+  }
+
+  throw new Error(
+    `Live ticker unavailable for ${symbol} and synthetic fallback is disabled.`,
+    {
+      cause: caughtError instanceof Error ? caughtError : undefined,
+    },
+  );
 }
 
 function buildFallbackCandles(
@@ -190,11 +226,9 @@ export async function getTicker(symbol: string): Promise<OKXTicker> {
     const ticker = mapTicker(rows[0]);
     await setCachedJson(cacheKey, ticker, 5);
     return ticker;
-  } catch {
+  } catch (caughtError) {
     if (!allowSyntheticMarketFallback()) {
-      throw new Error(
-        `Live ticker unavailable for ${symbol} and synthetic fallback is disabled.`,
-      );
+      rethrowLiveMarketError("ticker", symbol, undefined, caughtError);
     }
 
     const ticker = buildFallbackTicker(symbol);
@@ -224,11 +258,9 @@ export async function getCandles(
     const candles = rows.map(mapCandle).reverse();
     await setCachedJson(cacheKey, candles, 60);
     return candles;
-  } catch {
+  } catch (caughtError) {
     if (!allowSyntheticMarketFallback()) {
-      throw new Error(
-        `Live candles unavailable for ${symbol} ${timeframe} and synthetic fallback is disabled.`,
-      );
+      rethrowLiveMarketError("candles", symbol, timeframe, caughtError);
     }
 
     const candles = buildFallbackCandles(symbol, timeframe, limit);
@@ -253,11 +285,9 @@ export async function getOrderBook(
     const book = mapOrderBook(symbol, rows[0]);
     await setCachedJson(cacheKey, book, 5);
     return book;
-  } catch {
+  } catch (caughtError) {
     if (!allowSyntheticMarketFallback()) {
-      throw new Error(
-        `Live order book unavailable for ${symbol} and synthetic fallback is disabled.`,
-      );
+      rethrowLiveMarketError("order book", symbol, size, caughtError);
     }
 
     const book = buildFallbackOrderBook(symbol);

@@ -6,12 +6,17 @@ import {
   getRealtimeMarketContext,
 } from "@/lib/market-data/service";
 import { getAccountOverview } from "@/lib/okx/account";
+import { OkxRequestError } from "@/lib/okx/client";
 import {
   getAutonomousSymbolUniverse,
   getConfiguredAutonomousQuoteCurrencies,
   getQuoteCurrenciesFromBalances,
 } from "@/lib/okx/instruments";
-import type { AutonomySelectionMode } from "@/lib/persistence/autonomy-state";
+import type {
+  AutonomySelectionMode,
+  StoredAutonomyState,
+  StoredAutonomySuppressedSymbol,
+} from "@/lib/persistence/autonomy-state";
 import {
   readAutonomyState,
   updateAutonomyState,
@@ -29,7 +34,11 @@ import {
   warn,
   withTelemetrySpan,
 } from "@/lib/telemetry/server";
-import type { AutonomyCandidateScore, AutonomyStatus } from "@/types/api";
+import type {
+  AutonomyCandidateScore,
+  AutonomyStatus,
+  AutonomySuppressedSymbol,
+} from "@/types/api";
 import type { Timeframe } from "@/types/market";
 import type { ExecutionResult, SwarmRunResult } from "@/types/swarm";
 import type { AccountAssetBalance, AccountOverview } from "@/types/trade";
@@ -39,6 +48,8 @@ const AUTONOMY_SCHEDULER_TICK_MS = 5_000;
 const DEFAULT_MAX_SYMBOL_ALLOCATION_PCT = 0.35;
 const DEFAULT_PORTFOLIO_BUFFER_PCT = 0.9;
 const DEFAULT_MIN_TRADE_NOTIONAL_USD = 5;
+const DEFAULT_DEGRADED_SNAPSHOT_SUPPRESSION_THRESHOLD = 10;
+const DEFAULT_DEGRADED_SNAPSHOT_SUPPRESSION_WINDOW_MS = 30 * 60_000;
 
 declare global {
   var __okxAutonomyScheduler: NodeJS.Timeout | undefined;
@@ -52,6 +63,30 @@ function autoStartEnabledByEnv(): boolean {
 function parseNumber(value: string | undefined, fallback: number): number {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+function getDegradedSnapshotSuppressionThreshold(): number {
+  return Math.max(
+    1,
+    Math.trunc(
+      parseNumber(
+        process.env.AUTONOMY_DEGRADED_SNAPSHOT_SUPPRESSION_THRESHOLD,
+        DEFAULT_DEGRADED_SNAPSHOT_SUPPRESSION_THRESHOLD,
+      ),
+    ),
+  );
+}
+
+function getDegradedSnapshotSuppressionWindowMs(): number {
+  return Math.max(
+    60_000,
+    Math.trunc(
+      parseNumber(
+        process.env.AUTONOMY_DEGRADED_SNAPSHOT_SUPPRESSION_WINDOW_MS,
+        DEFAULT_DEGRADED_SNAPSHOT_SUPPRESSION_WINDOW_MS,
+      ),
+    ),
+  );
 }
 
 function makeLeaseId() {
@@ -83,6 +118,144 @@ function normalizeWorkerLeaseState(
   };
 }
 
+function normalizeDegradedSnapshotCounts(
+  counts?: StoredAutonomyState["degradedSnapshotCounts"],
+): Record<string, number> {
+  const entries = Object.entries(counts ?? {}).filter((entry) => {
+    const value = entry[1];
+    return (
+      Number.isFinite(value) &&
+      value !== undefined &&
+      Math.trunc(value) > 0 &&
+      entry[0].trim().length > 0
+    );
+  });
+
+  return Object.fromEntries(
+    entries.map(([symbol, value]) => [symbol.toUpperCase(), Math.trunc(value)]),
+  );
+}
+
+function normalizeSuppressedSymbols(
+  suppressed?: StoredAutonomyState["suppressedSymbols"],
+): Record<string, StoredAutonomySuppressedSymbol> {
+  const now = Date.now();
+  const entries = Object.entries(suppressed ?? {}).filter((entry) => {
+    const [symbol, value] = entry;
+    if (!symbol || !value?.until) {
+      return false;
+    }
+
+    const until = new Date(value.until).getTime();
+    return Number.isFinite(until) && until > now;
+  });
+
+  return Object.fromEntries(
+    entries.map(([symbol, value]) => [
+      symbol.toUpperCase(),
+      {
+        until: value.until,
+        reason: value.reason,
+        consecutiveDegradedSnapshots: Math.max(
+          1,
+          Math.trunc(value.consecutiveDegradedSnapshots),
+        ),
+      },
+    ]),
+  );
+}
+
+function areNumberRecordsEqual(
+  left?: Record<string, number>,
+  right?: Record<string, number>,
+) {
+  const leftEntries = Object.entries(left ?? {});
+  const rightEntries = Object.entries(right ?? {});
+  if (leftEntries.length !== rightEntries.length) {
+    return false;
+  }
+
+  return leftEntries.every(([key, value]) => right?.[key] === value);
+}
+
+function areSuppressedRecordsEqual(
+  left?: Record<string, StoredAutonomySuppressedSymbol>,
+  right?: Record<string, StoredAutonomySuppressedSymbol>,
+) {
+  const leftEntries = Object.entries(left ?? {});
+  const rightEntries = Object.entries(right ?? {});
+  if (leftEntries.length !== rightEntries.length) {
+    return false;
+  }
+
+  return leftEntries.every(([key, value]) => {
+    const other = right?.[key];
+    return (
+      other?.until === value.until &&
+      other?.reason === value.reason &&
+      other?.consecutiveDegradedSnapshots === value.consecutiveDegradedSnapshots
+    );
+  });
+}
+
+function normalizeAutonomyState(
+  state: StoredAutonomyState,
+): StoredAutonomyState {
+  const withLeaseState = normalizeWorkerLeaseState(state);
+  const degradedSnapshotCounts = normalizeDegradedSnapshotCounts(
+    withLeaseState.degradedSnapshotCounts,
+  );
+  const suppressedSymbols = normalizeSuppressedSymbols(
+    withLeaseState.suppressedSymbols,
+  );
+
+  if (
+    withLeaseState === state &&
+    areNumberRecordsEqual(
+      state.degradedSnapshotCounts,
+      degradedSnapshotCounts,
+    ) &&
+    areSuppressedRecordsEqual(state.suppressedSymbols, suppressedSymbols)
+  ) {
+    return state;
+  }
+
+  return {
+    ...withLeaseState,
+    degradedSnapshotCounts,
+    suppressedSymbols,
+  };
+}
+
+function toSuppressedSymbols(
+  state: StoredAutonomyState,
+): AutonomySuppressedSymbol[] {
+  return Object.entries(state.suppressedSymbols ?? {})
+    .map(([symbol, value]) => ({
+      symbol,
+      until: value.until,
+      reason: value.reason,
+      consecutiveDegradedSnapshots: value.consecutiveDegradedSnapshots,
+    }))
+    .sort(
+      (left, right) =>
+        new Date(left.until).getTime() - new Date(right.until).getTime(),
+    );
+}
+
+function isSymbolSuppressed(
+  state: StoredAutonomyState,
+  symbol: string,
+): boolean {
+  const suppressedUntil = state.suppressedSymbols?.[symbol]?.until;
+  if (!suppressedUntil) {
+    return false;
+  }
+
+  const ts = new Date(suppressedUntil).getTime();
+  return Number.isFinite(ts) && ts > Date.now();
+}
+
 async function getTodayExecutedNotionalUsd() {
   const history = await getHistory(200);
   const since = Date.now() - 24 * 60 * 60 * 1000;
@@ -110,7 +283,7 @@ function resolveInternalBaseUrl(): string {
 }
 
 function toAutonomyStatus(
-  state: Awaited<ReturnType<typeof readAutonomyState>>,
+  state: StoredAutonomyState,
   budgetRemainingUsd: number,
 ): AutonomyStatus {
   const selectionModeLabel =
@@ -146,10 +319,11 @@ function toAutonomyStatus(
     lastCandidateScores: state.lastCandidateScores,
     lastSelectedCandidate: state.lastSelectedCandidate,
     lastRejectedReasons: state.lastRejectedReasons,
+    suppressedSymbols: toSuppressedSymbols(state),
   };
 }
 
-function shouldRunNow(state: Awaited<ReturnType<typeof readAutonomyState>>) {
+function shouldRunNow(state: StoredAutonomyState) {
   return (
     state.running &&
     (!state.nextRunAt || new Date(state.nextRunAt).getTime() <= Date.now())
@@ -197,7 +371,11 @@ export async function ensureAutonomyBootState() {
     return;
   }
 
-  const state = await readAutonomyState();
+  const rawState = await readAutonomyState();
+  const state = normalizeAutonomyState(rawState);
+  if (state !== rawState) {
+    await writeAutonomyState(state);
+  }
   if (state.running) {
     setGauge(
       "autonomy_running",
@@ -231,7 +409,7 @@ export async function getAutonomyStatus(): Promise<AutonomyStatus> {
     readAutonomyState(),
     getTodayExecutedNotionalUsd(),
   ]);
-  const state = normalizeWorkerLeaseState(rawState);
+  const state = normalizeAutonomyState(rawState);
   if (state !== rawState) {
     await writeAutonomyState(state);
   }
@@ -578,7 +756,7 @@ function scoreAutonomyCandidate(
 }
 
 async function resolveAutonomySymbols(
-  state: Awaited<ReturnType<typeof readAutonomyState>>,
+  state: StoredAutonomyState,
   accountOverview: AccountOverview,
 ): Promise<string[]> {
   if (state.selectionMode === "fixed") {
@@ -592,10 +770,12 @@ async function resolveAutonomySymbols(
     ...getConfiguredAutonomousQuoteCurrencies(),
   ];
 
-  return getAutonomousSymbolUniverse({
+  const symbols = await getAutonomousSymbolUniverse({
     quoteCurrencies,
     balances: accountOverview.tradingBalances,
   });
+
+  return symbols.filter((symbol) => !isSymbolSuppressed(state, symbol));
 }
 
 async function evaluateAutonomyCandidate(
@@ -769,7 +949,7 @@ function applyPortfolioConstraints(
 }
 
 function getSymbolThrottleUntil(
-  state: Awaited<ReturnType<typeof readAutonomyState>>,
+  state: StoredAutonomyState,
   symbol: string,
 ): number | null {
   const iso = state.symbolThrottleUntil?.[symbol];
@@ -781,10 +961,97 @@ function getSymbolThrottleUntil(
   return Number.isFinite(ts) ? ts : null;
 }
 
-async function selectAutonomyRun(
-  state: Awaited<ReturnType<typeof readAutonomyState>>,
-  budgetRemainingUsd: number,
+type AutonomySelectionResult = {
+  best: AutonomySymbolEvaluation | null;
+  symbols: string[];
+  errors: string[];
+  candidateScores: AutonomyCandidateScore[];
+  degradedSnapshotCounts: Record<string, number>;
+  suppressedSymbols: Record<string, StoredAutonomySuppressedSymbol>;
+  reason?: string;
+};
+
+function createMarketHealthState(state: StoredAutonomyState) {
+  return {
+    degradedSnapshotCounts: { ...(state.degradedSnapshotCounts ?? {}) },
+    suppressedSymbols: { ...(state.suppressedSymbols ?? {}) },
+  };
+}
+
+function recordHealthySymbolSnapshot(
+  marketHealthState: ReturnType<typeof createMarketHealthState>,
+  symbol: string,
 ) {
+  delete marketHealthState.degradedSnapshotCounts[symbol];
+  delete marketHealthState.suppressedSymbols[symbol];
+}
+
+function recordDegradedSymbolSnapshot(
+  marketHealthState: ReturnType<typeof createMarketHealthState>,
+  symbol: string,
+  reason: string,
+) {
+  const nextCount = (marketHealthState.degradedSnapshotCounts[symbol] ?? 0) + 1;
+  marketHealthState.degradedSnapshotCounts[symbol] = nextCount;
+
+  if (nextCount < getDegradedSnapshotSuppressionThreshold()) {
+    return;
+  }
+
+  const until = new Date(
+    Date.now() + getDegradedSnapshotSuppressionWindowMs(),
+  ).toISOString();
+  const previousSuppression = marketHealthState.suppressedSymbols[symbol];
+  marketHealthState.suppressedSymbols[symbol] = {
+    until,
+    reason,
+    consecutiveDegradedSnapshots: nextCount,
+  };
+  if (!previousSuppression) {
+    warn(
+      "autonomy",
+      "Suppressing symbol after consecutive degraded snapshots",
+      {
+        symbol,
+        until,
+        consecutiveDegradedSnapshots: nextCount,
+        reason,
+      },
+    );
+  }
+}
+
+function getDegradedSnapshotReason(
+  evaluation: AutonomySymbolEvaluation,
+): string {
+  return (
+    evaluation.snapshot.status.warnings[0] ??
+    `Market data remained degraded for ${evaluation.symbol}.`
+  );
+}
+
+function isMarketDataEvaluationError(reason: unknown): reason is Error {
+  if (!(reason instanceof Error)) {
+    return false;
+  }
+
+  if (reason instanceof OkxRequestError) {
+    return true;
+  }
+
+  const message = reason.message.toLowerCase();
+  return (
+    message.includes("market data unavailable") ||
+    message.includes("live ticker unavailable") ||
+    message.includes("live order book unavailable") ||
+    message.includes("live candles unavailable")
+  );
+}
+
+async function selectAutonomyRun(
+  state: StoredAutonomyState,
+  budgetRemainingUsd: number,
+): Promise<AutonomySelectionResult> {
   return withTelemetrySpan(
     {
       name: "autonomy.select_run",
@@ -797,6 +1064,35 @@ async function selectAutonomyRun(
     async (span) => {
       const accountOverview = await getAccountOverview();
       const symbols = await resolveAutonomySymbols(state, accountOverview);
+      const marketHealthState = createMarketHealthState(state);
+
+      if (symbols.length === 0) {
+        const reason =
+          state.selectionMode === "auto"
+            ? "All automatically selected symbols are temporarily suppressed due to degraded market data."
+            : "Autonomy has no symbol available to evaluate.";
+        span.addAttributes({
+          candidateCount: 0,
+          errors: 0,
+          reason,
+        });
+        warn("autonomy", "Autonomy skipped candidate selection", {
+          timeframe: state.timeframe,
+          selectionMode: state.selectionMode,
+          reason,
+          suppressedSymbols: toSuppressedSymbols(state),
+        });
+        return {
+          best: null,
+          symbols,
+          errors: [],
+          candidateScores: [],
+          degradedSnapshotCounts: marketHealthState.degradedSnapshotCounts,
+          suppressedSymbols: marketHealthState.suppressedSymbols,
+          reason,
+        };
+      }
+
       const evaluations: AutonomySymbolEvaluation[] = [];
       const errors: string[] = [];
       const settled = await Promise.allSettled(
@@ -818,6 +1114,15 @@ async function selectAutonomyRun(
 
         if (settledResult.status === "fulfilled") {
           let evaluation = applyPortfolioConstraints(settledResult.value);
+          if (evaluation.snapshot.status.tradeable) {
+            recordHealthySymbolSnapshot(marketHealthState, symbol);
+          } else {
+            recordDegradedSymbolSnapshot(
+              marketHealthState,
+              symbol,
+              getDegradedSnapshotReason(evaluation),
+            );
+          }
           const throttleUntil = getSymbolThrottleUntil(state, symbol);
           if (throttleUntil && throttleUntil > Date.now()) {
             evaluation = appendAutonomyRejection(evaluation, {
@@ -835,6 +1140,13 @@ async function selectAutonomyRun(
           continue;
         }
 
+        if (isMarketDataEvaluationError(settledResult.reason)) {
+          recordDegradedSymbolSnapshot(
+            marketHealthState,
+            symbol,
+            settledResult.reason.message,
+          );
+        }
         errors.push(
           `${symbol}: ${
             settledResult.reason instanceof Error
@@ -845,11 +1157,24 @@ async function selectAutonomyRun(
       }
 
       if (evaluations.length === 0) {
-        throw new Error(
+        const reason =
           errors.length > 0
             ? `Autonomy could not evaluate any symbols. ${errors.join("; ")}`
-            : "Autonomy could not evaluate any symbols.",
-        );
+            : "Autonomy could not evaluate any symbols.";
+        span.addAttributes({
+          candidateCount: 0,
+          errors: errors.length,
+          reason,
+        });
+        return {
+          best: null,
+          symbols,
+          errors,
+          candidateScores: [],
+          degradedSnapshotCounts: marketHealthState.degradedSnapshotCounts,
+          suppressedSymbols: marketHealthState.suppressedSymbols,
+          reason,
+        };
       }
 
       const best =
@@ -877,7 +1202,14 @@ async function selectAutonomyRun(
         });
       }
 
-      return { best, symbols, errors, candidateScores };
+      return {
+        best,
+        symbols,
+        errors,
+        candidateScores,
+        degradedSnapshotCounts: marketHealthState.degradedSnapshotCounts,
+        suppressedSymbols: marketHealthState.suppressedSymbols,
+      };
     },
   );
 }
@@ -926,7 +1258,7 @@ export async function dispatchAutonomyWorker(options?: {
     async (span) => {
       const workerStartedAt = Date.now();
       const rawState = await readAutonomyState();
-      const state = normalizeWorkerLeaseState(rawState);
+      const state = normalizeAutonomyState(rawState);
       if (state !== rawState) {
         await writeAutonomyState(state);
       }
@@ -981,7 +1313,7 @@ export async function dispatchAutonomyWorker(options?: {
       }
 
       const leaseId = makeLeaseId();
-      const leased = await updateAutonomyState((current) => {
+      const leasedRaw = await updateAutonomyState((current) => {
         if (!current.running) {
           return current;
         }
@@ -998,6 +1330,10 @@ export async function dispatchAutonomyWorker(options?: {
           lastError: undefined,
         };
       });
+      const leased = normalizeAutonomyState(leasedRaw);
+      if (leased !== leasedRaw) {
+        await writeAutonomyState(leased);
+      }
 
       if (leased.leaseId !== leaseId) {
         incrementCounter(
@@ -1032,30 +1368,78 @@ export async function dispatchAutonomyWorker(options?: {
                 leased.budgetUsd - (await getTodayExecutedNotionalUsd()),
               )
             : 0;
-        const { best, symbols, errors, candidateScores } =
-          await selectAutonomyRun(leased, budgetRemainingUsd);
-        const snapshot = best.snapshot;
-        const result = best.result;
-        const decision = result.consensus.decision ?? result.consensus.signal;
+        const {
+          best,
+          symbols,
+          errors,
+          candidateScores,
+          degradedSnapshotCounts,
+          suppressedSymbols,
+          reason: selectionReason,
+        } = await selectAutonomyRun(leased, budgetRemainingUsd);
+        const selectedCandidate = best
+          ? toAutonomyCandidateScore(best)
+          : undefined;
+        const result = best?.result;
+        const decision = result
+          ? (result.consensus.decision ?? result.consensus.signal)
+          : "HOLD";
+        const selectedSymbol = result?.consensus.symbol ?? leased.symbol;
         const positionAwareCooldownActive =
+          best !== null &&
           leased.lastTradeAt !== undefined &&
           Date.now() - leased.lastTradeAt < leased.cooldownMs &&
-          leased.symbol === result.consensus.symbol &&
+          leased.symbol === result?.consensus.symbol &&
           decision === "BUY" &&
           best.portfolioState.positionState === "long";
 
         span.addAttributes({
           budgetRemainingUsd,
-          selectedSymbol: result.consensus.symbol,
+          selectedSymbol,
           selectedDecision: decision,
           candidateCount: candidateScores.length,
         });
 
-        if (positionAwareCooldownActive) {
+        if (!best) {
           execution = {
             status: "hold",
             timestamp: new Date().toISOString(),
-            symbol: result.consensus.symbol,
+            symbol: leased.symbol,
+            decision: "HOLD",
+            size: 0,
+            reason:
+              selectionReason ??
+              "Autonomy did not find a candidate to execute.",
+            response: {
+              suppressedSymbols: Object.entries(suppressedSymbols).map(
+                ([symbol, value]) => ({
+                  symbol,
+                  until: value.until,
+                  consecutiveDegradedSnapshots:
+                    value.consecutiveDegradedSnapshots,
+                }),
+              ),
+            },
+            rejectionReasons: [
+              {
+                layer: "autonomy",
+                code: "autonomy_no_candidate_available",
+                summary: "Autonomy did not find an executable candidate.",
+                detail:
+                  selectionReason ??
+                  "The symbol universe was exhausted by degraded market data or evaluation failures.",
+                metrics: {
+                  suppressedSymbols: Object.keys(suppressedSymbols).length,
+                  partialErrors: errors.length,
+                },
+              },
+            ],
+          };
+        } else if (positionAwareCooldownActive) {
+          execution = {
+            status: "hold",
+            timestamp: new Date().toISOString(),
+            symbol: best.result.consensus.symbol,
             decision,
             size: 0,
             reason: "autonomy cooldown active",
@@ -1082,19 +1466,20 @@ export async function dispatchAutonomyWorker(options?: {
             ],
           };
         } else if (
-          (!snapshot.status.tradeable ||
-            (liveExecutionRequiresRealtime() && !snapshot.status.realtime)) &&
+          (!best.snapshot.status.tradeable ||
+            (liveExecutionRequiresRealtime() &&
+              !best.snapshot.status.realtime)) &&
           decision !== "HOLD"
         ) {
           execution = {
             status: "hold",
             timestamp: new Date().toISOString(),
-            symbol: result.consensus.symbol,
+            symbol: best.result.consensus.symbol,
             decision,
             size: 0,
             reason: "market data not tradeable",
             response: {
-              marketStatus: snapshot.status,
+              marketStatus: best.snapshot.status,
             },
             rejectionReasons: [
               {
@@ -1105,34 +1490,42 @@ export async function dispatchAutonomyWorker(options?: {
                 detail:
                   "The worker will not execute on stale or degraded market data.",
                 metrics: {
-                  realtime: snapshot.status.realtime,
-                  tradeable: snapshot.status.tradeable,
-                  connectionState: snapshot.status.connectionState,
+                  realtime: best.snapshot.status.realtime,
+                  tradeable: best.snapshot.status.tradeable,
+                  connectionState: best.snapshot.status.connectionState,
                 },
               },
             ],
           };
         } else {
-          execution = await autoExecuteConsensus(result.consensus, baseUrl);
+          execution = await autoExecuteConsensus(
+            best.result.consensus,
+            baseUrl,
+          );
         }
 
         await updateAutonomyState((current) => ({
           ...current,
-          symbolThrottleUntil: {
-            ...(current.symbolThrottleUntil ?? {}),
-            [result.consensus.symbol]:
-              result.consensus.symbolThrottleMs &&
-              result.consensus.symbolThrottleMs > 0
-                ? new Date(
-                    Date.now() + result.consensus.symbolThrottleMs,
-                  ).toISOString()
-                : (current.symbolThrottleUntil?.[result.consensus.symbol] ??
-                  new Date().toISOString()),
-          },
+          symbolThrottleUntil:
+            result && selectedSymbol
+              ? {
+                  ...(current.symbolThrottleUntil ?? {}),
+                  [selectedSymbol]:
+                    result.consensus.symbolThrottleMs &&
+                    result.consensus.symbolThrottleMs > 0
+                      ? new Date(
+                          Date.now() + result.consensus.symbolThrottleMs,
+                        ).toISOString()
+                      : (current.symbolThrottleUntil?.[selectedSymbol] ??
+                        new Date().toISOString()),
+                }
+              : current.symbolThrottleUntil,
+          degradedSnapshotCounts,
+          suppressedSymbols,
           inFlight: false,
           leaseId: undefined,
           leaseAcquiredAt: undefined,
-          symbol: result.consensus.symbol,
+          symbol: result ? selectedSymbol : current.symbol,
           candidateSymbols:
             leased.selectionMode === "auto"
               ? symbols
@@ -1148,13 +1541,16 @@ export async function dispatchAutonomyWorker(options?: {
           lastReason:
             execution?.reason ??
             execution?.error ??
+            selectionReason ??
             (errors.length > 0
               ? `Partial scan issues: ${errors.join("; ")}`
               : undefined),
           lastCandidateScores: candidateScores,
-          lastSelectedCandidate: toAutonomyCandidateScore(best),
+          lastSelectedCandidate: selectedCandidate,
           lastRejectedReasons:
-            execution?.rejectionReasons ?? result.consensus.rejectionReasons,
+            execution?.rejectionReasons ??
+            result?.consensus.rejectionReasons ??
+            current.lastRejectedReasons,
           iterationCount: current.iterationCount + 1,
           lastTradeAt:
             execution?.status === "success" ? Date.now() : current.lastTradeAt,
@@ -1192,14 +1588,14 @@ export async function dispatchAutonomyWorker(options?: {
           warn("autonomy", "Autonomy worker completed without a trade", {
             trigger: options?.trigger ?? "manual",
             execution,
-            selectedCandidate: toAutonomyCandidateScore(best),
+            selectedCandidate,
             partialErrors: errors,
           });
         } else {
           info("autonomy", "Autonomy worker executed a trade", {
             trigger: options?.trigger ?? "manual",
             execution,
-            selectedCandidate: toAutonomyCandidateScore(best),
+            selectedCandidate,
           });
         }
 
@@ -1257,7 +1653,11 @@ export async function dispatchAutonomyWorker(options?: {
 export async function maybeDispatchDueAutonomyRun(
   trigger: "status_poll" | "scheduler" = "status_poll",
 ) {
-  const state = await readAutonomyState();
+  const rawState = await readAutonomyState();
+  const state = normalizeAutonomyState(rawState);
+  if (state !== rawState) {
+    await writeAutonomyState(state);
+  }
   if (!shouldRunNow(state)) {
     return false;
   }
