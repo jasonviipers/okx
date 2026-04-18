@@ -60,6 +60,10 @@ function autoStartEnabledByEnv(): boolean {
   return val !== "false";
 }
 
+function toAutonomySymbolKey(symbol: string) {
+  return symbol.trim().toUpperCase();
+}
+
 function parseNumber(value: string | undefined, fallback: number): number {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : fallback;
@@ -132,7 +136,10 @@ function normalizeDegradedSnapshotCounts(
   });
 
   return Object.fromEntries(
-    entries.map(([symbol, value]) => [symbol.toUpperCase(), Math.trunc(value)]),
+    entries.map(([symbol, value]) => [
+      toAutonomySymbolKey(symbol),
+      Math.trunc(value),
+    ]),
   );
 }
 
@@ -152,7 +159,7 @@ function normalizeSuppressedSymbols(
 
   return Object.fromEntries(
     entries.map(([symbol, value]) => [
-      symbol.toUpperCase(),
+      toAutonomySymbolKey(symbol),
       {
         until: value.until,
         reason: value.reason,
@@ -247,7 +254,8 @@ function isSymbolSuppressed(
   state: StoredAutonomyState,
   symbol: string,
 ): boolean {
-  const suppressedUntil = state.suppressedSymbols?.[symbol]?.until;
+  const symbolKey = toAutonomySymbolKey(symbol);
+  const suppressedUntil = state.suppressedSymbols?.[symbolKey]?.until;
   if (!suppressedUntil) {
     return false;
   }
@@ -760,7 +768,7 @@ async function resolveAutonomySymbols(
   accountOverview: AccountOverview,
 ): Promise<string[]> {
   if (state.selectionMode === "fixed") {
-    return [state.symbol];
+    return isSymbolSuppressed(state, state.symbol) ? [] : [state.symbol];
   }
   const balanceQuotes = getQuoteCurrenciesFromBalances(
     accountOverview.tradingBalances,
@@ -982,8 +990,9 @@ function recordHealthySymbolSnapshot(
   marketHealthState: ReturnType<typeof createMarketHealthState>,
   symbol: string,
 ) {
-  delete marketHealthState.degradedSnapshotCounts[symbol];
-  delete marketHealthState.suppressedSymbols[symbol];
+  const symbolKey = toAutonomySymbolKey(symbol);
+  delete marketHealthState.degradedSnapshotCounts[symbolKey];
+  delete marketHealthState.suppressedSymbols[symbolKey];
 }
 
 function recordDegradedSymbolSnapshot(
@@ -991,8 +1000,10 @@ function recordDegradedSymbolSnapshot(
   symbol: string,
   reason: string,
 ) {
-  const nextCount = (marketHealthState.degradedSnapshotCounts[symbol] ?? 0) + 1;
-  marketHealthState.degradedSnapshotCounts[symbol] = nextCount;
+  const symbolKey = toAutonomySymbolKey(symbol);
+  const nextCount =
+    (marketHealthState.degradedSnapshotCounts[symbolKey] ?? 0) + 1;
+  marketHealthState.degradedSnapshotCounts[symbolKey] = nextCount;
 
   if (nextCount < getDegradedSnapshotSuppressionThreshold()) {
     return;
@@ -1001,8 +1012,8 @@ function recordDegradedSymbolSnapshot(
   const until = new Date(
     Date.now() + getDegradedSnapshotSuppressionWindowMs(),
   ).toISOString();
-  const previousSuppression = marketHealthState.suppressedSymbols[symbol];
-  marketHealthState.suppressedSymbols[symbol] = {
+  const previousSuppression = marketHealthState.suppressedSymbols[symbolKey];
+  marketHealthState.suppressedSymbols[symbolKey] = {
     until,
     reason,
     consecutiveDegradedSnapshots: nextCount,
@@ -1114,7 +1125,10 @@ async function selectAutonomyRun(
 
         if (settledResult.status === "fulfilled") {
           let evaluation = applyPortfolioConstraints(settledResult.value);
-          if (evaluation.snapshot.status.tradeable) {
+          if (
+            evaluation.snapshot.status.tradeable &&
+            evaluation.snapshot.status.realtime
+          ) {
             recordHealthySymbolSnapshot(marketHealthState, symbol);
           } else {
             recordDegradedSymbolSnapshot(
@@ -1466,9 +1480,7 @@ export async function dispatchAutonomyWorker(options?: {
             ],
           };
         } else if (
-          (!best.snapshot.status.tradeable ||
-            (liveExecutionRequiresRealtime() &&
-              !best.snapshot.status.realtime)) &&
+          (!best.snapshot.status.tradeable || !best.snapshot.status.realtime) &&
           decision !== "HOLD"
         ) {
           execution = {
@@ -1477,7 +1489,7 @@ export async function dispatchAutonomyWorker(options?: {
             symbol: best.result.consensus.symbol,
             decision,
             size: 0,
-            reason: "market data not tradeable",
+            reason: "market data not healthy",
             response: {
               marketStatus: best.snapshot.status,
             },
@@ -1486,9 +1498,9 @@ export async function dispatchAutonomyWorker(options?: {
                 layer: "market_data",
                 code: "autonomy_market_not_tradeable",
                 summary:
-                  "Autonomy rejected the candidate because market data was not tradeable.",
+                  "Autonomy rejected the candidate because market data was not healthy enough to execute.",
                 detail:
-                  "The worker will not execute on stale or degraded market data.",
+                  "The worker will not execute on stale, degraded, or non-realtime market data.",
                 metrics: {
                   realtime: best.snapshot.status.realtime,
                   tradeable: best.snapshot.status.tradeable,

@@ -33,6 +33,29 @@ type ResearchDecision = {
   rationale: string | null;
 };
 
+type AgentRunOptions = {
+  abortSignal?: AbortSignal;
+};
+
+function toAbortError(reason: unknown, fallbackMessage: string): Error {
+  if (reason instanceof Error) {
+    return reason;
+  }
+
+  return new Error(fallbackMessage);
+}
+
+function throwIfAborted(
+  abortSignal: AbortSignal | undefined,
+  fallbackMessage: string,
+) {
+  if (!abortSignal?.aborted) {
+    return;
+  }
+
+  throw toAbortError(abortSignal.reason, fallbackMessage);
+}
+
 function extractJsonObject(text: string): string | null {
   const fencedMatch = text.match(/```json\s*([\s\S]*?)```/i);
   if (fencedMatch?.[1]) {
@@ -400,12 +423,18 @@ async function decideWebResearchNeed(
   ctx: MarketContext,
   heuristicVote: SignalScore,
   memoryLabel: string | null,
+  options?: AgentRunOptions,
 ): Promise<ResearchDecision> {
   const heuristicDecision = shouldUseWebResearchHeuristic(ctx, heuristicVote);
 
   if (!isOllamaConfigured()) {
     return heuristicDecision;
   }
+
+  throwIfAborted(
+    options?.abortSignal,
+    `Research decision aborted for ${modelId}.`,
+  );
 
   try {
     const { text } = await generateText({
@@ -424,6 +453,7 @@ async function decideWebResearchNeed(
       ),
       temperature: 0,
       maxOutputTokens: 120,
+      abortSignal: options?.abortSignal,
     });
 
     const parsed = parseResearchDecision(text);
@@ -436,7 +466,14 @@ async function decideWebResearchNeed(
       focus: parsed.focus ?? heuristicDecision.focus,
       rationale: parsed.rationale ?? heuristicDecision.rationale,
     };
-  } catch {
+  } catch (error) {
+    if (options?.abortSignal?.aborted) {
+      throw toAbortError(
+        options.abortSignal.reason ?? error,
+        `Research decision aborted for ${modelId}.`,
+      );
+    }
+
     return heuristicDecision;
   }
 }
@@ -453,14 +490,18 @@ export function createAgent(modelId: string, roleConfig: AgentRoleConfig) {
   return async function runAgent(
     ctx: MarketContext,
     memorySummary?: MemorySummary,
+    options?: AgentRunOptions,
   ): Promise<AgentVote> {
     const startedAt = Date.now();
     const heuristicVote = analyzeRole(roleConfig, ctx);
+    throwIfAborted(options?.abortSignal, `Agent vote aborted for ${modelId}.`);
     const resolvedMemorySummary =
       memorySummary ?? (await getMemorySummary(ctx));
+    throwIfAborted(options?.abortSignal, `Agent vote aborted for ${modelId}.`);
     const memoryLabel = summarizeMemoryForDisplay(resolvedMemorySummary);
 
     const rateLimit = await checkRateLimit(`agent:call:${modelId}`, 1, 1);
+    throwIfAborted(options?.abortSignal, `Agent vote aborted for ${modelId}.`);
     if (!rateLimit.allowed) {
       return finalizeVote({
         model: modelId,
@@ -494,8 +535,10 @@ export function createAgent(modelId: string, roleConfig: AgentRoleConfig) {
           ctx,
           heuristicVote,
           memoryLabel,
+          options,
         )
       : null;
+    throwIfAborted(options?.abortSignal, `Agent vote aborted for ${modelId}.`);
     if (
       webSearchAllowed &&
       researchDecision &&
@@ -521,10 +564,18 @@ export function createAgent(modelId: string, roleConfig: AgentRoleConfig) {
           researchDecision.rationale ??
           "Agent requested external research to improve context.",
       };
-      researchContext = await getMarketResearchDigest(ctx, {
-        role: roleConfig.role,
-        focus: researchDecision.focus,
-      });
+      researchContext = await getMarketResearchDigest(
+        ctx,
+        {
+          role: roleConfig.role,
+          focus: researchDecision.focus,
+        },
+        options,
+      );
+      throwIfAborted(
+        options?.abortSignal,
+        `Agent vote aborted for ${modelId}.`,
+      );
 
       researchTrace = researchContext
         ? {
@@ -561,6 +612,7 @@ export function createAgent(modelId: string, roleConfig: AgentRoleConfig) {
           prompt,
           temperature: roleConfig.isVetoLayer ? 0.05 : 0.2,
           maxOutputTokens: 220,
+          abortSignal: options?.abortSignal,
         });
 
         resolvedVote = parseModelVote(text, heuristicVote);
@@ -577,7 +629,14 @@ export function createAgent(modelId: string, roleConfig: AgentRoleConfig) {
             reasoning: `${heuristicVote.reasoning} [Veto layer: LLM directional override rejected; heuristic HOLD enforced]`,
           };
         }
-      } catch {
+      } catch (error) {
+        if (options?.abortSignal?.aborted) {
+          throw toAbortError(
+            options.abortSignal.reason ?? error,
+            `Agent vote aborted for ${modelId}.`,
+          );
+        }
+
         resolvedVote = {
           ...heuristicVote,
           reasoning: `${heuristicVote.reasoning} [Model call failed; heuristic used]${memoryLabel ? ` ${memoryLabel}` : ""}`,

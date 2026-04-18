@@ -23,15 +23,7 @@ interface OkxErrorLike {
   msg?: string;
   sCode?: string;
   sMsg?: string;
-  data?: Array<
-    | {
-        code?: string;
-        msg?: string;
-        sCode?: string;
-        sMsg?: string;
-      }
-    | Record<string, unknown>
-  >;
+  data?: unknown;
 }
 
 export class OkxRequestError extends Error {
@@ -73,20 +65,30 @@ function pickOkxErrorFields(payload?: OkxErrorLike | null): {
     return {};
   }
 
-  const detail = payload.data?.find((row) => {
-    if (!row || typeof row !== "object") {
-      return false;
-    }
-
-    return "sCode" in row || "code" in row || "sMsg" in row || "msg" in row;
-  }) as
+  const detail = hasDataArray<
     | {
         code?: string;
         msg?: string;
         sCode?: string;
         sMsg?: string;
       }
-    | undefined;
+    | Record<string, unknown>
+  >(payload)
+    ? (payload.data.find((row) => {
+        if (!row || typeof row !== "object") {
+          return false;
+        }
+
+        return "sCode" in row || "code" in row || "sMsg" in row || "msg" in row;
+      }) as
+        | {
+            code?: string;
+            msg?: string;
+            sCode?: string;
+            sMsg?: string;
+          }
+        | undefined)
+    : undefined;
 
   return {
     code: payload.code || detail?.code,

@@ -462,6 +462,12 @@ class OkxPublicWsClient {
     });
     this.reconnectTimer = setTimeout(() => {
       this.reconnectTimer = null;
+      if (this.desiredSubscriptions.size === 0) {
+        debug("okx.ws", "Skipping websocket reconnect with no subscriptions.", {
+          delayMs: RECONNECT_DELAY_MS,
+        });
+        return;
+      }
       this.ensureConnected();
     }, RECONNECT_DELAY_MS);
   }

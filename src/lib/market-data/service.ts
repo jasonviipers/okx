@@ -57,6 +57,7 @@ const DEFAULT_ORDERBOOK_STALE_MS = 15_000;
 const DEFAULT_REST_REFRESH_MS = 10_000;
 const DEFAULT_CANDLE_REFRESH_MS = 30_000;
 const DEFAULT_MARKET_WARMUP_TIMEOUT_MS = 5_000;
+const REQUIRED_WEBSOCKET_CHANNELS: OkxWsChannel[] = ["tickers", "books5"];
 
 const states = new Map<string, SymbolState>();
 let listenerAttached = false;
@@ -118,6 +119,30 @@ function ageMs(timestamp?: string) {
   return timestamp
     ? Date.now() - new Date(timestamp).getTime()
     : Number.POSITIVE_INFINITY;
+}
+
+function hasRequiredWebsocketFeeds(state: SymbolState) {
+  return REQUIRED_WEBSOCKET_CHANNELS.every(
+    (channel) =>
+      state.activeChannels.has(channel) && !state.disabledChannels.has(channel),
+  );
+}
+
+function resolveStreamSource(state: SymbolState): MarketDataSource {
+  if (state.source === "fallback") {
+    return "fallback";
+  }
+
+  const hasMarketData = Boolean(state.ticker || state.orderbook);
+  if (hasRequiredWebsocketFeeds(state)) {
+    return "websocket";
+  }
+
+  if (state.activeChannels.size > 0) {
+    return hasMarketData ? "mixed" : "unknown";
+  }
+
+  return hasMarketData ? "rest" : "unknown";
 }
 
 function mapWsTicker(symbol: string, data: Record<string, unknown>): OKXTicker {
@@ -213,9 +238,7 @@ function ensureWsListenerAttached() {
           if (state.connectionState !== "idle") {
             state.connectionState = "degraded";
             state.lastError = event.message;
-            if (state.source === "websocket") {
-              state.source = "rest";
-            }
+            state.source = resolveStreamSource(state);
           }
         }
       } else if (event.event === "error") {
@@ -227,9 +250,7 @@ function ensureWsListenerAttached() {
           if (state.connectionState !== "idle") {
             state.connectionState = "error";
             state.lastError = event.message;
-            if (state.source === "websocket") {
-              state.source = "rest";
-            }
+            state.source = resolveStreamSource(state);
           }
         }
       } else if (
@@ -266,9 +287,7 @@ function ensureWsListenerAttached() {
         }
         state.connectionState = "degraded";
         state.lastError = event.message;
-        if (state.source === "websocket") {
-          state.source = "rest";
-        }
+        state.source = resolveStreamSource(state);
       }
       return;
     }
@@ -281,7 +300,6 @@ function ensureWsListenerAttached() {
     state.activeChannels.add(event.channel);
     state.connectionState =
       state.disabledChannels.size > 0 ? "degraded" : "connected";
-    state.source = "websocket";
     state.lastEventAt = new Date().toISOString();
     state.lastError = undefined;
 
@@ -296,6 +314,8 @@ function ensureWsListenerAttached() {
       state.orderbook = orderbook;
       state.lastOrderBookAt = orderbook.timestamp;
     }
+
+    state.source = resolveStreamSource(state);
   });
 }
 
@@ -360,7 +380,7 @@ function ensurePolling(symbol: string, timeframe: Timeframe) {
           state.lastTickerAt = ticker.timestamp;
           state.lastOrderBookAt = orderbook.timestamp;
           state.lastEventAt = new Date().toISOString();
-          state.source = "rest";
+          state.source = state.activeChannels.size > 0 ? "mixed" : "rest";
           if (state.connectionState !== "connected") {
             state.connectionState = "degraded";
           }
@@ -460,7 +480,10 @@ function buildStatus(
 
   const stale = tickerStale || orderbookStale || candlesStale;
   const realtime =
-    state.source === "websocket" && !tickerStale && !orderbookStale;
+    state.source === "websocket" &&
+    hasRequiredWebsocketFeeds(state) &&
+    !tickerStale &&
+    !orderbookStale;
   const tradeable =
     !stale &&
     state.source !== "fallback" &&
@@ -657,9 +680,11 @@ export function getMarketDataRuntimeStatus(
     realtime: status.realtime,
     stale: status.stale,
     connectionState: status.connectionState,
-    detail: status.tradeable
+    detail: status.realtime
       ? "Realtime market data healthy"
-      : (status.warnings[0] ?? "Market data degraded"),
+      : status.tradeable
+        ? "Market data healthy"
+        : (status.warnings[0] ?? "Market data degraded"),
     symbol,
     timeframe,
     source: status.source,

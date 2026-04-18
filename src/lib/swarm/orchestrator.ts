@@ -52,21 +52,23 @@ function getDiagnosticVoteTimeoutMs() {
 
 async function withVoteTimeout<T>(
   modelId: string,
-  promise: Promise<T>,
+  task: (abortSignal: AbortSignal) => Promise<T>,
   timeoutMs: number,
 ): Promise<T> {
   let timeoutHandle: NodeJS.Timeout | null = null;
+  const controller = new AbortController();
+  const promise = task(controller.signal);
 
   try {
     return await Promise.race([
       promise,
       new Promise<T>((_, reject) => {
         timeoutHandle = setTimeout(() => {
-          reject(
-            new Error(
-              `Diagnostic vote timed out for ${modelId} after ${timeoutMs}ms.`,
-            ),
+          const timeoutError = new Error(
+            `Diagnostic vote timed out for ${modelId} after ${timeoutMs}ms.`,
           );
+          controller.abort(timeoutError);
+          reject(timeoutError);
         }, timeoutMs);
         timeoutHandle.unref?.();
       }),
@@ -199,7 +201,10 @@ export async function collectDiagnosticVotes(
           const roleConfig = getRoleForModel(modelId);
           return withVoteTimeout(
             modelId,
-            createAgent(modelId, roleConfig)(ctx, resolvedMemorySummary),
+            (abortSignal) =>
+              createAgent(modelId, roleConfig)(ctx, resolvedMemorySummary, {
+                abortSignal,
+              }),
             timeoutMs,
           );
         }),
@@ -230,11 +235,19 @@ export async function collectDiagnosticVotes(
       );
 
       if (missingVetos.length > 0) {
-        warn("swarm.orchestrator", "Diagnostic veto layer did not vote", {
+        const diagnostic = {
           symbol: ctx.symbol,
           timeframe: ctx.timeframe,
+          timeoutMs,
           missingVetos,
+          errors,
+        };
+        warn("swarm.orchestrator", "Diagnostic veto layer did not vote", {
+          ...diagnostic,
         });
+        throw new Error(
+          `Missing veto diagnostic votes: ${JSON.stringify(diagnostic)}`,
+        );
       }
 
       if (errors.length > 0) {

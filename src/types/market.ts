@@ -58,7 +58,12 @@ export interface MarketContext {
   timeframe: Timeframe;
 }
 
-export type MarketDataSource = "websocket" | "rest" | "fallback" | "unknown";
+export type MarketDataSource =
+  | "websocket"
+  | "rest"
+  | "mixed"
+  | "fallback"
+  | "unknown";
 export type FeedConnectionState =
   | "idle"
   | "connecting"

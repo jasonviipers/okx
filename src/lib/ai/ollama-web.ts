@@ -41,6 +41,29 @@ export interface MarketResearchRequest {
   focus?: string | null;
 }
 
+type MarketResearchOptions = {
+  abortSignal?: AbortSignal;
+};
+
+function toAbortError(reason: unknown, fallbackMessage: string): Error {
+  if (reason instanceof Error) {
+    return reason;
+  }
+
+  return new Error(fallbackMessage);
+}
+
+function throwIfAborted(
+  abortSignal: AbortSignal | undefined,
+  fallbackMessage: string,
+) {
+  if (!abortSignal?.aborted) {
+    return;
+  }
+
+  throw toAbortError(abortSignal.reason, fallbackMessage);
+}
+
 function clampText(text: string | undefined, maxLength: number): string {
   if (!text) return "";
   const normalized = text.replace(/\s+/g, " ").trim();
@@ -115,12 +138,14 @@ function getAuthHeaders(): HeadersInit {
 async function postJson<TResponse>(
   path: string,
   body: Record<string, string | number>,
+  options?: MarketResearchOptions,
 ): Promise<TResponse> {
   const response = await fetch(`${OLLAMA_WEB_BASE_URL}${path}`, {
     method: "POST",
     headers: getAuthHeaders(),
     body: JSON.stringify(body),
     cache: "no-store",
+    signal: options?.abortSignal,
   });
 
   if (!response.ok) {
@@ -130,16 +155,26 @@ async function postJson<TResponse>(
   return (await response.json()) as TResponse;
 }
 
-async function webSearch(query: string): Promise<OllamaWebSearchResult[]> {
-  const response = await postJson<OllamaWebSearchResponse>("/api/web_search", {
-    query,
-    max_results: MAX_SEARCH_RESULTS,
-  });
+async function webSearch(
+  query: string,
+  options?: MarketResearchOptions,
+): Promise<OllamaWebSearchResult[]> {
+  const response = await postJson<OllamaWebSearchResponse>(
+    "/api/web_search",
+    {
+      query,
+      max_results: MAX_SEARCH_RESULTS,
+    },
+    options,
+  );
   return response.results ?? [];
 }
 
-async function webFetch(url: string): Promise<OllamaWebFetchResponse> {
-  return postJson<OllamaWebFetchResponse>("/api/web_fetch", { url });
+async function webFetch(
+  url: string,
+  options?: MarketResearchOptions,
+): Promise<OllamaWebFetchResponse> {
+  return postJson<OllamaWebFetchResponse>("/api/web_fetch", { url }, options);
 }
 
 function formatSearchResults(results: OllamaWebSearchResult[]): string[] {
@@ -182,9 +217,14 @@ export function isOllamaWebSearchConfigured(): boolean {
 export async function getMarketResearchDigest(
   ctx: MarketContext,
   request?: MarketResearchRequest,
+  options?: MarketResearchOptions,
 ): Promise<string | null> {
   if (!isOllamaWebSearchConfigured()) return null;
 
+  throwIfAborted(
+    options?.abortSignal,
+    `Market research aborted for ${ctx.symbol} ${ctx.timeframe}.`,
+  );
   const cacheKey = getResearchCacheKey(ctx, request);
   const cached = await getCachedJson<string>(cacheKey);
   if (cached) return cached;
@@ -192,7 +232,7 @@ export async function getMarketResearchDigest(
   const query = buildSearchQuery(ctx, request);
 
   try {
-    const searchResults = await webSearch(query);
+    const searchResults = await webSearch(query, options);
     if (searchResults.length === 0) return null;
 
     const fetchedPages = (
@@ -201,7 +241,7 @@ export async function getMarketResearchDigest(
           .filter((r) => /^https?:\/\//i.test(r.url))
           .slice(0, MAX_FETCH_RESULTS)
           .map(async (r) => {
-            const page = await webFetch(r.url);
+            const page = await webFetch(r.url, options);
             return {
               url: r.url,
               title: page.title || r.title,
@@ -235,9 +275,20 @@ export async function getMarketResearchDigest(
       .filter(Boolean)
       .join("\n\n");
 
+    throwIfAborted(
+      options?.abortSignal,
+      `Market research aborted for ${ctx.symbol} ${ctx.timeframe}.`,
+    );
     await setCachedJson(cacheKey, digest, WEB_RESEARCH_TTL_SECONDS);
     return digest;
-  } catch {
+  } catch (error) {
+    if (options?.abortSignal?.aborted) {
+      throw toAbortError(
+        options.abortSignal.reason ?? error,
+        `Market research aborted for ${ctx.symbol} ${ctx.timeframe}.`,
+      );
+    }
+
     return null;
   }
 }

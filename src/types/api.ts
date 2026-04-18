@@ -41,7 +41,7 @@ export interface MarketDataStatus {
   detail: string;
   symbol?: string;
   timeframe?: string;
-  source?: "websocket" | "rest" | "fallback" | "unknown";
+  source?: "websocket" | "rest" | "mixed" | "fallback" | "unknown";
   lastEventAt?: string;
 }
 
