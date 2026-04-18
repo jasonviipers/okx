@@ -334,16 +334,22 @@ async function refreshCandles(symbol: string, timeframe: Timeframe) {
 
 async function bootstrapState(symbol: string, timeframe: Timeframe) {
   const state = getOrCreateState(symbol);
-  const [ticker, orderbook] = await Promise.all([
+  const bootstrappedAt = new Date().toISOString();
+  const [ticker, orderbook, candles] = await Promise.all([
     getRestTicker(symbol),
     getRestOrderBook(symbol, 10),
+    getRestCandles(symbol, timeframe, 20),
   ]);
 
   state.ticker = ticker;
   state.orderbook = orderbook;
   state.lastTickerAt = ticker.timestamp;
   state.lastOrderBookAt = orderbook.timestamp;
-  state.lastEventAt = new Date().toISOString();
+  state.lastEventAt = bootstrappedAt;
+  state.candlesByTimeframe.set(timeframe, {
+    candles,
+    updatedAt: bootstrappedAt,
+  });
   state.source = "rest";
 
   info("market.data", "Bootstrapped market state", {
@@ -352,8 +358,6 @@ async function bootstrapState(symbol: string, timeframe: Timeframe) {
     source: state.source,
     connectionState: state.connectionState,
   });
-
-  await refreshCandles(symbol, timeframe);
 }
 
 function ensurePolling(symbol: string, timeframe: Timeframe) {
@@ -439,8 +443,10 @@ async function ensureSymbolState(symbol: string, timeframe: Timeframe) {
   }
 
   const candleState = state.candlesByTimeframe.get(timeframe);
-  if (!state.ticker || !state.orderbook || !candleState?.candles?.length) {
+  if (!state.ticker || !state.orderbook) {
     await bootstrapState(symbol, timeframe);
+  } else if (!candleState?.candles?.length) {
+    await refreshCandles(symbol, timeframe);
   }
 
   ensurePolling(symbol, timeframe);

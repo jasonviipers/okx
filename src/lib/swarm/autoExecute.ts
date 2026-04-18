@@ -540,6 +540,10 @@ export async function autoExecuteConsensus(
       const timestamp = nowIso();
       const decision = normalizeDecision(consensus);
       const confidence = confidencePercent(consensus);
+      const autoExecuteEnabled = parseBoolean(
+        process.env.AUTO_EXECUTE_ENABLED,
+        true,
+      );
       const maxPositionUsd = parseNumber(
         process.env.MAX_POSITION_USD,
         DEFAULT_MAX_POSITION_USD,
@@ -552,12 +556,38 @@ export async function autoExecuteConsensus(
         process.env.MIN_CONFIDENCE_THRESHOLD,
         DEFAULT_MIN_CONFIDENCE_THRESHOLD,
       );
+      const minTradeNotionalUsd = parseNumber(
+        process.env.MIN_TRADE_NOTIONAL,
+        DEFAULT_MIN_TRADE_NOTIONAL,
+      );
       const accountMode = getOkxAccountModeLabel();
       const cappedMaxPositionUsd =
         accountMode === "live" && liveTradingBudgetUsd > 0
           ? Math.min(maxPositionUsd, liveTradingBudgetUsd)
           : maxPositionUsd;
       const targetNotionalUsd = deriveSize(confidence, cappedMaxPositionUsd);
+      telemetryInfo(
+        "swarm.auto_execute",
+        "Autonomous execution evaluation started",
+        {
+          symbol: consensus.symbol,
+          timeframe: consensus.timeframe,
+          consensus,
+          executionConfig: {
+            autoExecuteEnabled,
+            accountMode,
+            maxPositionUsd,
+            liveTradingBudgetUsd,
+            cappedMaxPositionUsd,
+            minConfidenceThreshold,
+            minTradeNotionalUsd,
+            requireRealtimeMarketData: parseBoolean(
+              process.env.REQUIRE_REALTIME_MARKET_DATA,
+              true,
+            ),
+          },
+        },
+      );
       const executionIntent = await createExecutionIntent(
         consensus,
         targetNotionalUsd,
@@ -639,7 +669,7 @@ export async function autoExecuteConsensus(
         return finalizeResult(priorResult, { duplicate: true });
       }
 
-      if (!parseBoolean(process.env.AUTO_EXECUTE_ENABLED, true)) {
+      if (!autoExecuteEnabled) {
         const result = buildHoldResult({
           timestamp,
           symbol: consensus.symbol,
