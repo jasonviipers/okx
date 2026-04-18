@@ -1,3 +1,4 @@
+import { performance } from "node:perf_hooks";
 import { createAgent } from "@/lib/agents/create-agent";
 import type { AIModel } from "@/lib/configs/models";
 import {
@@ -16,6 +17,7 @@ import {
 import { buildSwarmDecision } from "@/lib/swarm/pipeline";
 import {
   incrementCounter,
+  info,
   observeHistogram,
   warn,
   withTelemetrySpan,
@@ -199,6 +201,7 @@ export async function collectDiagnosticVotes(
       const settled = await Promise.allSettled(
         ACTIVE_SWARM_MODELS.map((modelId) => {
           const roleConfig = getRoleForModel(modelId);
+          const startedAt = performance.now();
           return withVoteTimeout(
             modelId,
             (abortSignal) =>
@@ -206,7 +209,63 @@ export async function collectDiagnosticVotes(
                 abortSignal,
               }),
             timeoutMs,
-          );
+          )
+            .then((vote) => {
+              const durationMs = Number(
+                (performance.now() - startedAt).toFixed(3),
+              );
+              observeHistogram(
+                "swarm_diagnostic_vote_duration_ms",
+                "Duration of individual diagnostic voter runs in milliseconds.",
+                durationMs,
+                {
+                  labels: {
+                    symbol: ctx.symbol,
+                    timeframe: ctx.timeframe,
+                    model: modelId,
+                    status: "success",
+                  },
+                },
+              );
+              info("swarm.orchestrator", "Diagnostic voter completed", {
+                symbol: ctx.symbol,
+                timeframe: ctx.timeframe,
+                model: modelId,
+                timeoutMs,
+                durationMs,
+              });
+              return vote;
+            })
+            .catch((caughtError) => {
+              const durationMs = Number(
+                (performance.now() - startedAt).toFixed(3),
+              );
+              observeHistogram(
+                "swarm_diagnostic_vote_duration_ms",
+                "Duration of individual diagnostic voter runs in milliseconds.",
+                durationMs,
+                {
+                  labels: {
+                    symbol: ctx.symbol,
+                    timeframe: ctx.timeframe,
+                    model: modelId,
+                    status: "error",
+                  },
+                },
+              );
+              warn("swarm.orchestrator", "Diagnostic voter failed", {
+                symbol: ctx.symbol,
+                timeframe: ctx.timeframe,
+                model: modelId,
+                timeoutMs,
+                durationMs,
+                error:
+                  caughtError instanceof Error
+                    ? caughtError.message
+                    : String(caughtError),
+              });
+              throw caughtError;
+            });
         }),
       );
       const votes: AgentVote[] = [];
