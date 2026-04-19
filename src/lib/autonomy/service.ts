@@ -9,7 +9,11 @@ import {
   isLiveQualitySnapshot,
 } from "@/lib/market-data/service";
 import { clamp01 } from "@/lib/math-utils";
-import { getAccountOverview } from "@/lib/okx/account";
+import {
+  getAccountOverview,
+  resolveEffectiveLiveTradingBudgetRemainingUsd,
+  resolveEffectiveLiveTradingBudgetUsd,
+} from "@/lib/okx/account";
 import { OkxRequestError } from "@/lib/okx/client";
 import {
   getAutonomousSymbolUniverse,
@@ -311,8 +315,10 @@ function resolveInternalBaseUrl(): string {
 
 function toAutonomyStatus(
   state: StoredAutonomyState,
+  budgetUsd: number,
   budgetRemainingUsd: number,
   portfolioState?: PortfolioState,
+  accountOverview?: AccountOverview,
 ): AutonomyStatus {
   const selectionModeLabel =
     state.selectionMode === "auto"
@@ -341,7 +347,8 @@ function toAutonomyStatus(
     lastError: state.lastError,
     lastReason: state.lastReason,
     iterationCount: state.iterationCount,
-    budgetUsd: state.budgetUsd ?? 0,
+    budgetUsd,
+    configuredBudgetUsd: state.budgetUsd ?? 0,
     budgetRemainingUsd,
     inFlight: state.inFlight,
     lastCandidateScores: state.lastCandidateScores,
@@ -349,6 +356,7 @@ function toAutonomyStatus(
     lastRejectedReasons: state.lastRejectedReasons,
     suppressedSymbols: toSuppressedSymbols(state),
     portfolioState,
+    accountOverview,
   };
 }
 
@@ -434,17 +442,24 @@ export async function ensureAutonomyBootState() {
 export async function getAutonomyStatus(): Promise<AutonomyStatus> {
   ensureAutonomyScheduler();
 
-  const [rawState, usedBudgetUsd] = await Promise.all([
+  const [rawState, usedBudgetUsd, accountOverview] = await Promise.all([
     readAutonomyState(),
     getTodayExecutedNotionalUsd(),
+    getAccountOverview().catch(() => undefined),
   ]);
   const state = normalizeAutonomyState(rawState);
   if (state !== rawState) {
     await writeAutonomyState(state);
   }
-  const budgetUsd = state.budgetUsd ?? 0;
-  const budgetRemainingUsd =
-    budgetUsd > 0 ? Math.max(0, budgetUsd - usedBudgetUsd) : 0;
+  const budgetUsd = resolveEffectiveLiveTradingBudgetUsd(
+    accountOverview,
+    state.budgetUsd ?? 0,
+  );
+  const budgetRemainingUsd = resolveEffectiveLiveTradingBudgetRemainingUsd({
+    overview: accountOverview,
+    configuredBudgetUsd: state.budgetUsd ?? 0,
+    usedBudgetUsd,
+  });
   const portfolioSymbols = [
     state.symbol,
     ...(state.candidateSymbols ?? []),
@@ -456,8 +471,10 @@ export async function getAutonomyStatus(): Promise<AutonomyStatus> {
 
   return toAutonomyStatus(
     state,
+    Number(budgetUsd.toFixed(2)),
     Number(budgetRemainingUsd.toFixed(2)),
     portfolioState,
+    accountOverview,
   );
 }
 
@@ -1300,6 +1317,7 @@ function isMarketDataEvaluationError(reason: unknown): reason is Error {
 async function selectAutonomyRun(
   state: StoredAutonomyState,
   budgetRemainingUsd: number,
+  accountOverviewInput?: AccountOverview,
 ): Promise<AutonomySelectionResult> {
   return withTelemetrySpan(
     {
@@ -1311,7 +1329,8 @@ async function selectAutonomyRun(
       },
     },
     async (span) => {
-      const accountOverview = await getAccountOverview();
+      const accountOverview =
+        accountOverviewInput ?? (await getAccountOverview());
       const symbols = await resolveAutonomySymbols(state, accountOverview);
       const marketHealthState = createMarketHealthState(state);
 
@@ -1651,13 +1670,13 @@ export async function dispatchAutonomyWorker(options?: {
           });
         });
         await heartbeatAutonomyLease(leaseId);
+        const accountOverview = await getAccountOverview();
         const budgetRemainingUsd =
-          leased.budgetUsd && leased.budgetUsd > 0
-            ? Math.max(
-                0,
-                leased.budgetUsd - (await getTodayExecutedNotionalUsd()),
-              )
-            : 0;
+          resolveEffectiveLiveTradingBudgetRemainingUsd({
+            overview: accountOverview,
+            configuredBudgetUsd: leased.budgetUsd ?? 0,
+            usedBudgetUsd: await getTodayExecutedNotionalUsd(),
+          });
         const {
           best,
           symbols,
@@ -1666,7 +1685,11 @@ export async function dispatchAutonomyWorker(options?: {
           degradedSnapshotCounts,
           suppressedSymbols,
           reason: selectionReason,
-        } = await selectAutonomyRun(leased, budgetRemainingUsd);
+        } = await selectAutonomyRun(
+          leased,
+          budgetRemainingUsd,
+          accountOverview,
+        );
         await heartbeatAutonomyLease(leaseId);
         const selectedCandidate = best
           ? toAutonomyCandidateScore(best)

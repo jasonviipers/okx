@@ -1,5 +1,6 @@
 import type { PortfolioState } from "@/types/portfolio";
 import type { RejectionReason, TradeSignal } from "@/types/swarm";
+import type { AccountOverview } from "@/types/trade";
 
 export type DataSource =
   | "okx"
@@ -95,6 +96,7 @@ export interface AutonomyStatus {
   lastReason?: string;
   iterationCount: number;
   budgetUsd?: number;
+  configuredBudgetUsd?: number;
   budgetRemainingUsd?: number;
   inFlight?: boolean;
   lastCandidateScores?: AutonomyCandidateScore[];
@@ -102,12 +104,14 @@ export interface AutonomyStatus {
   lastRejectedReasons?: RejectionReason[];
   suppressedSymbols?: AutonomySuppressedSymbol[];
   portfolioState?: PortfolioState;
+  accountOverview?: AccountOverview;
 }
 
 export interface RuntimeStatus {
   okx: ServiceStatus & {
     accountMode: "live" | "paper";
     baseUrl: string;
+    accountOverview?: AccountOverview;
   };
   marketData: MarketDataStatus;
   redis: ServiceStatus;

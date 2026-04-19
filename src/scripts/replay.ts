@@ -14,7 +14,9 @@ async function main() {
   const outputFile = getArg("--output");
 
   if (!inputFile) {
-    throw new Error("Usage: tsx src/scripts/replay.ts --file snapshots.json --output metrics.json");
+    throw new Error(
+      "Usage: tsx src/scripts/replay.ts --file snapshots.json --output metrics.json",
+    );
   }
 
   const raw = await readFile(path.resolve(inputFile), "utf8");

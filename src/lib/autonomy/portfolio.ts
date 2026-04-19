@@ -22,6 +22,16 @@ function getMaxSymbolAllocationPct(): number {
   );
 }
 
+function getMinimumTradeNotionalUsd(): number {
+  return Math.max(
+    0,
+    parseNumber(
+      env.MIN_TRADE_NOTIONAL,
+      SWARM_THRESHOLDS.DEFAULT_MIN_TRADE_NOTIONAL,
+    ),
+  );
+}
+
 /**
  * Single source of truth for portfolio state. Import this wherever
  * cross-symbol concentration or budget decisions are needed.
@@ -42,6 +52,7 @@ export async function buildPortfolioState(
     ]),
   ];
   const maxAllocationPct = getMaxSymbolAllocationPct();
+  const minimumTradeNotionalUsd = getMinimumTradeNotionalUsd();
   const totalDeployedUsd = openPositions.reduce((sum, position) => {
     const referencePrice = position.lastKnownPrice ?? position.entryPrice;
     return sum + position.remainingSize * Math.max(referencePrice, 0);
@@ -63,13 +74,27 @@ export async function buildPortfolioState(
       }, 0);
     const allocationPct =
       totalDeployedUsd > 0 ? currentNotionalUsd / totalDeployedUsd : 0;
-    const maxAllocationUsd = totalBudgetUsd * maxAllocationPct;
+    const configuredMaxAllocationUsd = totalBudgetUsd * maxAllocationPct;
+    // Prevent a configuration deadlock where the symbol cap falls below the
+    // minimum trade size even though the overall live budget can fund a trade.
+    const maxAllocationUsd =
+      totalBudgetUsd > 0
+        ? Math.min(
+            totalBudgetUsd,
+            Math.max(
+              configuredMaxAllocationUsd,
+              Math.min(totalBudgetUsd, minimumTradeNotionalUsd),
+            ),
+          )
+        : 0;
+    const effectiveMaxAllocationPct =
+      totalBudgetUsd > 0 ? maxAllocationUsd / totalBudgetUsd : 0;
 
     return {
       symbol,
       currentNotionalUsd: round(currentNotionalUsd),
       allocationPct: round(allocationPct, 6),
-      maxAllocationPct: round(maxAllocationPct, 6),
+      maxAllocationPct: round(effectiveMaxAllocationPct, 6),
       budgetRemainingUsd: round(
         Math.max(0, maxAllocationUsd - currentNotionalUsd),
       ),

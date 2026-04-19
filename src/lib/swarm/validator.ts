@@ -107,9 +107,7 @@ export function validateConsensus(
       detail: `Agreement ${(consensus.agreement * 100).toFixed(2)}% is below ${(SWARM_THRESHOLDS.MIN_AGREEMENT * 100).toFixed(2)}%.`,
       metrics: {
         agreement: Number((consensus.agreement * 100).toFixed(4)),
-        minAgreement: Number(
-          (SWARM_THRESHOLDS.MIN_AGREEMENT * 100).toFixed(4),
-        ),
+        minAgreement: Number((SWARM_THRESHOLDS.MIN_AGREEMENT * 100).toFixed(4)),
       },
     });
   }

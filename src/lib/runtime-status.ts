@@ -13,6 +13,10 @@ import {
   OKX_CONFIG,
 } from "@/lib/configs/okx";
 import { getMarketDataRuntimeStatus } from "@/lib/market-data/service";
+import {
+  getAccountOverview,
+  hasBrokerAccountSnapshot,
+} from "@/lib/okx/account";
 import { isRedisConfigured } from "@/lib/redis/client";
 import type { RuntimeStatus } from "@/types/api";
 
@@ -22,16 +26,22 @@ export async function getRuntimeStatus(): Promise<RuntimeStatus> {
   const redisConfigured = isRedisConfigured();
   const ollamaConfigured = isOllamaConfigured();
   const webResearchConfigured = isOllamaWebSearchConfigured();
+  const accountOverview = okxConfigured
+    ? await getAccountOverview().catch(() => undefined)
+    : undefined;
 
   return {
     okx: {
       configured: okxConfigured,
       available: okxConfigured,
       detail: okxConfigured
-        ? "OKX private credentials configured"
+        ? hasBrokerAccountSnapshot(accountOverview)
+          ? "OKX private credentials configured with live account snapshot access"
+          : "OKX private credentials configured"
         : "OKX private credentials missing",
       accountMode: getOkxAccountModeLabel(),
       baseUrl: OKX_CONFIG.baseUrl,
+      accountOverview,
     },
     marketData: getMarketDataRuntimeStatus(),
     redis: {

@@ -5,7 +5,11 @@ import { env } from "@/env";
 import { getOkxAccountModeLabel } from "@/lib/configs/okx";
 import { getMarketSnapshot } from "@/lib/market-data/service";
 import { clamp } from "@/lib/math-utils";
-import { getAccountOverview } from "@/lib/okx/account";
+import {
+  getAccountOverview,
+  hasBrokerAccountSnapshot,
+  resolveEffectiveLiveTradingBudgetUsd,
+} from "@/lib/okx/account";
 import { getInstrumentRules, normalizeOrderSize } from "@/lib/okx/instruments";
 import { getTicker } from "@/lib/okx/market";
 import { getPositions } from "@/lib/okx/orders";
@@ -34,7 +38,7 @@ import type {
   RejectionReason,
   TradeSignal,
 } from "@/types/swarm";
-import type { TradeDecisionSnapshot } from "@/types/trade";
+import type { AccountOverview, TradeDecisionSnapshot } from "@/types/trade";
 
 const DEFAULT_LIVE_TRADING_BUDGET_USD = 0;
 const CIRCUIT_BREAKER_WINDOW_MS = 60_000;
@@ -389,13 +393,14 @@ async function deriveExecutableSize(
   decision: TradeSignal,
   symbol: string,
   targetNotionalUsd: number,
+  overview?: AccountOverview,
 ): Promise<{
   size: number;
   reason?: string;
   response: Record<string, unknown>;
 }> {
-  const [overview, ticker] = await Promise.all([
-    getAccountOverview(symbol),
+  const [resolvedOverview, ticker] = await Promise.all([
+    overview ? Promise.resolve(overview) : getAccountOverview(symbol),
     getTicker(symbol),
   ]);
   const maxBalanceUsagePct = parseNumber(
@@ -408,7 +413,8 @@ async function deriveExecutableSize(
   );
 
   if (decision === "BUY") {
-    const availableQuote = overview.buyingPower.buy * maxBalanceUsagePct;
+    const availableQuote =
+      resolvedOverview.buyingPower.buy * maxBalanceUsagePct;
     const notional = Math.min(targetNotionalUsd, availableQuote);
     if (notional < minTradeNotional || ticker.ask <= 0) {
       return {
@@ -417,7 +423,7 @@ async function deriveExecutableSize(
         response: {
           availableQuote,
           minTradeNotional,
-          quoteCurrency: overview.buyingPower.quoteCurrency,
+          quoteCurrency: resolvedOverview.buyingPower.quoteCurrency,
         },
       };
     }
@@ -427,13 +433,13 @@ async function deriveExecutableSize(
       response: {
         availableQuote,
         notional,
-        quoteCurrency: overview.buyingPower.quoteCurrency,
+        quoteCurrency: resolvedOverview.buyingPower.quoteCurrency,
         derivedFrom: "quote-buying-power",
       },
     };
   }
 
-  const availableBase = overview.buyingPower.sell * maxBalanceUsagePct;
+  const availableBase = resolvedOverview.buyingPower.sell * maxBalanceUsagePct;
   const targetBaseSize = ticker.bid > 0 ? targetNotionalUsd / ticker.bid : 0;
   const size = Math.min(availableBase, targetBaseSize);
   const notional = size * ticker.bid;
@@ -445,7 +451,7 @@ async function deriveExecutableSize(
       response: {
         availableBase,
         minTradeNotional,
-        baseCurrency: overview.buyingPower.baseCurrency,
+        baseCurrency: resolvedOverview.buyingPower.baseCurrency,
       },
     };
   }
@@ -455,7 +461,7 @@ async function deriveExecutableSize(
     response: {
       availableBase,
       notional,
-      baseCurrency: overview.buyingPower.baseCurrency,
+      baseCurrency: resolvedOverview.buyingPower.baseCurrency,
       derivedFrom: "base-inventory",
     },
   };
@@ -464,6 +470,7 @@ async function deriveExecutableSize(
 async function checkExecutionRiskGuards(
   consensus: DecisionResult,
   decision: TradeSignal,
+  accountOverview?: AccountOverview,
 ): Promise<{
   allowed: boolean;
   reason?: string;
@@ -493,7 +500,14 @@ async function checkExecutionRiskGuards(
     env.LIVE_TRADING_BUDGET_USD,
     DEFAULT_LIVE_TRADING_BUDGET_USD,
   );
-  if (getOkxAccountModeLabel() === "live" && liveTradingBudgetUsd > 0) {
+  const hasLiveBrokerBudget =
+    getOkxAccountModeLabel() === "live" &&
+    hasBrokerAccountSnapshot(accountOverview);
+  if (
+    getOkxAccountModeLabel() === "live" &&
+    !hasLiveBrokerBudget &&
+    liveTradingBudgetUsd > 0
+  ) {
     const usedBudgetUsd = history.reduce((sum, entry) => {
       if (
         entry.type !== "trade_execution" ||
@@ -832,6 +846,9 @@ export async function autoExecuteConsensus(
       const decision = normalizeDecision(consensus);
       const confidence = confidencePercent(consensus);
       const autoExecuteEnabled = parseBoolean(env.AUTO_EXECUTE_ENABLED, true);
+      const accountOverview = await getAccountOverview(consensus.symbol).catch(
+        () => undefined,
+      );
       const maxPositionUsd = parseNumber(
         env.MAX_POSITION_USD,
         SWARM_THRESHOLDS.DEFAULT_MAX_POSITION_USD,
@@ -840,6 +857,11 @@ export async function autoExecuteConsensus(
         env.LIVE_TRADING_BUDGET_USD,
         DEFAULT_LIVE_TRADING_BUDGET_USD,
       );
+      const effectiveLiveTradingBudgetUsd =
+        resolveEffectiveLiveTradingBudgetUsd(
+          accountOverview,
+          liveTradingBudgetUsd,
+        );
       const minConfidenceThreshold = parseNumber(
         env.MIN_CONFIDENCE_THRESHOLD,
         SWARM_THRESHOLDS.DEFAULT_MIN_CONFIDENCE_THRESHOLD,
@@ -850,8 +872,8 @@ export async function autoExecuteConsensus(
       );
       const accountMode = getOkxAccountModeLabel();
       const cappedMaxPositionUsd =
-        accountMode === "live" && liveTradingBudgetUsd > 0
-          ? Math.min(maxPositionUsd, liveTradingBudgetUsd)
+        accountMode === "live" && effectiveLiveTradingBudgetUsd > 0
+          ? Math.min(maxPositionUsd, effectiveLiveTradingBudgetUsd)
           : maxPositionUsd;
       const targetNotionalUsd = deriveSize(confidence, cappedMaxPositionUsd);
       telemetryInfo(
@@ -866,6 +888,7 @@ export async function autoExecuteConsensus(
             accountMode,
             maxPositionUsd,
             liveTradingBudgetUsd,
+            effectiveLiveTradingBudgetUsd,
             cappedMaxPositionUsd,
             minConfidenceThreshold,
             minTradeNotionalUsd,
@@ -873,6 +896,7 @@ export async function autoExecuteConsensus(
               env.REQUIRE_REALTIME_MARKET_DATA,
               true,
             ),
+            accountSnapshotUpdatedAt: accountOverview?.updatedAt,
           },
         },
       );
@@ -1148,7 +1172,11 @@ export async function autoExecuteConsensus(
           return finalizeResult(result);
         }
 
-        const riskGuard = await checkExecutionRiskGuards(consensus, decision);
+        const riskGuard = await checkExecutionRiskGuards(
+          consensus,
+          decision,
+          accountOverview,
+        );
         if (!riskGuard.allowed) {
           const result = buildHoldResult({
             timestamp,
@@ -1172,6 +1200,7 @@ export async function autoExecuteConsensus(
           decision,
           consensus.symbol,
           targetNotionalUsd,
+          accountOverview,
         );
         if (executionPlan.size <= 0) {
           const result = buildHoldResult({

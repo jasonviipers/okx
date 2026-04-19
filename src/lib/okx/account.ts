@@ -200,6 +200,65 @@ export function buildUnavailableAccountOverview(
   return buildEmptyOverview(symbol, warning);
 }
 
+export function hasBrokerAccountSnapshot(
+  overview: AccountOverview | undefined,
+): overview is AccountOverview {
+  if (!overview) {
+    return false;
+  }
+
+  return (
+    overview.totalEquity > 0 ||
+    overview.availableEquity > 0 ||
+    overview.cashAvailableUsd > 0 ||
+    overview.tradingBalances.length > 0
+  );
+}
+
+export function resolveEffectiveLiveTradingBudgetUsd(
+  overview: AccountOverview | undefined,
+  configuredBudgetUsd = 0,
+): number {
+  const safeConfiguredBudgetUsd = Math.max(0, configuredBudgetUsd);
+
+  if (!hasBrokerAccountSnapshot(overview)) {
+    return safeConfiguredBudgetUsd;
+  }
+
+  return Math.max(
+    safeConfiguredBudgetUsd,
+    overview.totalEquity,
+    overview.availableEquity,
+    overview.cashAvailableUsd,
+  );
+}
+
+export function resolveEffectiveLiveTradingBudgetRemainingUsd(input: {
+  overview?: AccountOverview;
+  configuredBudgetUsd?: number;
+  usedBudgetUsd?: number;
+}): number {
+  const configuredBudgetUsd = Math.max(0, input.configuredBudgetUsd ?? 0);
+
+  if (hasBrokerAccountSnapshot(input.overview)) {
+    return Number(
+      resolveEffectiveLiveTradingBudgetUsd(
+        input.overview,
+        configuredBudgetUsd,
+      ).toFixed(2),
+    );
+  }
+
+  return configuredBudgetUsd > 0
+    ? Number(
+        Math.max(
+          0,
+          configuredBudgetUsd - Math.max(0, input.usedBudgetUsd ?? 0),
+        ).toFixed(2),
+      )
+    : 0;
+}
+
 async function fetchAccountStateFromOkx(): Promise<CachedAccountState> {
   const [balanceRows, fundingBalanceRows] = await Promise.all([
     okxPrivateGet<OkxBalanceRow>(OKX_ENDPOINTS.balance),
