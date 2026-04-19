@@ -1,5 +1,6 @@
 import "server-only";
 
+import { env } from "@/env";
 import {
   getOkxAccountModeLabel,
   hasOkxTradingCredentials,
@@ -52,7 +53,7 @@ declare global {
 }
 
 function positionMonitorEnabled(): boolean {
-  return parseBoolean(process.env.POSITION_MONITOR_ENABLED, true);
+  return parseBoolean(env.POSITION_MONITOR_ENABLED, true);
 }
 
 function getPositionMonitorIntervalMs(): number {
@@ -60,7 +61,7 @@ function getPositionMonitorIntervalMs(): number {
     5_000,
     Math.trunc(
       parseNumber(
-        process.env.POSITION_MONITOR_INTERVAL_MS,
+        env.POSITION_MONITOR_INTERVAL_MS,
         DEFAULT_POSITION_MONITOR_INTERVAL_MS,
       ),
     ),

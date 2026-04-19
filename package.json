@@ -12,6 +12,7 @@
   "dependencies": {
     "@base-ui/react": "^1.4.0",
     "@libsql/client": "^0.17.2",
+    "@t3-oss/env-nextjs": "^0.13.11",
     "ai": "^6.0.161",
     "ai-sdk-ollama": "^3.8.3",
     "class-variance-authority": "^0.7.1",

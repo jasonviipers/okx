@@ -1,8 +1,11 @@
+import "server-only";
+
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
+import { env } from "@/env";
 
 function getOperatorToken() {
-  return process.env.TELEMETRY_TOKEN ?? process.env.CRON_SECRET;
+  return env.TELEMETRY_TOKEN ?? env.CRON_SECRET;
 }
 
 export function isOperatorAuthorized(

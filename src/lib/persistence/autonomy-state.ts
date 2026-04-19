@@ -2,6 +2,7 @@ import "server-only";
 
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { env } from "@/env";
 import { parseNumber } from "@/lib/runtime-utils";
 import type { AutonomyCandidateScore } from "@/types/api";
 import type { Timeframe } from "@/types/market";
@@ -62,13 +63,13 @@ function parseSymbolList(value: string | undefined): string[] | undefined {
 export function getDefaultAutonomyState(): StoredAutonomyState {
   return {
     running: true,
-    symbol: process.env.AUTONOMOUS_SYMBOL || "BTC-USDT",
-    selectionMode: parseSelectionMode(process.env.AUTONOMOUS_SYMBOL_SELECTION),
-    candidateSymbols: parseSymbolList(process.env.AUTONOMOUS_SYMBOLS),
-    timeframe: (process.env.AUTONOMOUS_TIMEFRAME as Timeframe) || "1H",
-    intervalMs: parseNumber(process.env.AUTONOMOUS_INTERVAL_MS, 20_000),
-    cooldownMs: parseNumber(process.env.AUTONOMOUS_COOLDOWN_MS, 120_000),
-    budgetUsd: parseNumber(process.env.LIVE_TRADING_BUDGET_USD, 0),
+    symbol: env.AUTONOMOUS_SYMBOL || "BTC-USDT",
+    selectionMode: parseSelectionMode(env.AUTONOMOUS_SYMBOL_SELECTION),
+    candidateSymbols: parseSymbolList(env.AUTONOMOUS_SYMBOLS),
+    timeframe: (env.AUTONOMOUS_TIMEFRAME as Timeframe) || "1H",
+    intervalMs: parseNumber(env.AUTONOMOUS_INTERVAL_MS, 20_000),
+    cooldownMs: parseNumber(env.AUTONOMOUS_COOLDOWN_MS, 120_000),
+    budgetUsd: parseNumber(env.LIVE_TRADING_BUDGET_USD, 0),
     iterationCount: 0,
     inFlight: false,
     symbolThrottleUntil: {},

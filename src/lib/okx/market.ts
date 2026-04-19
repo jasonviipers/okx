@@ -1,5 +1,6 @@
 import "server-only";
 
+import { env } from "@/env";
 import { OKX_ENDPOINTS, OKX_TIMEFRAME_MAP } from "@/lib/configs/okx";
 import { OkxRequestError, okxPublicGet } from "@/lib/okx/client";
 import { getCachedJson, setCachedJson } from "@/lib/redis/swarm-cache";
@@ -15,7 +16,7 @@ import type {
 
 function allowSyntheticMarketFallback() {
   return parseBoolean(
-    process.env.ALLOW_SYNTHETIC_MARKET_FALLBACK,
+    env.ALLOW_SYNTHETIC_MARKET_FALLBACK,
     process.env.NODE_ENV !== "production",
   );
 }

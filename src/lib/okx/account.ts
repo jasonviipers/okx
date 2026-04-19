@@ -1,5 +1,6 @@
 import "server-only";
 
+import { env } from "@/env";
 import {
   getOkxAccountModeLabel,
   getOkxPrivateAuthHint,
@@ -74,14 +75,14 @@ let inFlightAccountState: Promise<CachedAccountState> | null = null;
 
 function accountCacheTtlMs(): number {
   return parseNumber(
-    process.env.OKX_ACCOUNT_CACHE_TTL_MS,
+    env.OKX_ACCOUNT_CACHE_TTL_MS,
     DEFAULT_ACCOUNT_CACHE_TTL_MS,
   );
 }
 
 function accountStaleFallbackMs(): number {
   return parseNumber(
-    process.env.OKX_ACCOUNT_STALE_FALLBACK_MS,
+    env.OKX_ACCOUNT_STALE_FALLBACK_MS,
     DEFAULT_ACCOUNT_STALE_FALLBACK_MS,
   );
 }

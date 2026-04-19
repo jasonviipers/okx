@@ -1,5 +1,6 @@
 import "server-only";
 
+import { env } from "@/env";
 import { buildPortfolioState } from "@/lib/autonomy/portfolio";
 import { getOkxAccountModeLabel } from "@/lib/configs/okx";
 import {
@@ -66,7 +67,7 @@ declare global {
 }
 
 function autoStartEnabledByEnv(): boolean {
-  const val = process.env.AUTONOMOUS_TRADING_ENABLED?.toLowerCase();
+  const val = env.AUTONOMOUS_TRADING_ENABLED?.toLowerCase();
   return val !== "false";
 }
 
@@ -79,7 +80,7 @@ function getDegradedSnapshotSuppressionThreshold(): number {
     1,
     Math.trunc(
       parseNumber(
-        process.env.AUTONOMY_DEGRADED_SNAPSHOT_SUPPRESSION_THRESHOLD,
+        env.AUTONOMY_DEGRADED_SNAPSHOT_SUPPRESSION_THRESHOLD,
         DEFAULT_DEGRADED_SNAPSHOT_SUPPRESSION_THRESHOLD,
       ),
     ),
@@ -91,7 +92,7 @@ function getDegradedSnapshotSuppressionWindowMs(): number {
     60_000,
     Math.trunc(
       parseNumber(
-        process.env.AUTONOMY_DEGRADED_SNAPSHOT_SUPPRESSION_WINDOW_MS,
+        env.AUTONOMY_DEGRADED_SNAPSHOT_SUPPRESSION_WINDOW_MS,
         DEFAULT_DEGRADED_SNAPSHOT_SUPPRESSION_WINDOW_MS,
       ),
     ),
@@ -299,7 +300,7 @@ async function getTodayExecutedNotionalUsd() {
 }
 
 function resolveInternalBaseUrl(): string {
-  const configured = process.env.NEXT_PUBLIC_APP_URL ?? process.env.APP_URL;
+  const configured = env.NEXT_PUBLIC_APP_URL ?? env.APP_URL;
   if (configured) {
     return configured.replace(/\/$/, "");
   }
@@ -558,7 +559,7 @@ function buildSymbolExecutionContext(
   const baseBalance = findTradingBalance(accountOverview, symbolParts?.base);
   const quoteBalance = findTradingBalance(accountOverview, symbolParts?.quote);
   const minimumTradeNotionalUsd = parseNumber(
-    process.env.MIN_TRADE_NOTIONAL,
+    env.MIN_TRADE_NOTIONAL,
     SWARM_THRESHOLDS.DEFAULT_MIN_TRADE_NOTIONAL,
   );
   const currentBaseInventoryUsd = Math.max(baseBalance?.usdValue ?? 0, 0);
@@ -570,7 +571,7 @@ function buildSymbolExecutionContext(
     symbolAllocation !== undefined
       ? portfolioState.totalBudgetUsd * symbolAllocation.maxAllocationPct
       : parseNumber(
-          process.env.MAX_POSITION_USD,
+          env.MAX_POSITION_USD,
           SWARM_THRESHOLDS.DEFAULT_MAX_POSITION_USD,
         );
   const budgetCapUsd =

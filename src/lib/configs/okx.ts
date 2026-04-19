@@ -1,3 +1,6 @@
+import "server-only";
+
+import { env } from "@/env";
 import type { Timeframe } from "@/types/market";
 
 export const OKX_ACCOUNT_MODES = ["live", "demo", "paper"] as const;
@@ -45,16 +48,16 @@ function getRegionalWsBaseUrl(region: OkxApiRegion): string {
   }
 }
 
-const okxApiRegion = normalizeRegion(process.env.OKX_API_REGION);
+const okxApiRegion = normalizeRegion(env.OKX_API_REGION);
 
 export const OKX_CONFIG = {
   apiRegion: okxApiRegion,
-  baseUrl: process.env.OKX_BASE_URL || getRegionalRestBaseUrl(okxApiRegion),
-  wsUrl: process.env.OKX_WS_URL || getRegionalWsBaseUrl(okxApiRegion),
-  apiKey: process.env.OKX_API_KEY || "",
-  secret: process.env.OKX_SECRET || "",
-  passphrase: process.env.OKX_PASSPHRASE || "",
-  accountMode: normalizeAccountMode(process.env.OKX_ACCOUNT_MODE),
+  baseUrl: env.OKX_BASE_URL || getRegionalRestBaseUrl(okxApiRegion),
+  wsUrl: env.OKX_WS_URL || getRegionalWsBaseUrl(okxApiRegion),
+  apiKey: env.OKX_API_KEY || "",
+  secret: env.OKX_SECRET || "",
+  passphrase: env.OKX_PASSPHRASE || "",
+  accountMode: normalizeAccountMode(env.OKX_ACCOUNT_MODE),
 };
 
 export const OKX_ENDPOINTS = {

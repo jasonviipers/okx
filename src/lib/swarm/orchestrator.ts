@@ -1,4 +1,5 @@
 import { performance } from "node:perf_hooks";
+import { env } from "@/env";
 import { createAgent } from "@/lib/agents/create-agent";
 import type { AIModel } from "@/lib/configs/models";
 import {
@@ -48,7 +49,7 @@ for (const modelId of ACTIVE_SWARM_MODELS) {
 
 function getDiagnosticVoteTimeoutMs() {
   return parseNumber(
-    process.env.SWARM_DIAGNOSTIC_VOTE_TIMEOUT_MS,
+    env.SWARM_DIAGNOSTIC_VOTE_TIMEOUT_MS,
     DEFAULT_DIAGNOSTIC_VOTE_TIMEOUT_MS,
   );
 }

@@ -1,15 +1,16 @@
+import { env } from "@/env";
 import { parseNumber } from "@/lib/runtime-utils";
-import type { MarketContext } from "@/types/market";
-import type {
-  ConsensusResult,
-  RejectionReason,
-  ExpectedValueReport,
-} from "@/types/swarm";
 import {
   appendRejectionReason,
   markConsensusBlocked,
 } from "@/lib/swarm/rejection-utils";
 import { SWARM_THRESHOLDS } from "@/lib/swarm/thresholds";
+import type { MarketContext } from "@/types/market";
+import type {
+  ConsensusResult,
+  ExpectedValueReport,
+  RejectionReason,
+} from "@/types/swarm";
 
 function spreadBps(ctx: MarketContext): number {
   return ctx.ticker.last > 0
@@ -35,15 +36,15 @@ export function applyExpectedValueGate(
   ctx: MarketContext,
 ): ConsensusResult {
   const estimatedFeeBps = parseNumber(
-    process.env.EXPECTED_FEE_BPS,
+    env.EXPECTED_FEE_BPS,
     SWARM_THRESHOLDS.EV_DEFAULT_FEE_BPS,
   );
   const minNetEdgeBps = parseNumber(
-    process.env.MIN_NET_EDGE_BPS,
+    env.MIN_NET_EDGE_BPS,
     SWARM_THRESHOLDS.EV_MIN_NET_EDGE_BPS,
   );
   const minRewardRisk = parseNumber(
-    process.env.MIN_REWARD_RISK,
+    env.MIN_REWARD_RISK,
     SWARM_THRESHOLDS.EV_MIN_REWARD_RISK,
   );
 

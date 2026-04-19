@@ -1,6 +1,7 @@
 import "server-only";
 
 import { performance } from "node:perf_hooks";
+import { env } from "@/env";
 import { getOkxAccountModeLabel } from "@/lib/configs/okx";
 import { getMarketSnapshot } from "@/lib/market-data/service";
 import { clamp } from "@/lib/math-utils";
@@ -398,11 +399,11 @@ async function deriveExecutableSize(
     getTicker(symbol),
   ]);
   const maxBalanceUsagePct = parseNumber(
-    process.env.MAX_BALANCE_USAGE_PCT,
+    env.MAX_BALANCE_USAGE_PCT,
     SWARM_THRESHOLDS.DEFAULT_MAX_BALANCE_USAGE_PCT,
   );
   const minTradeNotional = parseNumber(
-    process.env.MIN_TRADE_NOTIONAL,
+    env.MIN_TRADE_NOTIONAL,
     SWARM_THRESHOLDS.DEFAULT_MIN_TRADE_NOTIONAL,
   );
 
@@ -469,7 +470,7 @@ async function checkExecutionRiskGuards(
   response?: Record<string, unknown>;
 }> {
   const maxDailyTrades = parseNumber(
-    process.env.MAX_DAILY_TRADES,
+    env.MAX_DAILY_TRADES,
     SWARM_THRESHOLDS.DEFAULT_MAX_DAILY_TRADES,
   );
   const history = await getHistory(200);
@@ -489,7 +490,7 @@ async function checkExecutionRiskGuards(
   }
 
   const liveTradingBudgetUsd = parseNumber(
-    process.env.LIVE_TRADING_BUDGET_USD,
+    env.LIVE_TRADING_BUDGET_USD,
     DEFAULT_LIVE_TRADING_BUDGET_USD,
   );
   if (getOkxAccountModeLabel() === "live" && liveTradingBudgetUsd > 0) {
@@ -830,24 +831,21 @@ export async function autoExecuteConsensus(
       const timestamp = nowIso();
       const decision = normalizeDecision(consensus);
       const confidence = confidencePercent(consensus);
-      const autoExecuteEnabled = parseBoolean(
-        process.env.AUTO_EXECUTE_ENABLED,
-        true,
-      );
+      const autoExecuteEnabled = parseBoolean(env.AUTO_EXECUTE_ENABLED, true);
       const maxPositionUsd = parseNumber(
-        process.env.MAX_POSITION_USD,
+        env.MAX_POSITION_USD,
         SWARM_THRESHOLDS.DEFAULT_MAX_POSITION_USD,
       );
       const liveTradingBudgetUsd = parseNumber(
-        process.env.LIVE_TRADING_BUDGET_USD,
+        env.LIVE_TRADING_BUDGET_USD,
         DEFAULT_LIVE_TRADING_BUDGET_USD,
       );
       const minConfidenceThreshold = parseNumber(
-        process.env.MIN_CONFIDENCE_THRESHOLD,
+        env.MIN_CONFIDENCE_THRESHOLD,
         SWARM_THRESHOLDS.DEFAULT_MIN_CONFIDENCE_THRESHOLD,
       );
       const minTradeNotionalUsd = parseNumber(
-        process.env.MIN_TRADE_NOTIONAL,
+        env.MIN_TRADE_NOTIONAL,
         SWARM_THRESHOLDS.DEFAULT_MIN_TRADE_NOTIONAL,
       );
       const accountMode = getOkxAccountModeLabel();
@@ -872,7 +870,7 @@ export async function autoExecuteConsensus(
             minConfidenceThreshold,
             minTradeNotionalUsd,
             requireRealtimeMarketData: parseBoolean(
-              process.env.REQUIRE_REALTIME_MARKET_DATA,
+              env.REQUIRE_REALTIME_MARKET_DATA,
               true,
             ),
           },

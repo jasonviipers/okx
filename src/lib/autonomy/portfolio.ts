@@ -1,5 +1,6 @@
 import "server-only";
 
+import { env } from "@/env";
 import { getAccountOverview } from "@/lib/okx/account";
 import { parseNumber } from "@/lib/runtime-utils";
 import { getOpenPositions } from "@/lib/store/open-positions";
@@ -12,15 +13,12 @@ function round(value: number, digits = 4): number {
 
 function getMaxSymbolAllocationPct(): number {
   const legacyDefault = parseNumber(
-    process.env.AUTONOMY_MAX_SYMBOL_ALLOCATION_PCT,
+    env.AUTONOMY_MAX_SYMBOL_ALLOCATION_PCT,
     SWARM_THRESHOLDS.DEFAULT_MAX_SYMBOL_ALLOCATION_PCT,
   );
   return Math.max(
     0.01,
-    Math.min(
-      1,
-      parseNumber(process.env.MAX_SYMBOL_ALLOCATION_PCT, legacyDefault),
-    ),
+    Math.min(1, parseNumber(env.MAX_SYMBOL_ALLOCATION_PCT, legacyDefault)),
   );
 }
 

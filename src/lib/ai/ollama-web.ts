@@ -12,6 +12,7 @@
 
 import "server-only";
 
+import { env } from "@/env";
 import { getCachedJson, setCachedJson } from "@/lib/redis/swarm-cache";
 import type { MarketContext } from "@/types/market";
 
@@ -130,7 +131,7 @@ function buildSearchQuery(
 
 function getAuthHeaders(): HeadersInit {
   return {
-    Authorization: `Bearer ${process.env.OLLAMA_API_KEY}`,
+    Authorization: `Bearer ${env.OLLAMA_API_KEY}`,
     "Content-Type": "application/json",
   };
 }
@@ -200,7 +201,7 @@ function formatFetchResults(
 }
 
 export function isOllamaWebSearchConfigured(): boolean {
-  return Boolean(process.env.OLLAMA_API_KEY);
+  return Boolean(env.OLLAMA_API_KEY);
 }
 
 /**

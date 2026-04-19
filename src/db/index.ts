@@ -5,13 +5,14 @@ import { pathToFileURL } from "node:url";
 import { createClient } from "@libsql/client";
 import { drizzle } from "drizzle-orm/libsql";
 import { migrate } from "drizzle-orm/libsql/migrator";
+import { env } from "@/env";
 import * as schema from "./schema";
 
 const DEFAULT_DB_FILE = ".data/okx.sqlite";
 const DEFAULT_MIGRATIONS_DIR = "src/db/migrations";
-const configuredDbFile = process.env.DB_FILE_NAME?.trim() || DEFAULT_DB_FILE;
+const configuredDbFile = env.DB_FILE_NAME?.trim() || DEFAULT_DB_FILE;
 const configuredMigrationsDir =
-  process.env.DB_MIGRATIONS_DIR?.trim() || DEFAULT_MIGRATIONS_DIR;
+  env.DB_MIGRATIONS_DIR?.trim() || DEFAULT_MIGRATIONS_DIR;
 
 const dbFilePath = path.isAbsolute(configuredDbFile)
   ? configuredDbFile

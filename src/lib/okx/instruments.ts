@@ -1,5 +1,6 @@
 import "server-only";
 
+import { env } from "@/env";
 import { OKX_ENDPOINTS } from "@/lib/configs/okx";
 import { okxPublicGet } from "@/lib/okx/client";
 import { getCachedJson, setCachedJson } from "@/lib/redis/swarm-cache";
@@ -115,7 +116,7 @@ export function getConfiguredAutonomousBaseAssets(
   const sourceSymbols =
     explicitSymbols && explicitSymbols.length > 0
       ? explicitSymbols
-      : parseSymbolList(process.env.AUTONOMOUS_SYMBOLS);
+      : parseSymbolList(env.AUTONOMOUS_SYMBOLS);
   const bases =
     sourceSymbols.length > 0
       ? sourceSymbols.map(extractBaseAsset)
@@ -126,8 +127,8 @@ export function getConfiguredAutonomousBaseAssets(
 
 export function getConfiguredAutonomousQuoteCurrencies(): string[] {
   const configured = uniqueUppercase([
-    ...parseSymbolList(process.env.AUTONOMOUS_QUOTE_CURRENCIES),
-    ...parseSymbolList(process.env.AUTONOMOUS_QUOTE_CURRENCY),
+    ...parseSymbolList(env.AUTONOMOUS_QUOTE_CURRENCIES),
+    ...parseSymbolList(env.AUTONOMOUS_QUOTE_CURRENCY),
   ]);
 
   return uniqueUppercase([...configured, ...DEFAULT_AUTONOMOUS_QUOTES]);
@@ -278,10 +279,7 @@ export async function getAutonomousSymbolUniverse(options?: {
 }): Promise<string[]> {
   const limit = Math.max(
     1,
-    Math.min(
-      20,
-      options?.limit ?? parseNumber(process.env.AUTONOMOUS_SYMBOL_LIMIT, 8),
-    ),
+    Math.min(20, options?.limit ?? parseNumber(env.AUTONOMOUS_SYMBOL_LIMIT, 8)),
   );
   const manualBaseAssets = getConfiguredAutonomousBaseAssets(
     options?.explicitSymbols,

@@ -1,6 +1,7 @@
 import "server-only";
 
 import { performance } from "node:perf_hooks";
+import { env } from "@/env";
 import { getOkxAccountModeLabel } from "@/lib/configs/okx";
 import {
   getCandles as getRestCandles,
@@ -51,9 +52,8 @@ type CandleState = {
   updatedAt?: string;
 };
 
-const DEFAULT_SYMBOL = process.env.AUTONOMOUS_SYMBOL || "BTC-USDT";
-const DEFAULT_TIMEFRAME =
-  (process.env.AUTONOMOUS_TIMEFRAME as Timeframe) || "1H";
+const DEFAULT_SYMBOL = env.AUTONOMOUS_SYMBOL || "BTC-USDT";
+const DEFAULT_TIMEFRAME = (env.AUTONOMOUS_TIMEFRAME as Timeframe) || "1H";
 const DEFAULT_TICKER_STALE_MS = 15_000;
 const DEFAULT_ORDERBOOK_STALE_MS = 15_000;
 const DEFAULT_REST_REFRESH_MS = 10_000;
@@ -71,35 +71,23 @@ const states = new Map<string, SymbolState>();
 let listenerAttached = false;
 
 function requireRealtimeMarketData() {
-  return parseBoolean(process.env.REQUIRE_REALTIME_MARKET_DATA, false);
+  return parseBoolean(env.REQUIRE_REALTIME_MARKET_DATA, false);
 }
 
 function getTickerStaleMs() {
-  return parseNumber(
-    process.env.MARKET_TICKER_STALE_MS,
-    DEFAULT_TICKER_STALE_MS,
-  );
+  return parseNumber(env.MARKET_TICKER_STALE_MS, DEFAULT_TICKER_STALE_MS);
 }
 
 function getOrderBookStaleMs() {
-  return parseNumber(
-    process.env.MARKET_ORDERBOOK_STALE_MS,
-    DEFAULT_ORDERBOOK_STALE_MS,
-  );
+  return parseNumber(env.MARKET_ORDERBOOK_STALE_MS, DEFAULT_ORDERBOOK_STALE_MS);
 }
 
 function getRestRefreshMs() {
-  return parseNumber(
-    process.env.MARKET_REST_REFRESH_MS,
-    DEFAULT_REST_REFRESH_MS,
-  );
+  return parseNumber(env.MARKET_REST_REFRESH_MS, DEFAULT_REST_REFRESH_MS);
 }
 
 function getCandleRefreshMs() {
-  return parseNumber(
-    process.env.MARKET_CANDLE_REFRESH_MS,
-    DEFAULT_CANDLE_REFRESH_MS,
-  );
+  return parseNumber(env.MARKET_CANDLE_REFRESH_MS, DEFAULT_CANDLE_REFRESH_MS);
 }
 
 function toIso(ts: string | number | undefined) {

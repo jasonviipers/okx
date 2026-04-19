@@ -1,4 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server";
+import { env } from "@/env";
 import {
   dispatchAutonomyWorker,
   ensureAutonomyBootState,
@@ -9,7 +10,7 @@ export const dynamic = "force-dynamic";
 
 export async function GET(req: NextRequest) {
   const auth = req.headers.get("authorization");
-  if (!auth || auth !== `Bearer ${process.env.CRON_SECRET}`) {
+  if (!auth || auth !== `Bearer ${env.CRON_SECRET}`) {
     return Response.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -27,7 +28,7 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   const auth = req.headers.get("authorization");
-  if (!auth || auth !== `Bearer ${process.env.CRON_SECRET}`) {
+  if (!auth || auth !== `Bearer ${env.CRON_SECRET}`) {
     return Response.json({ error: "Unauthorized" }, { status: 401 });
   }
 

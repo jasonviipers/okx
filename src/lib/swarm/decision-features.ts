@@ -1,3 +1,4 @@
+import { env } from "@/env";
 import { average, clamp, sum } from "@/lib/math-utils";
 import { parseNumber } from "@/lib/runtime-utils";
 import type { MarketContext, OrderBookEntry, Timeframe } from "@/types/market";
@@ -344,11 +345,8 @@ export function buildDecisionFeatures(input: {
   accountOverview: AccountOverview;
   budgetRemainingUsd?: number;
 }): DecisionFeatureVector {
-  const maxPositionUsd = parseNumber(process.env.MAX_POSITION_USD, 100);
-  const minimumTradeNotionalUsd = parseNumber(
-    process.env.MIN_TRADE_NOTIONAL,
-    5,
-  );
+  const maxPositionUsd = parseNumber(env.MAX_POSITION_USD, 100);
+  const minimumTradeNotionalUsd = parseNumber(env.MIN_TRADE_NOTIONAL, 5);
   const budgetCapUsd = getBudgetCapUsd(input.budgetRemainingUsd ?? 0);
   const availableQuoteUsd = Math.max(
     0,

@@ -1,6 +1,7 @@
 import "server-only";
 
 import Redis from "ioredis";
+import { env } from "@/env";
 
 type CacheValue = {
   value: string;
@@ -12,7 +13,7 @@ let redisAvailable = false; // tracks whether last known state was connected
 const memoryStore = new Map<string, CacheValue>();
 
 function getRedisClient(): Redis | null {
-  const redisUrl = process.env.REDIS_URL;
+  const redisUrl = env.REDIS_URL;
   if (!redisUrl) {
     return null;
   }
@@ -83,7 +84,7 @@ function setMemoryValue(key: string, value: string, ttlSeconds?: number) {
 }
 
 export function isRedisConfigured(): boolean {
-  return Boolean(process.env.REDIS_URL);
+  return Boolean(env.REDIS_URL);
 }
 
 export function isRedisAvailable(): boolean {

@@ -1,3 +1,4 @@
+import { env } from "@/env";
 import { clamp, clamp01 } from "@/lib/math-utils";
 import { parseNumber } from "@/lib/runtime-utils";
 import {
@@ -376,20 +377,20 @@ function buildRejectionReasons(input: {
   riskFlags: string[];
 }): RejectionReason[] {
   const minDirectionalEdge = parseNumber(
-    process.env.MIN_DIRECTIONAL_EDGE_SCORE,
+    env.MIN_DIRECTIONAL_EDGE_SCORE,
     SWARM_THRESHOLDS.DEFAULT_MIN_DIRECTIONAL_EDGE,
   );
   const minConfidence =
     parseNumber(
-      process.env.MIN_CONFIDENCE_THRESHOLD,
+      env.MIN_CONFIDENCE_THRESHOLD,
       SWARM_THRESHOLDS.DEFAULT_MIN_CONFIDENCE * 100,
     ) / 100;
   const minMarketQuality = parseNumber(
-    process.env.MIN_MARKET_QUALITY_SCORE,
+    env.MIN_MARKET_QUALITY_SCORE,
     SWARM_THRESHOLDS.DEFAULT_MIN_MARKET_QUALITY,
   );
   const minNetEdgeBps = parseNumber(
-    process.env.MIN_NET_EDGE_BPS,
+    env.MIN_NET_EDGE_BPS,
     SWARM_THRESHOLDS.DEFAULT_MIN_NET_EDGE_BPS,
   );
   const rejections: RejectionReason[] = [];
@@ -550,7 +551,7 @@ export function buildDeterministicConsensus(input: {
   budgetRemainingUsd?: number;
 }): DecisionResult {
   const expectedFeeBps = parseNumber(
-    process.env.EXPECTED_FEE_BPS,
+    env.EXPECTED_FEE_BPS,
     SWARM_THRESHOLDS.DEFAULT_EXPECTED_FEE_BPS,
   );
   const features = buildDecisionFeatures({
