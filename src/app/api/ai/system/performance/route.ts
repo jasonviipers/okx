@@ -3,7 +3,7 @@ import { buildStrategyPerformanceSummary } from "@/lib/persistence/history";
 import {
   getOperatorUnauthorizedResponse,
   isOperatorAuthorized,
-} from "@/lib/telemetry/auth";
+} from "@/lib/observability/operator-auth";
 
 export const dynamic = "force-dynamic";
 

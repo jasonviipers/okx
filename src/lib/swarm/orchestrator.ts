@@ -23,7 +23,7 @@ import {
   observeHistogram,
   warn,
   withTelemetrySpan,
-} from "@/lib/telemetry/server";
+} from "@/lib/observability/telemetry";
 import type { MarketContext } from "@/types/market";
 import type { AgentVote, SwarmRunResult } from "@/types/swarm";
 

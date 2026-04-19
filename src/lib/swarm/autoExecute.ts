@@ -27,7 +27,7 @@ import {
   info as telemetryInfo,
   warn as telemetryWarn,
   withTelemetrySpan,
-} from "@/lib/telemetry/server";
+} from "@/lib/observability/telemetry";
 import type {
   DecisionResult,
   ExecutionResult,

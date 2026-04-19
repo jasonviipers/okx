@@ -1,0 +1,12 @@
+apiVersion: 1
+
+providers:
+  - name: ai-trading-swarm
+    orgId: 1
+    folder: AI Trading Swarm
+    type: file
+    disableDeletion: false
+    allowUiUpdates: true
+    updateIntervalSeconds: 30
+    options:
+      path: /var/lib/grafana/dashboards

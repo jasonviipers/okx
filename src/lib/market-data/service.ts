@@ -18,7 +18,7 @@ import {
   setGauge,
   warn,
   withTelemetrySpan,
-} from "@/lib/telemetry/server";
+} from "@/lib/observability/telemetry";
 import type { MarketDataStatus } from "@/types/api";
 import type {
   Candle,

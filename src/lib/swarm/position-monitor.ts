@@ -32,7 +32,7 @@ import {
   error as telemetryError,
   warn as telemetryWarn,
   withTelemetrySpan,
-} from "@/lib/telemetry/server";
+} from "@/lib/observability/telemetry";
 import type { Order, Position } from "@/types/trade";
 import {
   isExecutionCircuitOpen,

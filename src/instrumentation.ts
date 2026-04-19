@@ -20,6 +20,12 @@ export const onRequestError: Instrumentation.onRequestError = async (
     return;
   }
 
-  const { onTelemetryRequestError } = await import("./lib/telemetry/server");
-  await onTelemetryRequestError(err, request, context);
+  const { onObservabilityRequestError } = await import(
+    "./lib/observability/telemetry"
+  );
+  await onObservabilityRequestError(
+    err as Error & { digest?: string },
+    request,
+    context,
+  );
 };

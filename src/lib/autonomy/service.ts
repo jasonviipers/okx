@@ -39,7 +39,7 @@ import {
   error as telemetryError,
   warn,
   withTelemetrySpan,
-} from "@/lib/telemetry/server";
+} from "@/lib/observability/telemetry";
 import { approximateAvailableUsd, parseSpotSymbol } from "@/lib/trade-utils";
 import type {
   AutonomyCandidateScore,

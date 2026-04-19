@@ -1,7 +1,8 @@
 import "server-only";
 
-import { mkdir, readFile, writeFile } from "node:fs/promises";
-import path from "node:path";
+import { desc, eq } from "drizzle-orm";
+import { getDb } from "@/db";
+import { openPositions } from "@/db/schema";
 
 export interface OpenPositionRecord {
   orderId: string;
@@ -24,8 +25,6 @@ export interface OpenPositionRecord {
   updatedAt: number;
 }
 
-const DATA_DIR = path.join(process.cwd(), ".data");
-const OPEN_POSITIONS_FILE = path.join(DATA_DIR, "open-positions.json");
 const DEFAULT_TRAILING_STOP_DISTANCE_PCT = 1.5;
 
 let writeQueue: Promise<void> = Promise.resolve();
@@ -132,42 +131,74 @@ function sanitizeOpenPositionRecord(
   };
 }
 
-async function ensureOpenPositionsFile() {
-  await mkdir(DATA_DIR, { recursive: true });
-
-  try {
-    await readFile(OPEN_POSITIONS_FILE, "utf8");
-  } catch {
-    await writeFile(OPEN_POSITIONS_FILE, "[]", "utf8");
-  }
+function mapRow(row: typeof openPositions.$inferSelect): OpenPositionRecord {
+  return sanitizeOpenPositionRecord({
+    orderId: row.orderId,
+    instId: row.instId,
+    direction: row.direction,
+    entryPrice: row.entryPrice,
+    size: row.size,
+    remainingSize: row.remainingSize,
+    stopLoss: row.stopLoss ?? null,
+    takeProfitLevels: row.takeProfitLevels,
+    tpHitCount: row.tpHitCount,
+    trailingStopActive: row.trailingStopActive,
+    trailingStopPrice: row.trailingStopPrice ?? null,
+    trailingStopAnchorPrice: row.trailingStopAnchorPrice ?? null,
+    trailingStopDistancePct: row.trailingStopDistancePct,
+    exchangePositionMissingCount: row.exchangePositionMissingCount,
+    lastKnownPrice: row.lastKnownPrice ?? null,
+    lastCheckedAt: row.lastCheckedAt ?? null,
+    timestamp: row.timestamp,
+    updatedAt: row.updatedAt,
+  });
 }
 
-async function readOpenPositionsFile(): Promise<OpenPositionRecord[]> {
-  await ensureOpenPositionsFile();
-  const raw = await readFile(OPEN_POSITIONS_FILE, "utf8");
-
-  try {
-    const parsed = JSON.parse(raw) as unknown[];
-    return Array.isArray(parsed)
-      ? parsed.map((entry) =>
-          sanitizeOpenPositionRecord(entry as Partial<OpenPositionRecord>),
-        )
-      : [];
-  } catch {
-    return [];
-  }
-}
-
-async function writeOpenPositionsFile(entries: OpenPositionRecord[]) {
-  await ensureOpenPositionsFile();
-  const sanitizedEntries = entries
-    .map((entry) => sanitizeOpenPositionRecord(entry))
-    .sort((left, right) => right.timestamp - left.timestamp);
-  await writeFile(
-    OPEN_POSITIONS_FILE,
-    JSON.stringify(sanitizedEntries, null, 2),
-    "utf8",
-  );
+async function upsertOpenPositionRecord(position: OpenPositionRecord) {
+  await getDb()
+    .insert(openPositions)
+    .values({
+      orderId: position.orderId,
+      instId: position.instId,
+      direction: position.direction,
+      entryPrice: position.entryPrice,
+      size: position.size,
+      remainingSize: position.remainingSize,
+      stopLoss: position.stopLoss,
+      takeProfitLevels: position.takeProfitLevels,
+      tpHitCount: position.tpHitCount,
+      trailingStopActive: position.trailingStopActive,
+      trailingStopPrice: position.trailingStopPrice,
+      trailingStopAnchorPrice: position.trailingStopAnchorPrice,
+      trailingStopDistancePct: position.trailingStopDistancePct,
+      exchangePositionMissingCount: position.exchangePositionMissingCount,
+      lastKnownPrice: position.lastKnownPrice,
+      lastCheckedAt: position.lastCheckedAt,
+      timestamp: position.timestamp,
+      updatedAt: position.updatedAt,
+    })
+    .onConflictDoUpdate({
+      target: openPositions.orderId,
+      set: {
+        instId: position.instId,
+        direction: position.direction,
+        entryPrice: position.entryPrice,
+        size: position.size,
+        remainingSize: position.remainingSize,
+        stopLoss: position.stopLoss,
+        takeProfitLevels: position.takeProfitLevels,
+        tpHitCount: position.tpHitCount,
+        trailingStopActive: position.trailingStopActive,
+        trailingStopPrice: position.trailingStopPrice,
+        trailingStopAnchorPrice: position.trailingStopAnchorPrice,
+        trailingStopDistancePct: position.trailingStopDistancePct,
+        exchangePositionMissingCount: position.exchangePositionMissingCount,
+        lastKnownPrice: position.lastKnownPrice,
+        lastCheckedAt: position.lastCheckedAt,
+        timestamp: position.timestamp,
+        updatedAt: position.updatedAt,
+      },
+    });
 }
 
 function enqueueWrite<T>(operation: () => Promise<T>): Promise<T> {
@@ -185,14 +216,25 @@ async function waitForPendingWrites() {
 
 export async function getOpenPositions(): Promise<OpenPositionRecord[]> {
   await waitForPendingWrites();
-  return readOpenPositionsFile();
+  const rows = await getDb()
+    .select()
+    .from(openPositions)
+    .orderBy(desc(openPositions.timestamp));
+
+  return rows.map(mapRow);
 }
 
 export async function getOpenPosition(
   orderId: string,
 ): Promise<OpenPositionRecord | undefined> {
-  const positions = await getOpenPositions();
-  return positions.find((position) => position.orderId === orderId);
+  await waitForPendingWrites();
+  const [row] = await getDb()
+    .select()
+    .from(openPositions)
+    .where(eq(openPositions.orderId, orderId))
+    .limit(1);
+
+  return row ? mapRow(row) : undefined;
 }
 
 export async function upsertOpenPosition(
@@ -203,18 +245,7 @@ export async function upsertOpenPosition(
       ...position,
       updatedAt: Date.now(),
     });
-    const positions = await readOpenPositionsFile();
-    const index = positions.findIndex(
-      (entry) => entry.orderId === nextPosition.orderId,
-    );
-
-    if (index >= 0) {
-      positions[index] = nextPosition;
-    } else {
-      positions.unshift(nextPosition);
-    }
-
-    await writeOpenPositionsFile(positions);
+    await upsertOpenPositionRecord(nextPosition);
     return nextPosition;
   });
 }
@@ -226,44 +257,51 @@ export async function updateOpenPosition(
   ) => OpenPositionRecord | Partial<OpenPositionRecord> | null,
 ): Promise<OpenPositionRecord | undefined> {
   return enqueueWrite(async () => {
-    const positions = await readOpenPositionsFile();
-    const index = positions.findIndex((entry) => entry.orderId === orderId);
+    const [row] = await getDb()
+      .select()
+      .from(openPositions)
+      .where(eq(openPositions.orderId, orderId))
+      .limit(1);
 
-    if (index < 0) {
+    if (!row) {
       return undefined;
     }
 
-    const updated = updater(positions[index]);
+    const current = mapRow(row);
+    const updated = updater(current);
     if (updated === null) {
-      positions.splice(index, 1);
-      await writeOpenPositionsFile(positions);
+      await getDb()
+        .delete(openPositions)
+        .where(eq(openPositions.orderId, orderId));
       return undefined;
     }
 
     const nextPosition = sanitizeOpenPositionRecord({
-      ...positions[index],
+      ...current,
       ...updated,
       orderId,
       updatedAt: Date.now(),
     });
-    positions[index] = nextPosition;
-    await writeOpenPositionsFile(positions);
+    await upsertOpenPositionRecord(nextPosition);
     return nextPosition;
   });
 }
 
 export async function removeOpenPosition(orderId: string): Promise<boolean> {
   return enqueueWrite(async () => {
-    const positions = await readOpenPositionsFile();
-    const nextPositions = positions.filter(
-      (position) => position.orderId !== orderId,
-    );
+    const [existingRow] = await getDb()
+      .select()
+      .from(openPositions)
+      .where(eq(openPositions.orderId, orderId))
+      .limit(1);
 
-    if (nextPositions.length === positions.length) {
+    if (!existingRow) {
       return false;
     }
 
-    await writeOpenPositionsFile(nextPositions);
+    await getDb()
+      .delete(openPositions)
+      .where(eq(openPositions.orderId, orderId));
     return true;
   });
 }

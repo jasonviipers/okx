@@ -8,7 +8,7 @@ import {
   info,
   setGauge,
   warn,
-} from "@/lib/telemetry/server";
+} from "@/lib/observability/telemetry";
 
 export type OkxWsChannel = "tickers" | "books5";
 

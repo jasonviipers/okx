@@ -1,7 +1,12 @@
 import "server-only";
 
-import { mkdir, readFile, writeFile } from "node:fs/promises";
-import path from "node:path";
+import { desc, eq, inArray } from "drizzle-orm";
+import { getDb } from "@/db";
+import {
+  outcomeWindows as outcomeWindowsTable,
+  swarmRuns,
+  tradeExecutions,
+} from "@/db/schema";
 import { average } from "@/lib/math-utils";
 import { getTicker } from "@/lib/okx/market";
 import { getTradeUpdates, type OkxTradeUpdateRow } from "@/lib/okx/orders";
@@ -21,63 +26,8 @@ import type {
   TradePerformanceMetrics,
 } from "@/types/trade";
 
-const DATA_DIR = path.join(process.cwd(), ".data");
-const HISTORY_FILE = path.join(DATA_DIR, "history.json");
-const OUTCOME_WINDOWS_FILE = path.join(DATA_DIR, "outcome-windows.json");
 const OUTCOME_HORIZON_MINUTES = [5, 15, 60, 240, 1440] as const;
 let outcomeWindowWriteQueue: Promise<void> = Promise.resolve();
-
-async function ensureHistoryFile() {
-  await mkdir(DATA_DIR, { recursive: true });
-
-  try {
-    await readFile(HISTORY_FILE, "utf8");
-  } catch {
-    await writeFile(HISTORY_FILE, "[]", "utf8");
-  }
-}
-
-async function ensureOutcomeWindowsFile() {
-  await mkdir(DATA_DIR, { recursive: true });
-
-  try {
-    await readFile(OUTCOME_WINDOWS_FILE, "utf8");
-  } catch {
-    await writeFile(OUTCOME_WINDOWS_FILE, "[]", "utf8");
-  }
-}
-
-async function readHistory(): Promise<StoredHistoryEntry[]> {
-  await ensureHistoryFile();
-  const raw = await readFile(HISTORY_FILE, "utf8");
-  try {
-    const entries = JSON.parse(raw) as StoredHistoryEntry[];
-    const normalized: StoredHistoryEntry[] = [];
-
-    for (const entry of entries) {
-      if (entry.type !== "swarm_run") {
-        normalized.push(entry);
-        continue;
-      }
-
-      try {
-        normalized.push({
-          ...entry,
-          consensus: normalizeConsensusResult(entry.consensus),
-        });
-      } catch {}
-    }
-
-    return normalized;
-  } catch {
-    return [];
-  }
-}
-
-async function writeHistory(entries: StoredHistoryEntry[]) {
-  await ensureHistoryFile();
-  await writeFile(HISTORY_FILE, JSON.stringify(entries, null, 2), "utf8");
-}
 
 function toFiniteNumber(value: unknown, fallback = 0): number {
   const parsed =
@@ -153,22 +103,126 @@ function sanitizeOutcomeWindow(value: Partial<OutcomeWindow>): OutcomeWindow {
   };
 }
 
-async function readOutcomeWindowsFile(): Promise<OutcomeWindow[]> {
-  await ensureOutcomeWindowsFile();
-  const raw = await readFile(OUTCOME_WINDOWS_FILE, "utf8");
+function mapSwarmRunRow(
+  row: typeof swarmRuns.$inferSelect,
+): StoredHistoryEntry {
+  return {
+    id: row.id,
+    type: "swarm_run",
+    timestamp: row.timestamp,
+    symbol: row.symbol,
+    timeframe: row.timeframe,
+    cached: row.cached,
+    totalElapsedMs: row.totalElapsedMs,
+    consensus: normalizeConsensusResult(row.consensus),
+  };
+}
 
-  try {
-    const parsed = JSON.parse(raw) as Partial<OutcomeWindow>[];
-    return Array.isArray(parsed)
-      ? parsed.map((entry) => sanitizeOutcomeWindow(entry))
-      : [];
-  } catch {
-    return [];
+function mapTradeExecutionRow(
+  row: typeof tradeExecutions.$inferSelect,
+): StoredTradeExecution {
+  return {
+    id: row.id,
+    type: "trade_execution",
+    timestamp: row.timestamp,
+    symbol: row.symbol,
+    order: row.order,
+    success: row.success,
+    decisionSnapshot: row.decisionSnapshot ?? undefined,
+    executionContext: row.executionContext ?? undefined,
+    performance: row.performance ?? undefined,
+  };
+}
+
+function mapOutcomeWindowRow(
+  row: typeof outcomeWindowsTable.$inferSelect,
+): OutcomeWindow {
+  return sanitizeOutcomeWindow({
+    orderId: row.orderId,
+    symbol: row.symbol,
+    direction: row.direction,
+    entryPrice: row.entryPrice,
+    entryTime: row.entryTime,
+    returnAt5m: row.returnAt5m,
+    returnAt15m: row.returnAt15m,
+    returnAt1h: row.returnAt1h,
+    returnAt4h: row.returnAt4h,
+    exitPrice: row.exitPrice ?? null,
+    exitTime: row.exitTime ?? null,
+    realizedPnl: row.realizedPnl ?? null,
+    realizedSlippageBps: row.realizedSlippageBps ?? null,
+    featureSnapshot: row.featureSnapshot,
+    decisionConfidence: row.decisionConfidence,
+    expectedNetEdgeBps: row.expectedNetEdgeBps,
+    regime: row.regime,
+    selectedEngine: row.selectedEngine,
+    updatedAt: row.updatedAt,
+  });
+}
+
+async function readHistory(): Promise<StoredHistoryEntry[]> {
+  const [swarmRunRows, tradeExecutionRows] = await Promise.all([
+    getDb().select().from(swarmRuns).orderBy(desc(swarmRuns.timestamp)),
+    getDb()
+      .select()
+      .from(tradeExecutions)
+      .orderBy(desc(tradeExecutions.timestamp)),
+  ]);
+
+  return [
+    ...swarmRunRows.map(mapSwarmRunRow),
+    ...tradeExecutionRows.map(mapTradeExecutionRow),
+  ].sort(
+    (left, right) =>
+      new Date(right.timestamp).getTime() - new Date(left.timestamp).getTime(),
+  );
+}
+
+async function persistTradeExecutions(entries: StoredTradeExecution[]) {
+  if (entries.length === 0) {
+    return;
   }
+
+  await getDb().transaction(async (tx) => {
+    for (const entry of entries) {
+      await tx
+        .insert(tradeExecutions)
+        .values({
+          id: entry.id,
+          timestamp: entry.timestamp,
+          symbol: entry.symbol,
+          order: entry.order,
+          success: entry.success,
+          decisionSnapshot: entry.decisionSnapshot ?? null,
+          executionContext: entry.executionContext ?? null,
+          performance: entry.performance ?? null,
+        })
+        .onConflictDoUpdate({
+          target: tradeExecutions.id,
+          set: {
+            timestamp: entry.timestamp,
+            symbol: entry.symbol,
+            order: entry.order,
+            success: entry.success,
+            decisionSnapshot: entry.decisionSnapshot ?? null,
+            executionContext: entry.executionContext ?? null,
+            performance: entry.performance ?? null,
+          },
+        });
+    }
+  });
+}
+
+async function readOutcomeWindowsFile(): Promise<OutcomeWindow[]> {
+  const rows = await getDb()
+    .select()
+    .from(outcomeWindowsTable)
+    .orderBy(desc(outcomeWindowsTable.updatedAt));
+
+  return rows.map(mapOutcomeWindowRow);
 }
 
 async function writeOutcomeWindowsFile(entries: OutcomeWindow[]) {
-  await ensureOutcomeWindowsFile();
   const sanitized = entries
     .map((entry) => sanitizeOutcomeWindow(entry))
     .sort(
@@ -176,11 +230,57 @@ async function writeOutcomeWindowsFile(entries: OutcomeWindow[]) {
         new Date(right.updatedAt).getTime() -
         new Date(left.updatedAt).getTime(),
     );
-  await writeFile(
-    OUTCOME_WINDOWS_FILE,
-    JSON.stringify(sanitized, null, 2),
-    "utf8",
-  );
+
+  await getDb().transaction(async (tx) => {
+    for (const entry of sanitized) {
+      await tx
+        .insert(outcomeWindowsTable)
+        .values({
+          orderId: entry.orderId,
+          symbol: entry.symbol,
+          direction: entry.direction,
+          entryPrice: entry.entryPrice,
+          entryTime: entry.entryTime,
+          returnAt5m: entry.returnAt5m,
+          returnAt15m: entry.returnAt15m,
+          returnAt1h: entry.returnAt1h,
+          returnAt4h: entry.returnAt4h,
+          exitPrice: entry.exitPrice,
+          exitTime: entry.exitTime,
+          realizedPnl: entry.realizedPnl,
+          realizedSlippageBps: entry.realizedSlippageBps,
+          featureSnapshot: entry.featureSnapshot,
+          decisionConfidence: entry.decisionConfidence,
+          expectedNetEdgeBps: entry.expectedNetEdgeBps,
+          regime: entry.regime,
+          selectedEngine: entry.selectedEngine,
+          updatedAt: entry.updatedAt,
+        })
+        .onConflictDoUpdate({
+          target: outcomeWindowsTable.orderId,
+          set: {
+            symbol: entry.symbol,
+            direction: entry.direction,
+            entryPrice: entry.entryPrice,
+            entryTime: entry.entryTime,
+            returnAt5m: entry.returnAt5m,
+            returnAt15m: entry.returnAt15m,
+            returnAt1h: entry.returnAt1h,
+            returnAt4h: entry.returnAt4h,
+            exitPrice: entry.exitPrice,
+            exitTime: entry.exitTime,
+            realizedPnl: entry.realizedPnl,
+            realizedSlippageBps: entry.realizedSlippageBps,
+            featureSnapshot: entry.featureSnapshot,
+            decisionConfidence: entry.decisionConfidence,
+            expectedNetEdgeBps: entry.expectedNetEdgeBps,
+            regime: entry.regime,
+            selectedEngine: entry.selectedEngine,
+            updatedAt: entry.updatedAt,
+          },
+        });
+    }
+  });
 }
 
 function enqueueOutcomeWindowWrite<T>(operation: () => Promise<T>): Promise<T> {
@@ -583,18 +683,17 @@ function refreshTradeEntryPerformance(
 }
 
 export async function recordSwarmRun(result: SwarmRunResult): Promise<void> {
-  const entries = await readHistory();
-  entries.unshift({
-    id: makeId("swarm"),
-    type: "swarm_run",
-    timestamp: new Date().toISOString(),
-    symbol: result.marketContext.symbol,
-    timeframe: result.marketContext.timeframe,
-    cached: result.cached,
-    totalElapsedMs: result.totalElapsedMs,
-    consensus: result.consensus,
-  });
-  await writeHistory(entries.slice(0, 500));
+  await getDb()
+    .insert(swarmRuns)
+    .values({
+      id: makeId("swarm"),
+      timestamp: new Date().toISOString(),
+      symbol: result.marketContext.symbol,
+      timeframe: result.marketContext.timeframe,
+      cached: result.cached,
+      totalElapsedMs: result.totalElapsedMs,
+      consensus: result.consensus,
+    });
 }
 
 export async function recordTradeExecution(
@@ -604,19 +703,18 @@ export async function recordTradeExecution(
     executionContext?: TradeExecutionContext;
   },
 ): Promise<void> {
-  const entries = await readHistory();
-  entries.unshift({
-    id: makeId("trade"),
-    type: "trade_execution",
-    timestamp: new Date().toISOString(),
-    symbol: order.symbol,
-    order,
-    success: true,
-    decisionSnapshot: options?.decisionSnapshot,
-    executionContext: options?.executionContext,
-    performance: buildInitialPerformance(order, options?.executionContext),
-  });
-  await writeHistory(entries.slice(0, 500));
+  await getDb()
+    .insert(tradeExecutions)
+    .values({
+      id: makeId("trade"),
+      timestamp: new Date().toISOString(),
+      symbol: order.symbol,
+      order,
+      success: true,
+      decisionSnapshot: options?.decisionSnapshot ?? null,
+      executionContext: options?.executionContext ?? null,
+      performance: buildInitialPerformance(order, options?.executionContext),
+    });
 }
 
 export async function getHistory(limit = 100): Promise<StoredHistoryEntry[]> {
@@ -627,13 +725,13 @@ export async function getHistory(limit = 100): Promise<StoredHistoryEntry[]> {
 export async function getTradeHistory(
   limit = 100,
 ): Promise<StoredTradeExecution[]> {
-  const entries = await readHistory();
-  return entries
-    .filter(
-      (entry): entry is StoredTradeExecution =>
-        entry.type === "trade_execution",
-    )
-    .slice(0, limit);
+  const rows = await getDb()
+    .select()
+    .from(tradeExecutions)
+    .orderBy(desc(tradeExecutions.timestamp))
+    .limit(limit);
+
+  return rows.map(mapTradeExecutionRow);
 }
 
 export async function upsertOutcomeWindow(
@@ -736,10 +834,7 @@ export async function refreshOutcomeWindows(
 export async function refreshTradeExecutionOutcomes(
   limit = 100,
 ): Promise<StoredTradeExecution[]> {
-  const entries = await readHistory();
-  const trades = entries.filter(
-    (entry): entry is StoredTradeExecution => entry.type === "trade_execution",
-  );
+  const trades = await getTradeHistory(1_000);
   if (trades.length === 0) {
     return [];
   }
@@ -782,8 +877,8 @@ export async function refreshTradeExecutionOutcomes(
   }
 
   let changed = false;
-  let nextEntries = entries.map((entry) => {
-    if (entry.type !== "trade_execution" || !entry.order.okxOrderId) {
+  let nextTrades = trades.map((entry) => {
+    if (!entry.order.okxOrderId) {
       return entry;
     }
 
@@ -797,12 +892,9 @@ export async function refreshTradeExecutionOutcomes(
     return synced.entry;
   });
 
-  const tradeEntries = nextEntries.filter(
-    (entry): entry is StoredTradeExecution => entry.type === "trade_execution",
-  );
   const candidateSymbols = [
     ...new Set(
-      tradeEntries
+      nextTrades
         .filter((entry) => {
           const entryPrice =
             entry.performance?.filledPrice ??
@@ -827,11 +919,7 @@ export async function refreshTradeExecutionOutcomes(
   }
 
   const observedAt = new Date().toISOString();
-  nextEntries = nextEntries.map((entry) => {
-    if (entry.type !== "trade_execution") {
-      return entry;
-    }
-
+  nextTrades = nextTrades.map((entry) => {
     const refreshed = refreshTradeEntryPerformance(
       entry,
       tickerMap.get(entry.symbol),
@@ -842,15 +930,10 @@ export async function refreshTradeExecutionOutcomes(
   });
 
   if (changed) {
-    await writeHistory(nextEntries);
+    await persistTradeExecutions(nextTrades);
   }
 
-  return nextEntries
-    .filter(
-      (entry): entry is StoredTradeExecution =>
-        entry.type === "trade_execution",
-    )
-    .slice(0, limit);
+  return nextTrades.slice(0, limit);
 }
 
 export async function buildStrategyPerformanceSummary(

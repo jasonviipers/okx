@@ -14,7 +14,7 @@ import {
   incrementCounter,
   observeHistogram,
   withTelemetrySpan,
-} from "@/lib/telemetry/server";
+} from "@/lib/observability/telemetry";
 
 export const dynamic = "force-dynamic";
 
