@@ -8,6 +8,7 @@ type CacheValue = {
 };
 
 let redisClient: Redis | null = null;
+let redisAvailable = false; // tracks whether last known state was connected
 const memoryStore = new Map<string, CacheValue>();
 
 function getRedisClient(): Redis | null {
@@ -23,26 +24,28 @@ function getRedisClient(): Redis | null {
       enableOfflineQueue: false,
       connectTimeout: 5_000,
       retryStrategy(times) {
-        // Cap backoff at 10 seconds; give up after 10 consecutive failures.
         if (times > 10) {
-          return null; // stop retrying — ioredis will emit "error" once and idle
+          return null;
         }
         return Math.min(times * 500, 10_000);
       },
     });
 
-    // Required: without this listener Node.js throws an unhandled EventEmitter
-    // error on every reconnect attempt, which is what you're seeing in the logs.
     redisClient.on("error", (err: Error) => {
-      console.warn("[redis] connection error:", err.message);
-    });
-
-    redisClient.on("reconnecting", () => {
-      console.info("[redis] reconnecting...");
+      // Only log the first failure per disconnection cycle to avoid log spam.
+      if (redisAvailable) {
+        console.warn("[redis] connection lost:", err.message);
+        redisAvailable = false;
+      }
     });
 
     redisClient.on("ready", () => {
       console.info("[redis] connection ready");
+      redisAvailable = true;
+    });
+
+    redisClient.on("reconnecting", () => {
+      // Intentionally silent — we already logged the error above.
     });
   }
 
@@ -54,12 +57,8 @@ async function ensureRedisConnection(client: Redis): Promise<boolean> {
     if (client.status === "wait") {
       await client.connect();
     }
-    return true;
-  } catch (err) {
-    console.warn(
-      "[redis] could not establish connection, falling back to memory store:",
-      err instanceof Error ? err.message : String(err),
-    );
+    return client.status === "ready";
+  } catch {
     return false;
   }
 }
@@ -87,9 +86,13 @@ export function isRedisConfigured(): boolean {
   return Boolean(process.env.REDIS_URL);
 }
 
+export function isRedisAvailable(): boolean {
+  return redisAvailable;
+}
+
 export async function cacheGet(key: string): Promise<string | null> {
   const client = getRedisClient();
-  if (!client) {
+  if (!client || !redisAvailable) {
     return getMemoryValue(key);
   }
 
@@ -100,8 +103,7 @@ export async function cacheGet(key: string): Promise<string | null> {
 
   try {
     return await client.get(key);
-  } catch (err) {
-    console.warn("[redis] cacheGet failed, falling back to memory:", err instanceof Error ? err.message : String(err));
+  } catch {
     return getMemoryValue(key);
   }
 }
@@ -112,7 +114,7 @@ export async function cacheSet(
   ttlSeconds?: number,
 ): Promise<void> {
   const client = getRedisClient();
-  if (!client) {
+  if (!client || !redisAvailable) {
     setMemoryValue(key, value, ttlSeconds);
     return;
   }
@@ -129,8 +131,7 @@ export async function cacheSet(
     } else {
       await client.set(key, value);
     }
-  } catch (err) {
-    console.warn("[redis] cacheSet failed, falling back to memory:", err instanceof Error ? err.message : String(err));
+  } catch {
     setMemoryValue(key, value, ttlSeconds);
   }
 }
@@ -140,7 +141,7 @@ export async function cacheIncrement(
   ttlSeconds: number,
 ): Promise<number> {
   const client = getRedisClient();
-  if (!client) {
+  if (!client || !redisAvailable) {
     const current = Number(getMemoryValue(key) ?? "0") + 1;
     setMemoryValue(key, String(current), ttlSeconds);
     return current;
@@ -159,8 +160,7 @@ export async function cacheIncrement(
       await client.expire(key, ttlSeconds);
     }
     return current;
-  } catch (err) {
-    console.warn("[redis] cacheIncrement failed, falling back to memory:", err instanceof Error ? err.message : String(err));
+  } catch {
     const current = Number(getMemoryValue(key) ?? "0") + 1;
     setMemoryValue(key, String(current), ttlSeconds);
     return current;
