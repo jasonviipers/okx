@@ -1,3 +1,5 @@
+CREATE EXTENSION IF NOT EXISTS vector;
+
 CREATE TABLE "autonomy_state" (
 	"id" text PRIMARY KEY NOT NULL,
 	"state" jsonb NOT NULL,
