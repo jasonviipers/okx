@@ -2,8 +2,7 @@ import "server-only";
 
 import { parseBoolean, parseNumber } from "@/lib/runtime-utils";
 import type { OpenPositionRecord } from "@/lib/store/open-positions";
-
-const DEFAULT_TRAILING_STOP_DISTANCE_PCT = 1.5;
+import { SWARM_THRESHOLDS } from "@/lib/swarm/thresholds";
 
 export function isTrailingStopEnabled(): boolean {
   return parseBoolean(process.env.TRAILING_STOP_ENABLED, true);
@@ -14,7 +13,7 @@ export function getTrailingStopDistancePct(): number {
     0.1,
     parseNumber(
       process.env.TRAILING_STOP_DISTANCE_PCT,
-      DEFAULT_TRAILING_STOP_DISTANCE_PCT,
+      SWARM_THRESHOLDS.DEFAULT_TRAILING_STOP_DISTANCE_PCT,
     ),
   );
 }

@@ -1,3 +1,4 @@
+import { average, clamp, sum } from "@/lib/math-utils";
 import { parseNumber } from "@/lib/runtime-utils";
 import type { MarketContext, OrderBookEntry, Timeframe } from "@/types/market";
 import type { AccountOverview } from "@/types/trade";
@@ -33,20 +34,6 @@ export interface DecisionFeatureVector {
   maxExecutableSellUsd: number;
   assumedTradeNotionalUsd: number;
   minimumTradeNotionalUsd: number;
-}
-
-function clamp(value: number, min: number, max: number): number {
-  return Math.min(max, Math.max(min, value));
-}
-
-function average(values: number[]): number {
-  return values.length > 0
-    ? values.reduce((sum, value) => sum + value, 0) / values.length
-    : 0;
-}
-
-function sum(values: number[]): number {
-  return values.reduce((total, value) => total + value, 0);
 }
 
 function getReturn(ctx: MarketContext, lookback: number): number {

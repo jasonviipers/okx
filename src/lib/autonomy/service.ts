@@ -1,10 +1,13 @@
 import "server-only";
 
+import { buildPortfolioState } from "@/lib/autonomy/portfolio";
 import { getOkxAccountModeLabel } from "@/lib/configs/okx";
 import {
+  getAutonomyEvaluationMarketContext,
   getMarketSnapshot,
-  getRealtimeMarketContext,
+  isLiveQualitySnapshot,
 } from "@/lib/market-data/service";
+import { clamp01 } from "@/lib/math-utils";
 import { getAccountOverview } from "@/lib/okx/account";
 import { OkxRequestError } from "@/lib/okx/client";
 import {
@@ -22,10 +25,11 @@ import {
   updateAutonomyState,
   writeAutonomyState,
 } from "@/lib/persistence/autonomy-state";
-import { getHistory } from "@/lib/persistence/history";
+import { getHistory, refreshOutcomeWindows } from "@/lib/persistence/history";
 import { parseNumber } from "@/lib/runtime-utils";
 import { autoExecuteConsensus } from "@/lib/swarm/autoExecute";
 import { runSwarm } from "@/lib/swarm/orchestrator";
+import { SWARM_THRESHOLDS } from "@/lib/swarm/thresholds";
 import {
   incrementCounter,
   info,
@@ -41,15 +45,19 @@ import type {
   AutonomyStatus,
   AutonomySuppressedSymbol,
 } from "@/types/api";
-import type { Timeframe } from "@/types/market";
-import type { ExecutionResult, SwarmRunResult } from "@/types/swarm";
+import type { MarketSnapshot, Timeframe } from "@/types/market";
+import type { PortfolioState, SymbolAllocation } from "@/types/portfolio";
+import type {
+  ExecutionResult,
+  RejectionReason,
+  SwarmRunResult,
+} from "@/types/swarm";
 import type { AccountAssetBalance, AccountOverview } from "@/types/trade";
 
 const WORKER_LEASE_TIMEOUT_MS = 5 * 60_000;
 const AUTONOMY_SCHEDULER_TICK_MS = 5_000;
-const DEFAULT_MAX_SYMBOL_ALLOCATION_PCT = 0.35;
-const DEFAULT_PORTFOLIO_BUFFER_PCT = 0.9;
-const DEFAULT_MIN_TRADE_NOTIONAL_USD = 5;
+const DEFAULT_PORTFOLIO_BUFFER_PCT =
+  SWARM_THRESHOLDS.DEFAULT_MAX_BALANCE_USAGE_PCT;
 const DEFAULT_DEGRADED_SNAPSHOT_SUPPRESSION_THRESHOLD = 10;
 const DEFAULT_DEGRADED_SNAPSHOT_SUPPRESSION_WINDOW_MS = 30 * 60_000;
 
@@ -92,6 +100,19 @@ function getDegradedSnapshotSuppressionWindowMs(): number {
 
 function makeLeaseId() {
   return `lease_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+}
+
+async function heartbeatAutonomyLease(leaseId: string) {
+  await updateAutonomyState((current) => {
+    if (!current.inFlight || current.leaseId !== leaseId) {
+      return current;
+    }
+
+    return {
+      ...current,
+      leaseAcquiredAt: new Date().toISOString(),
+    };
+  });
 }
 
 function isLeaseActive(leaseAcquiredAt?: string) {
@@ -290,6 +311,7 @@ function resolveInternalBaseUrl(): string {
 function toAutonomyStatus(
   state: StoredAutonomyState,
   budgetRemainingUsd: number,
+  portfolioState?: PortfolioState,
 ): AutonomyStatus {
   const selectionModeLabel =
     state.selectionMode === "auto"
@@ -325,6 +347,7 @@ function toAutonomyStatus(
     lastSelectedCandidate: state.lastSelectedCandidate,
     lastRejectedReasons: state.lastRejectedReasons,
     suppressedSymbols: toSuppressedSymbols(state),
+    portfolioState,
   };
 }
 
@@ -421,8 +444,20 @@ export async function getAutonomyStatus(): Promise<AutonomyStatus> {
   const budgetUsd = state.budgetUsd ?? 0;
   const budgetRemainingUsd =
     budgetUsd > 0 ? Math.max(0, budgetUsd - usedBudgetUsd) : 0;
+  const portfolioSymbols = [
+    state.symbol,
+    ...(state.candidateSymbols ?? []),
+  ].filter(Boolean);
+  const portfolioState = await buildPortfolioState(
+    portfolioSymbols,
+    budgetRemainingUsd,
+  ).catch(() => undefined);
 
-  return toAutonomyStatus(state, Number(budgetRemainingUsd.toFixed(2)));
+  return toAutonomyStatus(
+    state,
+    Number(budgetRemainingUsd.toFixed(2)),
+    portfolioState,
+  );
 }
 
 export async function startAutonomyLoop(config?: {
@@ -462,10 +497,6 @@ export async function startAutonomyLoop(config?: {
   return getAutonomyStatus();
 }
 
-function clamp01(value: number): number {
-  return Math.min(1, Math.max(0, value));
-}
-
 function findTradingBalance(
   accountOverview: AccountOverview,
   currency?: string,
@@ -479,7 +510,7 @@ function findTradingBalance(
   );
 }
 
-type PortfolioState = {
+type SymbolExecutionContext = {
   baseCurrency?: string;
   quoteCurrency?: string;
   positionState: "flat" | "long";
@@ -497,10 +528,12 @@ type PortfolioState = {
 
 type AutonomySymbolEvaluation = {
   symbol: string;
-  snapshot: Awaited<ReturnType<typeof getMarketSnapshot>>;
+  snapshot: MarketSnapshot;
   result: SwarmRunResult;
   score: number;
   portfolioState: PortfolioState;
+  symbolAllocation?: SymbolAllocation;
+  symbolExecutionContext: SymbolExecutionContext;
   portfolioFitScore: number;
 };
 
@@ -508,11 +541,11 @@ function liveExecutionRequiresRealtime() {
   return getOkxAccountModeLabel() === "live";
 }
 
-function buildPortfolioState(
+function buildSymbolExecutionContext(
   accountOverview: AccountOverview,
   symbol: string,
-  budgetRemainingUsd: number,
-): PortfolioState {
+  portfolioState: PortfolioState,
+): SymbolExecutionContext {
   const symbolParts = parseSpotSymbol(symbol);
   const totalTradingEquityUsd = Math.max(
     accountOverview.tradingBalances.reduce(
@@ -522,28 +555,37 @@ function buildPortfolioState(
     ),
     accountOverview.totalEquity,
   );
-  const maxSymbolAllocationPct = parseNumber(
-    process.env.AUTONOMY_MAX_SYMBOL_ALLOCATION_PCT,
-    DEFAULT_MAX_SYMBOL_ALLOCATION_PCT,
-  );
   const baseBalance = findTradingBalance(accountOverview, symbolParts?.base);
   const quoteBalance = findTradingBalance(accountOverview, symbolParts?.quote);
   const minimumTradeNotionalUsd = parseNumber(
     process.env.MIN_TRADE_NOTIONAL,
-    DEFAULT_MIN_TRADE_NOTIONAL_USD,
+    SWARM_THRESHOLDS.DEFAULT_MIN_TRADE_NOTIONAL,
   );
   const currentBaseInventoryUsd = Math.max(baseBalance?.usdValue ?? 0, 0);
   const availableBaseInventoryUsd = approximateAvailableUsd(baseBalance);
-  const symbolBudgetCapUsd =
-    totalTradingEquityUsd > 0
-      ? totalTradingEquityUsd * maxSymbolAllocationPct
-      : parseNumber(process.env.MAX_POSITION_USD, 100);
-  const budgetCapUsd =
-    budgetRemainingUsd > 0 ? budgetRemainingUsd : Number.POSITIVE_INFINITY;
-  const symbolBudgetRemainingUsd = Math.max(
-    0,
-    Math.min(symbolBudgetCapUsd, budgetCapUsd) - currentBaseInventoryUsd,
+  const symbolAllocation = portfolioState.symbols.find(
+    (allocation) => allocation.symbol === symbol,
   );
+  const symbolBudgetCapUsd =
+    symbolAllocation !== undefined
+      ? portfolioState.totalBudgetUsd * symbolAllocation.maxAllocationPct
+      : parseNumber(
+          process.env.MAX_POSITION_USD,
+          SWARM_THRESHOLDS.DEFAULT_MAX_POSITION_USD,
+        );
+  const budgetCapUsd =
+    portfolioState.totalBudgetUsd > 0
+      ? Math.max(
+          0,
+          portfolioState.totalBudgetUsd - portfolioState.totalDeployedUsd,
+        )
+      : Number.POSITIVE_INFINITY;
+  const symbolBudgetRemainingUsd =
+    symbolAllocation?.budgetRemainingUsd ??
+    Math.max(
+      0,
+      Math.min(symbolBudgetCapUsd, budgetCapUsd) - currentBaseInventoryUsd,
+    );
   const quoteBudgetAvailableUsd = Math.max(
     0,
     Math.min(
@@ -564,9 +606,10 @@ function buildPortfolioState(
     quoteAvailableBalance: Math.max(quoteBalance?.availableBalance ?? 0, 0),
     quoteBudgetAvailableUsd,
     portfolioConcentrationPct:
-      totalTradingEquityUsd > 0
+      symbolAllocation?.allocationPct ??
+      (totalTradingEquityUsd > 0
         ? currentBaseInventoryUsd / totalTradingEquityUsd
-        : 0,
+        : 0),
     symbolBudgetCapUsd,
     symbolBudgetRemainingUsd,
     minimumTradeNotionalUsd,
@@ -575,7 +618,7 @@ function buildPortfolioState(
 
 function computePortfolioFitScore(
   decision: "BUY" | "SELL" | "HOLD",
-  portfolioState: PortfolioState,
+  portfolioState: SymbolExecutionContext,
 ): number {
   const symbolBudgetCapacity =
     portfolioState.symbolBudgetCapUsd > 0
@@ -603,7 +646,7 @@ function computePortfolioFitScore(
       : 0;
   const exposureNeed = clamp01(
     portfolioState.portfolioConcentrationPct /
-      DEFAULT_MAX_SYMBOL_ALLOCATION_PCT,
+      SWARM_THRESHOLDS.DEFAULT_MAX_SYMBOL_ALLOCATION_PCT,
   );
 
   if (decision === "BUY") {
@@ -639,8 +682,15 @@ function computePortfolioFitScore(
 function toAutonomyCandidateScore(
   evaluation: AutonomySymbolEvaluation,
 ): AutonomyCandidateScore {
-  const { symbol, snapshot, result, score, portfolioState, portfolioFitScore } =
-    evaluation;
+  const {
+    symbol,
+    snapshot,
+    result,
+    score,
+    portfolioFitScore,
+    symbolAllocation,
+    symbolExecutionContext,
+  } = evaluation;
   const consensus = result.consensus;
 
   return {
@@ -661,10 +711,14 @@ function toAutonomyCandidateScore(
     decisionCadenceMs: consensus.decisionCadenceMs,
     symbolThrottleMs: consensus.symbolThrottleMs,
     portfolioFitScore,
-    portfolioConcentrationPct: portfolioState.portfolioConcentrationPct,
-    symbolBudgetRemainingUsd: portfolioState.symbolBudgetRemainingUsd,
-    quoteBudgetAvailableUsd: portfolioState.quoteBudgetAvailableUsd,
-    positionState: portfolioState.positionState,
+    portfolioConcentrationPct:
+      symbolAllocation?.allocationPct ??
+      symbolExecutionContext.portfolioConcentrationPct,
+    symbolBudgetRemainingUsd:
+      symbolAllocation?.budgetRemainingUsd ??
+      symbolExecutionContext.symbolBudgetRemainingUsd,
+    quoteBudgetAvailableUsd: symbolExecutionContext.quoteBudgetAvailableUsd,
+    positionState: symbolExecutionContext.positionState,
     rejectionReasons: consensus.rejectionReasons,
   };
 }
@@ -672,7 +726,7 @@ function toAutonomyCandidateScore(
 function scoreAutonomyCandidate(
   evaluation: Omit<AutonomySymbolEvaluation, "score" | "portfolioFitScore">,
 ): { score: number; portfolioFitScore: number } {
-  const { snapshot, result, portfolioState } = evaluation;
+  const { snapshot, result, symbolExecutionContext } = evaluation;
   const consensus = result.consensus;
   const confidence =
     consensus.confidence <= 1
@@ -683,14 +737,14 @@ function scoreAutonomyCandidate(
 
   if (
     !snapshot.status.tradeable ||
-    (liveExecutionRequiresRealtime() && !snapshot.status.realtime) ||
+    (liveExecutionRequiresRealtime() && !isLiveQualitySnapshot(snapshot)) ||
     !consensus.executionEligible
   ) {
     return {
       score: 0,
       portfolioFitScore: computePortfolioFitScore(
         consensus.decision ?? consensus.signal,
-        portfolioState,
+        symbolExecutionContext,
       ),
     };
   }
@@ -707,7 +761,7 @@ function scoreAutonomyCandidate(
     0.5;
   const portfolioFitScore = computePortfolioFitScore(
     consensus.decision ?? consensus.signal,
-    portfolioState,
+    symbolExecutionContext,
   );
 
   return {
@@ -747,11 +801,117 @@ async function resolveAutonomySymbols(
   return symbols.filter((symbol) => !isSymbolSuppressed(state, symbol));
 }
 
+function buildMarketDataRejectedRun(
+  symbol: string,
+  timeframe: Timeframe,
+  snapshot: MarketSnapshot,
+): SwarmRunResult {
+  const rejectionReason: RejectionReason = {
+    layer: "market_data",
+    code: "synthetic_fallback_blocked",
+    summary: "Live decision path requires realtime-quality market data.",
+    detail:
+      "Synthetic or stale market data is not permitted in the live execution path.",
+    metrics: {
+      source: snapshot.status.source,
+      realtime: snapshot.status.realtime,
+      stale: snapshot.status.stale,
+      synthetic: snapshot.status.synthetic,
+      connectionState: snapshot.status.connectionState,
+    },
+  };
+
+  return {
+    consensus: {
+      symbol,
+      timeframe,
+      signal: "HOLD",
+      directionalSignal: "HOLD",
+      directionalConfidence: 0,
+      directionalAgreement: 0,
+      decision: "HOLD",
+      confidence: 0,
+      agreement: 0,
+      decisionSource: "deterministic",
+      featureSummary: {},
+      riskFlags: [],
+      directionalEdgeScore: 0,
+      executionQualityScore: 0,
+      riskPenaltyScore: 0,
+      expectedNetEdgeBps: 0,
+      marketQualityScore: 0,
+      decisionCadenceMs: 20_000,
+      symbolThrottleMs: 30_000,
+      regime: {
+        regime: "illiquid",
+        confidence: 1,
+        trendScore: 0,
+        breakoutScore: 0,
+        meanReversionScore: 0,
+        volatilityScore: 0,
+        liquidityScore: 0,
+        notes: [rejectionReason.summary],
+        generatedAt: new Date().toISOString(),
+      },
+      engineReports: [],
+      metaSelection: {
+        selectedEngine: "none",
+        suitability: 0,
+        actionBias: "HOLD",
+        engineScores: {
+          trend_continuation: 0,
+          breakout: 0,
+          mean_reversion: 0,
+          microstructure: 0,
+          none: 0,
+        },
+        notes: [rejectionReason.summary],
+        generatedAt: new Date().toISOString(),
+      },
+      expectedValue: {
+        grossEdgeBps: 0,
+        estimatedFeeBps: 0,
+        estimatedSlippageBps: 0,
+        netEdgeBps: 0,
+        rewardRiskRatio: 0,
+        tradeAllowed: false,
+        notes: [rejectionReason.summary],
+        generatedAt: new Date().toISOString(),
+      },
+      harness: {
+        generatedAt: new Date().toISOString(),
+        marketQualityScore: 0,
+        liquidityScore: 0,
+        volatilityPenalty: 1,
+        memoryAlignmentScore: 0,
+        confidenceAdjustment: 0,
+        blockedByHarness: true,
+        notes: [rejectionReason.summary],
+      },
+      votes: [],
+      weightedScores: {
+        BUY: 0,
+        SELL: 0,
+        HOLD: 1,
+      },
+      validatedAt: new Date().toISOString(),
+      blocked: true,
+      executionEligible: false,
+      blockReason: rejectionReason.summary,
+      rejectionReasons: [rejectionReason],
+    },
+    marketContext: snapshot.context,
+    totalElapsedMs: 0,
+    cached: false,
+  };
+}
+
 async function evaluateAutonomyCandidate(
   symbol: string,
   timeframe: Timeframe,
   budgetRemainingUsd: number,
   accountOverview: AccountOverview,
+  portfolioState: PortfolioState,
 ): Promise<AutonomySymbolEvaluation> {
   return withTelemetrySpan(
     {
@@ -764,20 +924,58 @@ async function evaluateAutonomyCandidate(
     },
     async (span) => {
       const snapshot = await getMarketSnapshot(symbol, timeframe);
-      const ctx = await getRealtimeMarketContext(symbol, timeframe);
+      const symbolExecutionContext = buildSymbolExecutionContext(
+        accountOverview,
+        symbol,
+        portfolioState,
+      );
+      const symbolAllocation = portfolioState.symbols.find(
+        (allocation) => allocation.symbol === symbol,
+      );
+      const ctx = getAutonomyEvaluationMarketContext(snapshot);
+      if (!ctx) {
+        const result = buildMarketDataRejectedRun(symbol, timeframe, snapshot);
+
+        span.addAttributes({
+          decision: "HOLD",
+          blocked: true,
+          score: 0,
+          portfolioFitScore: 0,
+          marketDataRejected: true,
+        });
+        incrementCounter(
+          "autonomy_candidate_evaluations_total",
+          "Total autonomy candidate evaluations.",
+          1,
+          {
+            timeframe,
+            decision: "HOLD",
+            blocked: true,
+          },
+        );
+
+        return {
+          symbol,
+          snapshot,
+          result,
+          score: 0,
+          portfolioState,
+          symbolAllocation,
+          symbolExecutionContext,
+          portfolioFitScore: 0,
+        };
+      }
+
       const result = await runSwarm(ctx, {
         budgetRemainingUsd,
       });
-      const portfolioState = buildPortfolioState(
-        accountOverview,
-        symbol,
-        budgetRemainingUsd,
-      );
       const { score, portfolioFitScore } = scoreAutonomyCandidate({
         symbol,
         snapshot,
         result,
         portfolioState,
+        symbolAllocation,
+        symbolExecutionContext,
       });
       span.addAttributes({
         decision: result.consensus.decision ?? result.consensus.signal,
@@ -802,6 +1000,8 @@ async function evaluateAutonomyCandidate(
         result,
         score,
         portfolioState,
+        symbolAllocation,
+        symbolExecutionContext,
         portfolioFitScore,
       };
     },
@@ -811,6 +1011,7 @@ async function evaluateAutonomyCandidate(
 function appendAutonomyRejection(
   evaluation: AutonomySymbolEvaluation,
   reason: {
+    layer?: RejectionReason["layer"];
     code: string;
     summary: string;
     detail: string;
@@ -832,7 +1033,7 @@ function appendAutonomyRejection(
         rejectionReasons: [
           ...evaluation.result.consensus.rejectionReasons,
           {
-            layer: "autonomy",
+            layer: reason.layer ?? "autonomy",
             code: reason.code,
             summary: reason.summary,
             detail: reason.detail,
@@ -849,13 +1050,13 @@ function applyPortfolioConstraints(
 ): AutonomySymbolEvaluation {
   const decision =
     evaluation.result.consensus.decision ?? evaluation.result.consensus.signal;
-  const { portfolioState } = evaluation;
+  const { symbolAllocation, symbolExecutionContext } = evaluation;
   let nextEvaluation = evaluation;
 
   if (decision === "BUY") {
     if (
-      portfolioState.symbolBudgetRemainingUsd <
-      portfolioState.minimumTradeNotionalUsd
+      symbolExecutionContext.symbolBudgetRemainingUsd <
+      symbolExecutionContext.minimumTradeNotionalUsd
     ) {
       nextEvaluation = appendAutonomyRejection(nextEvaluation, {
         code: "symbol_budget_exhausted",
@@ -864,19 +1065,23 @@ function applyPortfolioConstraints(
           "The candidate already consumes its allowed portfolio allocation, so autonomy will not add more exposure.",
         metrics: {
           symbolBudgetRemainingUsd: Number(
-            portfolioState.symbolBudgetRemainingUsd.toFixed(4),
+            symbolExecutionContext.symbolBudgetRemainingUsd.toFixed(4),
           ),
-          minimumTradeNotionalUsd: portfolioState.minimumTradeNotionalUsd,
+          minimumTradeNotionalUsd:
+            symbolExecutionContext.minimumTradeNotionalUsd,
           portfolioConcentrationPct: Number(
-            (portfolioState.portfolioConcentrationPct * 100).toFixed(4),
+            (
+              (symbolAllocation?.allocationPct ??
+                symbolExecutionContext.portfolioConcentrationPct) * 100
+            ).toFixed(4),
           ),
         },
       });
     }
 
     if (
-      portfolioState.quoteBudgetAvailableUsd <
-      portfolioState.minimumTradeNotionalUsd
+      symbolExecutionContext.quoteBudgetAvailableUsd <
+      symbolExecutionContext.minimumTradeNotionalUsd
     ) {
       nextEvaluation = appendAutonomyRejection(nextEvaluation, {
         code: "quote_budget_unavailable",
@@ -885,10 +1090,11 @@ function applyPortfolioConstraints(
           "Autonomy rejected the buy because the quote balance and symbol allocation headroom do not support the minimum trade size.",
         metrics: {
           quoteBudgetAvailableUsd: Number(
-            portfolioState.quoteBudgetAvailableUsd.toFixed(4),
+            symbolExecutionContext.quoteBudgetAvailableUsd.toFixed(4),
           ),
-          quoteCurrency: portfolioState.quoteCurrency,
-          minimumTradeNotionalUsd: portfolioState.minimumTradeNotionalUsd,
+          quoteCurrency: symbolExecutionContext.quoteCurrency,
+          minimumTradeNotionalUsd:
+            symbolExecutionContext.minimumTradeNotionalUsd,
         },
       });
     }
@@ -896,8 +1102,8 @@ function applyPortfolioConstraints(
 
   if (
     decision === "SELL" &&
-    portfolioState.availableBaseInventoryUsd <
-      portfolioState.minimumTradeNotionalUsd
+    symbolExecutionContext.availableBaseInventoryUsd <
+      symbolExecutionContext.minimumTradeNotionalUsd
   ) {
     nextEvaluation = appendAutonomyRejection(nextEvaluation, {
       code: "base_inventory_too_small",
@@ -906,10 +1112,31 @@ function applyPortfolioConstraints(
         "Autonomy rejected the sell because the available base inventory does not clear the minimum trade size after portfolio buffers.",
       metrics: {
         availableBaseInventoryUsd: Number(
-          portfolioState.availableBaseInventoryUsd.toFixed(4),
+          symbolExecutionContext.availableBaseInventoryUsd.toFixed(4),
         ),
-        baseCurrency: portfolioState.baseCurrency,
-        minimumTradeNotionalUsd: portfolioState.minimumTradeNotionalUsd,
+        baseCurrency: symbolExecutionContext.baseCurrency,
+        minimumTradeNotionalUsd: symbolExecutionContext.minimumTradeNotionalUsd,
+      },
+    });
+  }
+
+  if (
+    decision !== "HOLD" &&
+    symbolAllocation &&
+    symbolAllocation.allocationPct >= symbolAllocation.maxAllocationPct
+  ) {
+    nextEvaluation = appendAutonomyRejection(nextEvaluation, {
+      layer: "execution",
+      code: "concentration_limit_reached",
+      summary: "Symbol concentration limit reached.",
+      detail: `${evaluation.symbol} already at ${(symbolAllocation.allocationPct * 100).toFixed(1)}% of portfolio.`,
+      metrics: {
+        allocationPct: Number(
+          (symbolAllocation.allocationPct * 100).toFixed(4),
+        ),
+        maxAllocationPct: Number(
+          (symbolAllocation.maxAllocationPct * 100).toFixed(4),
+        ),
       },
     });
   }
@@ -997,6 +1224,7 @@ function getDegradedSnapshotReason(
   evaluation: AutonomySymbolEvaluation,
 ): string {
   return (
+    evaluation.result.consensus.rejectionReasons[0]?.summary ??
     evaluation.snapshot.status.warnings[0] ??
     `Market data remained degraded for ${evaluation.symbol}.`
   );
@@ -1084,6 +1312,10 @@ async function selectAutonomyRun(
         };
       }
 
+      const portfolioState = await buildPortfolioState(
+        symbols,
+        budgetRemainingUsd,
+      );
       const evaluations: AutonomySymbolEvaluation[] = [];
       const errors: string[] = [];
       const settled = await Promise.allSettled(
@@ -1093,6 +1325,7 @@ async function selectAutonomyRun(
             state.timeframe,
             budgetRemainingUsd,
             accountOverview,
+            portfolioState,
           ),
         ),
       );
@@ -1107,7 +1340,8 @@ async function selectAutonomyRun(
           let evaluation = applyPortfolioConstraints(settledResult.value);
           if (
             evaluation.snapshot.status.tradeable &&
-            evaluation.snapshot.status.realtime
+            (!liveExecutionRequiresRealtime() ||
+              isLiveQualitySnapshot(evaluation.snapshot))
           ) {
             recordHealthySymbolSnapshot(marketHealthState, symbol);
           } else {
@@ -1373,6 +1607,12 @@ export async function dispatchAutonomyWorker(options?: {
       let execution: ExecutionResult | undefined;
 
       try {
+        await refreshOutcomeWindows().catch((error) => {
+          warn("autonomy", "Failed to refresh outcome windows", {
+            error,
+          });
+        });
+        await heartbeatAutonomyLease(leaseId);
         const budgetRemainingUsd =
           leased.budgetUsd && leased.budgetUsd > 0
             ? Math.max(
@@ -1389,6 +1629,7 @@ export async function dispatchAutonomyWorker(options?: {
           suppressedSymbols,
           reason: selectionReason,
         } = await selectAutonomyRun(leased, budgetRemainingUsd);
+        await heartbeatAutonomyLease(leaseId);
         const selectedCandidate = best
           ? toAutonomyCandidateScore(best)
           : undefined;
@@ -1403,7 +1644,7 @@ export async function dispatchAutonomyWorker(options?: {
           Date.now() - leased.lastTradeAt < leased.cooldownMs &&
           leased.symbol === result?.consensus.symbol &&
           decision === "BUY" &&
-          best.portfolioState.positionState === "long";
+          best.symbolExecutionContext.positionState === "long";
 
         span.addAttributes({
           budgetRemainingUsd,
@@ -1469,16 +1710,20 @@ export async function dispatchAutonomyWorker(options?: {
                   cooldownMs: leased.cooldownMs,
                   portfolioConcentrationPct: Number(
                     (
-                      best.portfolioState.portfolioConcentrationPct * 100
+                      (best.symbolAllocation?.allocationPct ??
+                        best.symbolExecutionContext.portfolioConcentrationPct) *
+                      100
                     ).toFixed(4),
                   ),
-                  positionState: best.portfolioState.positionState,
+                  positionState: best.symbolExecutionContext.positionState,
                 },
               },
             ],
           };
         } else if (
-          (!best.snapshot.status.tradeable || !best.snapshot.status.realtime) &&
+          (!best.snapshot.status.tradeable ||
+            (liveExecutionRequiresRealtime() &&
+              !isLiveQualitySnapshot(best.snapshot))) &&
           decision !== "HOLD"
         ) {
           execution = {
@@ -1502,17 +1747,20 @@ export async function dispatchAutonomyWorker(options?: {
                 metrics: {
                   realtime: best.snapshot.status.realtime,
                   tradeable: best.snapshot.status.tradeable,
+                  synthetic: best.snapshot.status.synthetic,
                   connectionState: best.snapshot.status.connectionState,
                 },
               },
             ],
           };
         } else {
+          await heartbeatAutonomyLease(leaseId);
           execution = await autoExecuteConsensus(
             best.result.consensus,
             baseUrl,
           );
         }
+        await heartbeatAutonomyLease(leaseId);
 
         await updateAutonomyState((current) => ({
           ...current,

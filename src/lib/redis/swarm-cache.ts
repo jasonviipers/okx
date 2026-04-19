@@ -3,7 +3,7 @@ import "server-only";
 import { cacheGet, cacheSet } from "@/lib/redis/client";
 import { normalizeConsensusResult } from "@/lib/swarm/normalize-consensus";
 import type { Timeframe } from "@/types/market";
-import type { ConsensusResult } from "@/types/swarm";
+import type { ConsensusResult, DecisionResult } from "@/types/swarm";
 
 const DEFAULT_SWARM_CACHE_TTL_SECONDS = 15;
 
@@ -14,17 +14,23 @@ function getSwarmKey(symbol: string, timeframe: Timeframe): string {
 export async function getCachedSwarmResult(
   symbol: string,
   timeframe: Timeframe,
-): Promise<ConsensusResult | null> {
+): Promise<DecisionResult | null> {
   const cached = await cacheGet(getSwarmKey(symbol, timeframe));
-  return cached
-    ? normalizeConsensusResult(JSON.parse(cached) as ConsensusResult)
-    : null;
+  if (!cached) {
+    return null;
+  }
+
+  try {
+    return normalizeConsensusResult(JSON.parse(cached) as ConsensusResult);
+  } catch {
+    return null;
+  }
 }
 
 export async function setCachedSwarmResult(
   symbol: string,
   timeframe: Timeframe,
-  result: ConsensusResult,
+  result: DecisionResult,
   ttlSeconds?: number,
 ): Promise<void> {
   await cacheSet(

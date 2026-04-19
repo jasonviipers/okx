@@ -25,7 +25,14 @@ export type StrategyEngine =
   | "mean_reversion"
   | "microstructure"
   | "none";
-export type DecisionSource = "deterministic" | "diagnostic_swarm";
+export type DecisionSource =
+  | "deterministic"
+  | "diagnostic"
+  | "diagnostic_swarm";
+export type ExecutionDecisionSource = Exclude<
+  DecisionSource,
+  "diagnostic_swarm"
+>;
 
 export interface StrategyEngineReport {
   engine: StrategyEngine;
@@ -122,6 +129,50 @@ export interface RejectionReason {
   metrics?: Record<string, unknown>;
 }
 
+/**
+ * Execution-ready deterministic decision. Supersedes ConsensusResult for
+ * all execution-critical consumers.
+ */
+export type DecisionResult = {
+  symbol: string;
+  timeframe: Timeframe;
+  signal: TradeSignal;
+  directionalSignal: TradeSignal;
+  directionalConfidence: number;
+  directionalAgreement: number;
+  decision: TradeSignal;
+  confidence: number;
+  agreement: number;
+  executionEligible: boolean;
+  blocked: boolean;
+  blockReason?: string;
+  rejectionReasons: RejectionReason[];
+  riskFlags: string[];
+  featureSummary: Record<string, number>;
+  directionalEdgeScore: number;
+  executionQualityScore: number;
+  riskPenaltyScore: number;
+  expectedNetEdgeBps: number;
+  marketQualityScore: number;
+  decisionSource: ExecutionDecisionSource;
+  decisionCadenceMs: number;
+  symbolThrottleMs: number;
+  validatedAt: string;
+  regime: RegimeAnalysis;
+  engineReports: StrategyEngineReport[];
+  metaSelection: MetaSelectionReport;
+  expectedValue: ExpectedValueReport;
+  harness: DecisionHarnessReport;
+  memory?: MemorySummary;
+  reliability?: ReliabilityReport;
+  votes?: AgentVote[];
+  weightedScores?: Record<TradeSignal, number>;
+  researchSummary?: ConsensusResearchSummary;
+};
+
+/**
+ * @deprecated Use DecisionResult for execution-critical flows.
+ */
 export interface ConsensusResult {
   symbol: string;
   timeframe: Timeframe;
@@ -176,7 +227,7 @@ export interface ExecutionResult {
 }
 
 export interface SwarmRunResult {
-  consensus: ConsensusResult;
+  consensus: DecisionResult;
   marketContext: MarketContext;
   totalElapsedMs: number;
   cached: boolean;
@@ -190,7 +241,7 @@ export interface SwarmStreamEvent {
   timeframe?: Timeframe;
   message?: string;
   vote?: AgentVote;
-  consensus?: ConsensusResult;
+  consensus?: DecisionResult | ConsensusResult;
   pipeline?: {
     stage: string;
     detail: string;

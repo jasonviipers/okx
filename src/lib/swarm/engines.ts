@@ -1,3 +1,4 @@
+import { average, clamp01 } from "@/lib/math-utils";
 import type { MarketContext } from "@/types/market";
 import type {
   AgentVote,
@@ -20,16 +21,6 @@ const ROLE_ENGINE_MAP: Record<AgentVote["role"], StrategyEngine> = {
   macro_filter: "none",
   execution_tactician: "none",
 };
-
-function clamp01(value: number): number {
-  return Math.max(0, Math.min(1, value));
-}
-
-function average(values: number[]): number {
-  return values.length > 0
-    ? values.reduce((sum, value) => sum + value, 0) / values.length
-    : 0;
-}
 
 function deriveSignalFromWeights(
   weights: Record<TradeSignal, number>,

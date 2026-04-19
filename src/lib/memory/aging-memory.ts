@@ -3,16 +3,13 @@ import "server-only";
 import { and, desc, eq } from "drizzle-orm";
 import db, { dbFilePath } from "@/db";
 import { swarmMemory } from "@/db/schema";
+import { clamp } from "@/lib/math-utils";
 import type { MarketContext, Timeframe } from "@/types/market";
 import type { MemoryRecall, MemoryRecord, MemorySummary } from "@/types/memory";
 import type { SwarmRunResult, TradeSignal } from "@/types/swarm";
 
 const MEMORY_HALF_LIFE_HOURS = 72;
 const MAX_RECALL_CANDIDATES = 120;
-
-function clamp(value: number, min = 0, max = 1): number {
-  return Math.min(max, Math.max(min, value));
-}
 
 function spreadBps(ctx: MarketContext): number {
   return ctx.ticker.last > 0
@@ -35,7 +32,7 @@ function orderbookImbalance(ctx: MarketContext): number {
 
 function buildMemorySummaryLine(result: SwarmRunResult): string {
   const consensus = result.consensus;
-  const topVote = [...consensus.votes].sort(
+  const topVote = [...(consensus.votes ?? [])].sort(
     (left, right) => right.confidence - left.confidence,
   )[0];
 
@@ -97,6 +94,8 @@ function computeSimilarity(record: MemoryRecord, ctx: MarketContext): number {
       spreadSimilarity * 0.2 +
       volatilitySimilarity * 0.25 +
       imbalanceSimilarity * 0.2,
+    0,
+    1,
   );
 }
 

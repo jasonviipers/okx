@@ -1,3 +1,4 @@
+import { clamp01 } from "@/lib/math-utils";
 import type {
   ConsensusResult,
   MarketRegime,
@@ -6,6 +7,7 @@ import type {
   TradeSignal,
 } from "@/types/swarm";
 import { markConsensusBlocked } from "@/lib/swarm/rejection-utils";
+import { SWARM_THRESHOLDS } from "@/lib/swarm/thresholds";
 
 const REGIME_ENGINE_PRIORITIES: Record<
   MarketRegime,
@@ -55,14 +57,6 @@ const EMPTY_ENGINE_SCORES: Record<StrategyEngine, number> = {
   microstructure: 0,
   none: 0,
 };
-
-const HARD_BLOCK_SUITABILITY = 0.3;
-const MIN_SUPPORTIVE_CONFIDENCE = 0.55;
-const MIN_SUPPORTIVE_AGREEMENT = 0.67;
-
-function clamp01(value: number): number {
-  return Math.max(0, Math.min(1, value));
-}
 
 function determineActionBias(consensus: ConsensusResult): TradeSignal {
   const { BUY, SELL, HOLD } = consensus.weightedScores;
@@ -138,10 +132,10 @@ export function applyMetaSelection(
       );
     }
   } else if (
-    suitability < HARD_BLOCK_SUITABILITY &&
+    suitability < SWARM_THRESHOLDS.HARD_BLOCK_SUITABILITY &&
     consensus.signal !== "HOLD" &&
-    (consensus.confidence < MIN_SUPPORTIVE_CONFIDENCE ||
-      consensus.agreement < MIN_SUPPORTIVE_AGREEMENT)
+    (consensus.confidence < SWARM_THRESHOLDS.MIN_SUPPORTIVE_CONFIDENCE ||
+      consensus.agreement < SWARM_THRESHOLDS.MIN_SUPPORTIVE_AGREEMENT)
   ) {
     nextConfidence = Math.min(nextConfidence, 0.4);
     nextConsensus = markConsensusBlocked(
@@ -155,7 +149,9 @@ export function applyMetaSelection(
           "No strategy engine had enough regime fit to justify execution.",
         metrics: {
           suitability: Number((suitability * 100).toFixed(4)),
-          minSuitability: Number((HARD_BLOCK_SUITABILITY * 100).toFixed(4)),
+          minSuitability: Number(
+            (SWARM_THRESHOLDS.HARD_BLOCK_SUITABILITY * 100).toFixed(4),
+          ),
           confidence: Number((consensus.confidence * 100).toFixed(4)),
           agreement: Number((consensus.agreement * 100).toFixed(4)),
         },

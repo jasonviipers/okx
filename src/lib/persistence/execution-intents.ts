@@ -3,7 +3,7 @@ import "server-only";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import type { StoredExecutionIntent } from "@/types/history";
-import type { ConsensusResult, ExecutionResult } from "@/types/swarm";
+import type { DecisionResult, ExecutionResult } from "@/types/swarm";
 
 export type ExecutionIntentRecord = StoredExecutionIntent;
 
@@ -44,7 +44,7 @@ function makeId() {
 }
 
 export async function createExecutionIntent(
-  consensus: ConsensusResult,
+  consensus: DecisionResult,
   targetSize: number,
 ): Promise<ExecutionIntentRecord> {
   const entries = await readIntents();

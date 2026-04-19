@@ -1,3 +1,4 @@
+import { clamp, clamp01 } from "@/lib/math-utils";
 import { parseNumber } from "@/lib/runtime-utils";
 import {
   buildDecisionFeatures,
@@ -6,11 +7,12 @@ import {
   deriveDecisionCadence,
 } from "@/lib/swarm/decision-features";
 import { classifyMarketRegime } from "@/lib/swarm/regime";
+import { SWARM_THRESHOLDS } from "@/lib/swarm/thresholds";
 import type { MarketContext } from "@/types/market";
 import type { DecisionHarnessReport, MemorySummary } from "@/types/memory";
 import type {
   AgentVote,
-  ConsensusResult,
+  DecisionResult,
   ExpectedValueReport,
   MetaSelectionReport,
   RejectionReason,
@@ -20,26 +22,12 @@ import type {
 } from "@/types/swarm";
 import type { AccountOverview } from "@/types/trade";
 
-const DEFAULT_EXPECTED_FEE_BPS = 8;
-const DEFAULT_MIN_DIRECTIONAL_EDGE = 0.12;
-const DEFAULT_MIN_CONFIDENCE = 0.58;
-const DEFAULT_MIN_MARKET_QUALITY = 0.55;
-const DEFAULT_MIN_NET_EDGE_BPS = 6;
-
 type EngineScoreCard = {
   trend: number;
   breakout: number;
   meanReversion: number;
   microstructure: number;
 };
-
-function clamp(value: number, min: number, max: number): number {
-  return Math.min(max, Math.max(min, value));
-}
-
-function clamp01(value: number): number {
-  return clamp(value, 0, 1);
-}
 
 function clampSigned(value: number): number {
   return clamp(value, -1, 1);
@@ -117,7 +105,7 @@ function microstructureScore(features: DecisionFeatureVector): number {
 }
 
 function selectedEngineForRegime(
-  regime: ConsensusResult["regime"],
+  regime: DecisionResult["regime"],
 ): StrategyEngine {
   switch (regime?.regime) {
     case "trend":
@@ -329,7 +317,7 @@ function buildWeightedScores(
 
 function buildRiskFlags(
   features: DecisionFeatureVector,
-  regime: NonNullable<ConsensusResult["regime"]>,
+  regime: DecisionResult["regime"],
   marketQualityScore: number,
   directionalSignal: TradeSignal,
 ): string[] {
@@ -371,7 +359,7 @@ function buildRiskFlags(
   ) {
     flags.push("inventory_constrained");
   }
-  if (marketQualityScore < DEFAULT_MIN_MARKET_QUALITY) {
+  if (marketQualityScore < SWARM_THRESHOLDS.DEFAULT_MIN_MARKET_QUALITY) {
     flags.push("market_quality_soft");
   }
 
@@ -389,20 +377,20 @@ function buildRejectionReasons(input: {
 }): RejectionReason[] {
   const minDirectionalEdge = parseNumber(
     process.env.MIN_DIRECTIONAL_EDGE_SCORE,
-    DEFAULT_MIN_DIRECTIONAL_EDGE,
+    SWARM_THRESHOLDS.DEFAULT_MIN_DIRECTIONAL_EDGE,
   );
   const minConfidence =
     parseNumber(
       process.env.MIN_CONFIDENCE_THRESHOLD,
-      DEFAULT_MIN_CONFIDENCE * 100,
+      SWARM_THRESHOLDS.DEFAULT_MIN_CONFIDENCE * 100,
     ) / 100;
   const minMarketQuality = parseNumber(
     process.env.MIN_MARKET_QUALITY_SCORE,
-    DEFAULT_MIN_MARKET_QUALITY,
+    SWARM_THRESHOLDS.DEFAULT_MIN_MARKET_QUALITY,
   );
   const minNetEdgeBps = parseNumber(
     process.env.MIN_NET_EDGE_BPS,
-    DEFAULT_MIN_NET_EDGE_BPS,
+    SWARM_THRESHOLDS.DEFAULT_MIN_NET_EDGE_BPS,
   );
   const rejections: RejectionReason[] = [];
   const diagnosticDirectionalThreshold = 0.06;
@@ -560,10 +548,10 @@ export function buildDeterministicConsensus(input: {
   votes?: AgentVote[];
   memorySummary?: MemorySummary;
   budgetRemainingUsd?: number;
-}): ConsensusResult {
+}): DecisionResult {
   const expectedFeeBps = parseNumber(
     process.env.EXPECTED_FEE_BPS,
-    DEFAULT_EXPECTED_FEE_BPS,
+    SWARM_THRESHOLDS.DEFAULT_EXPECTED_FEE_BPS,
   );
   const features = buildDecisionFeatures({
     ctx: input.ctx,

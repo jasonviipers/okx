@@ -3,6 +3,7 @@ import "server-only";
 import { performance } from "node:perf_hooks";
 import { getOkxAccountModeLabel } from "@/lib/configs/okx";
 import { getMarketSnapshot } from "@/lib/market-data/service";
+import { clamp } from "@/lib/math-utils";
 import { getAccountOverview } from "@/lib/okx/account";
 import { getInstrumentRules, normalizeOrderSize } from "@/lib/okx/instruments";
 import { getTicker } from "@/lib/okx/market";
@@ -12,9 +13,11 @@ import {
   finalizeExecutionIntent,
   updateExecutionIntent,
 } from "@/lib/persistence/execution-intents";
-import { getHistory } from "@/lib/persistence/history";
+import { getHistory, upsertOutcomeWindow } from "@/lib/persistence/history";
+import { cacheGet, cacheIncrement, cacheSet } from "@/lib/redis/client";
 import { nowIso, parseBoolean, parseNumber } from "@/lib/runtime-utils";
 import { upsertOpenPosition } from "@/lib/store/open-positions";
+import { SWARM_THRESHOLDS } from "@/lib/swarm/thresholds";
 import { getTrailingStopDistancePct } from "@/lib/swarm/trailing-stop";
 import {
   incrementCounter,
@@ -25,25 +28,21 @@ import {
   withTelemetrySpan,
 } from "@/lib/telemetry/server";
 import type {
-  ConsensusResult,
+  DecisionResult,
   ExecutionResult,
   RejectionReason,
   TradeSignal,
 } from "@/types/swarm";
 import type { TradeDecisionSnapshot } from "@/types/trade";
 
-const DEFAULT_MAX_POSITION_USD = 100;
-const DEFAULT_MIN_CONFIDENCE_THRESHOLD = 60;
-const DEFAULT_MAX_BALANCE_USAGE_PCT = 0.9;
-const DEFAULT_MIN_TRADE_NOTIONAL = 5;
-const DEFAULT_MAX_DAILY_TRADES = 20;
 const DEFAULT_LIVE_TRADING_BUDGET_USD = 0;
 const CIRCUIT_BREAKER_WINDOW_MS = 60_000;
 const CIRCUIT_BREAKER_ERROR_LIMIT = 3;
+const CIRCUIT_BREAKER_TTL_SECONDS = 120;
 const EXECUTION_RESULT_CACHE_MAX_SIZE = 64;
 
-let CIRCUIT_OPEN = false;
-let executionErrorTimestamps: number[] = [];
+const localCircuitOpenUntil = new Map<string, number>();
+const executionErrorTimestamps = new Map<string, number[]>();
 const executionResults = new Map<
   string,
   {
@@ -59,11 +58,24 @@ type ExitPlan = {
   takeProfitLevels: number[];
 };
 
-function normalizeDecision(consensus: ConsensusResult): TradeSignal {
+type ExitPlanPayload = {
+  stop_loss?: number | null;
+  stopLoss?: number | null;
+  take_profit?: number[] | null;
+  takeProfitLevels?: number[] | null;
+  exitPlan?: {
+    stop_loss?: number | null;
+    stopLoss?: number | null;
+    take_profit?: number[] | null;
+    takeProfitLevels?: number[] | null;
+  } | null;
+};
+
+function normalizeDecision(consensus: DecisionResult): TradeSignal {
   return consensus.decision ?? consensus.signal;
 }
 
-function confidencePercent(consensus: ConsensusResult): number {
+function confidencePercent(consensus: DecisionResult): number {
   return consensus.confidence <= 1
     ? consensus.confidence * 100
     : consensus.confidence;
@@ -74,7 +86,7 @@ function deriveSize(confidence: number, maxPositionUsd: number): number {
 }
 
 function buildTradeDecisionSnapshot(
-  consensus: ConsensusResult,
+  consensus: DecisionResult,
 ): TradeDecisionSnapshot {
   return {
     signal: consensus.signal,
@@ -109,10 +121,6 @@ function mergeRejectionReasons(
   });
 }
 
-function clamp(value: number, min: number, max: number): number {
-  return Math.min(max, Math.max(min, value));
-}
-
 function sanitizeTakeProfitLevels(
   direction: TradeSignal,
   levels: number[] | null | undefined,
@@ -133,7 +141,7 @@ function sanitizeTakeProfitLevels(
 }
 
 function deriveFallbackExitPlan(
-  consensus: ConsensusResult,
+  consensus: DecisionResult,
   decision: TradeSignal,
   referencePrice: number,
 ): ExitPlan {
@@ -167,35 +175,66 @@ function deriveFallbackExitPlan(
   };
 }
 
+function getOptionalFiniteNumber(
+  value: object,
+  key: keyof ExitPlanPayload["exitPlan"] | keyof ExitPlanPayload,
+): number | null | undefined {
+  const candidate = Reflect.get(value, key);
+  return typeof candidate === "number" && Number.isFinite(candidate)
+    ? candidate
+    : candidate === null
+      ? null
+      : undefined;
+}
+
+function getOptionalNumberArray(
+  value: object,
+  key: keyof ExitPlanPayload["exitPlan"] | keyof ExitPlanPayload,
+): number[] | null | undefined {
+  const candidate = Reflect.get(value, key);
+  if (candidate === null) {
+    return null;
+  }
+  if (!Array.isArray(candidate)) {
+    return undefined;
+  }
+  return candidate.filter(
+    (entry): entry is number =>
+      typeof entry === "number" && Number.isFinite(entry),
+  );
+}
+
+function getExitPlanPayload(
+  consensus: DecisionResult,
+): ExitPlanPayload["exitPlan"] | null {
+  const exitPlan = Reflect.get(consensus, "exitPlan");
+  return exitPlan && typeof exitPlan === "object"
+    ? (exitPlan as ExitPlanPayload["exitPlan"])
+    : null;
+}
+
 function resolveExitPlan(
-  consensus: ConsensusResult,
+  consensus: DecisionResult,
   decision: TradeSignal,
   referencePrice: number,
 ): ExitPlan {
-  const extendedConsensus = consensus as ConsensusResult & {
-    stop_loss?: number | null;
-    stopLoss?: number | null;
-    take_profit?: number[] | null;
-    takeProfitLevels?: number[] | null;
-    exitPlan?: {
-      stop_loss?: number | null;
-      stopLoss?: number | null;
-      take_profit?: number[] | null;
-      takeProfitLevels?: number[] | null;
-    } | null;
-  };
+  const nestedExitPlan = getExitPlanPayload(consensus);
   const explicitStopLoss =
-    extendedConsensus.stopLoss ??
-    extendedConsensus.stop_loss ??
-    extendedConsensus.exitPlan?.stopLoss ??
-    extendedConsensus.exitPlan?.stop_loss ??
+    getOptionalFiniteNumber(consensus, "stopLoss") ??
+    getOptionalFiniteNumber(consensus, "stop_loss") ??
+    (nestedExitPlan
+      ? (getOptionalFiniteNumber(nestedExitPlan, "stopLoss") ??
+        getOptionalFiniteNumber(nestedExitPlan, "stop_loss"))
+      : undefined) ??
     null;
   const explicitTakeProfits = sanitizeTakeProfitLevels(
     decision,
-    extendedConsensus.takeProfitLevels ??
-      extendedConsensus.take_profit ??
-      extendedConsensus.exitPlan?.takeProfitLevels ??
-      extendedConsensus.exitPlan?.take_profit ??
+    getOptionalNumberArray(consensus, "takeProfitLevels") ??
+      getOptionalNumberArray(consensus, "take_profit") ??
+      (nestedExitPlan
+        ? (getOptionalNumberArray(nestedExitPlan, "takeProfitLevels") ??
+          getOptionalNumberArray(nestedExitPlan, "take_profit"))
+        : undefined) ??
       null,
   );
   const fallbackPlan = deriveFallbackExitPlan(
@@ -219,7 +258,7 @@ function resolveExitPlan(
 }
 
 async function persistManagedOpenPosition(input: {
-  consensus: ConsensusResult;
+  consensus: DecisionResult;
   decision: TradeSignal;
   order: NonNullable<ExecutionResult["order"]>;
   normalizedSize: number;
@@ -264,6 +303,41 @@ async function persistManagedOpenPosition(input: {
       takeProfitLevels: input.exitPlan.takeProfitLevels,
     },
   );
+}
+
+async function persistOutcomeWindowEntry(input: {
+  consensus: DecisionResult;
+  decision: TradeSignal;
+  order: NonNullable<ExecutionResult["order"]>;
+  entryPrice: number;
+}) {
+  if (input.decision === "HOLD") {
+    return;
+  }
+
+  const orderId = input.order.okxOrderId ?? input.order.id;
+  await upsertOutcomeWindow({
+    orderId,
+    symbol: input.consensus.symbol,
+    direction: input.decision,
+    entryPrice: input.entryPrice,
+    entryTime:
+      input.order.filledAt ?? input.order.createdAt ?? new Date().toISOString(),
+    returnAt5m: null,
+    returnAt15m: null,
+    returnAt1h: null,
+    returnAt4h: null,
+    exitPrice: null,
+    exitTime: null,
+    realizedPnl: null,
+    realizedSlippageBps: null,
+    featureSnapshot: input.consensus.featureSummary ?? {},
+    decisionConfidence: input.consensus.confidence,
+    expectedNetEdgeBps: input.consensus.expectedNetEdgeBps ?? 0,
+    regime: input.consensus.regime.regime,
+    selectedEngine: input.consensus.metaSelection.selectedEngine,
+    updatedAt: new Date().toISOString(),
+  });
 }
 
 function buildHoldResult(input: {
@@ -325,11 +399,11 @@ async function deriveExecutableSize(
   ]);
   const maxBalanceUsagePct = parseNumber(
     process.env.MAX_BALANCE_USAGE_PCT,
-    DEFAULT_MAX_BALANCE_USAGE_PCT,
+    SWARM_THRESHOLDS.DEFAULT_MAX_BALANCE_USAGE_PCT,
   );
   const minTradeNotional = parseNumber(
     process.env.MIN_TRADE_NOTIONAL,
-    DEFAULT_MIN_TRADE_NOTIONAL,
+    SWARM_THRESHOLDS.DEFAULT_MIN_TRADE_NOTIONAL,
   );
 
   if (decision === "BUY") {
@@ -387,7 +461,7 @@ async function deriveExecutableSize(
 }
 
 async function checkExecutionRiskGuards(
-  consensus: ConsensusResult,
+  consensus: DecisionResult,
   decision: TradeSignal,
 ): Promise<{
   allowed: boolean;
@@ -396,7 +470,7 @@ async function checkExecutionRiskGuards(
 }> {
   const maxDailyTrades = parseNumber(
     process.env.MAX_DAILY_TRADES,
-    DEFAULT_MAX_DAILY_TRADES,
+    SWARM_THRESHOLDS.DEFAULT_MAX_DAILY_TRADES,
   );
   const history = await getHistory(200);
   const since = Date.now() - 24 * 60 * 60 * 1000;
@@ -464,38 +538,98 @@ async function checkExecutionRiskGuards(
   return { allowed: true };
 }
 
-function recordExecutionError(timestamp: number) {
-  executionErrorTimestamps = executionErrorTimestamps.filter(
+function getExecutionCircuitKey(symbol: string): string {
+  return `circuit:execution:${symbol}`;
+}
+
+function getExecutionCircuitErrorKey(symbol: string): string {
+  return `circuit:execution-errors:${symbol}`;
+}
+
+function isLocalCircuitOpen(symbol: string): boolean {
+  const openUntil = localCircuitOpenUntil.get(symbol);
+  if (!openUntil) {
+    return false;
+  }
+
+  if (openUntil <= Date.now()) {
+    localCircuitOpenUntil.delete(symbol);
+    return false;
+  }
+
+  return true;
+}
+
+async function openExecutionCircuit(symbol: string) {
+  localCircuitOpenUntil.set(
+    symbol,
+    Date.now() + CIRCUIT_BREAKER_TTL_SECONDS * 1_000,
+  );
+  await cacheSet(
+    getExecutionCircuitKey(symbol),
+    "open",
+    CIRCUIT_BREAKER_TTL_SECONDS,
+  );
+}
+
+async function recordExecutionError(
+  symbol: string,
+  timestamp: number,
+): Promise<void> {
+  const recentErrors = (executionErrorTimestamps.get(symbol) ?? []).filter(
     (value) => timestamp - value <= CIRCUIT_BREAKER_WINDOW_MS,
   );
-  executionErrorTimestamps.push(timestamp);
+  recentErrors.push(timestamp);
+  executionErrorTimestamps.set(symbol, recentErrors);
   incrementCounter(
     "auto_execution_errors_total",
     "Total autonomous execution errors.",
   );
 
-  if (executionErrorTimestamps.length >= CIRCUIT_BREAKER_ERROR_LIMIT) {
-    CIRCUIT_OPEN = true;
+  const sharedErrorCount = await cacheIncrement(
+    getExecutionCircuitErrorKey(symbol),
+    Math.ceil(CIRCUIT_BREAKER_WINDOW_MS / 1_000),
+  );
+
+  if (
+    recentErrors.length >= CIRCUIT_BREAKER_ERROR_LIMIT ||
+    sharedErrorCount >= CIRCUIT_BREAKER_ERROR_LIMIT
+  ) {
+    await openExecutionCircuit(symbol);
     telemetryError(
       "swarm.auto_execute",
       "Circuit breaker opened after repeated execution errors",
       {
-        errorsInWindow: executionErrorTimestamps.length,
+        errorsInWindow: Math.max(recentErrors.length, sharedErrorCount),
+        symbol,
         windowMs: CIRCUIT_BREAKER_WINDOW_MS,
       },
     );
     console.error(
-      `[${nowIso()}] [AutoExec] CRITICAL: circuit breaker opened after ${executionErrorTimestamps.length} execution errors within 60 seconds`,
+      `[${nowIso()}] [AutoExec] CRITICAL: circuit breaker opened for ${symbol} after ${Math.max(recentErrors.length, sharedErrorCount)} execution errors within 60 seconds`,
     );
   }
 }
 
-export function isExecutionCircuitOpen(): boolean {
-  return CIRCUIT_OPEN;
+export async function isExecutionCircuitOpen(symbol: string): Promise<boolean> {
+  if (isLocalCircuitOpen(symbol)) {
+    return true;
+  }
+
+  const sharedState = await cacheGet(getExecutionCircuitKey(symbol));
+  if (sharedState === "open") {
+    localCircuitOpenUntil.set(
+      symbol,
+      Date.now() + CIRCUIT_BREAKER_TTL_SECONDS * 1_000,
+    );
+    return true;
+  }
+
+  return false;
 }
 
-export function recordExecutionCircuitError() {
-  recordExecutionError(Date.now());
+export async function recordExecutionCircuitError(symbol: string) {
+  await recordExecutionError(symbol, Date.now());
 }
 
 function logResult(result: ExecutionResult) {
@@ -532,7 +666,7 @@ function logResult(result: ExecutionResult) {
   );
 }
 
-function getExecutionResultCacheKey(consensus: ConsensusResult): string {
+function getExecutionResultCacheKey(consensus: DecisionResult): string {
   return `${consensus.symbol}:${consensus.timeframe}`;
 }
 
@@ -561,7 +695,7 @@ function pruneExecutionResults(now = Date.now()) {
 }
 
 function getDuplicateExecutionResult(
-  consensus: ConsensusResult,
+  consensus: DecisionResult,
   decision: TradeSignal,
 ) {
   pruneExecutionResults();
@@ -581,7 +715,7 @@ function getDuplicateExecutionResult(
 }
 
 function cacheExecutionResult(
-  consensus: ConsensusResult,
+  consensus: DecisionResult,
   decision: TradeSignal,
   result: ExecutionResult,
 ) {
@@ -678,7 +812,7 @@ function mapExecutionGuardReason(
 }
 
 export async function autoExecuteConsensus(
-  consensus: ConsensusResult,
+  consensus: DecisionResult,
   baseUrl: string,
 ): Promise<ExecutionResult> {
   return withTelemetrySpan(
@@ -702,7 +836,7 @@ export async function autoExecuteConsensus(
       );
       const maxPositionUsd = parseNumber(
         process.env.MAX_POSITION_USD,
-        DEFAULT_MAX_POSITION_USD,
+        SWARM_THRESHOLDS.DEFAULT_MAX_POSITION_USD,
       );
       const liveTradingBudgetUsd = parseNumber(
         process.env.LIVE_TRADING_BUDGET_USD,
@@ -710,11 +844,11 @@ export async function autoExecuteConsensus(
       );
       const minConfidenceThreshold = parseNumber(
         process.env.MIN_CONFIDENCE_THRESHOLD,
-        DEFAULT_MIN_CONFIDENCE_THRESHOLD,
+        SWARM_THRESHOLDS.DEFAULT_MIN_CONFIDENCE_THRESHOLD,
       );
       const minTradeNotionalUsd = parseNumber(
         process.env.MIN_TRADE_NOTIONAL,
-        DEFAULT_MIN_TRADE_NOTIONAL,
+        SWARM_THRESHOLDS.DEFAULT_MIN_TRADE_NOTIONAL,
       );
       const accountMode = getOkxAccountModeLabel();
       const cappedMaxPositionUsd =
@@ -848,7 +982,7 @@ export async function autoExecuteConsensus(
         return finalizeResult(result);
       }
 
-      if (CIRCUIT_OPEN) {
+      if (await isExecutionCircuitOpen(consensus.symbol)) {
         const result = buildErrorResult({
           timestamp,
           symbol: consensus.symbol,
@@ -1147,7 +1281,7 @@ export async function autoExecuteConsensus(
         } | null;
 
         if (!response.ok) {
-          recordExecutionError(Date.now());
+          await recordExecutionError(consensus.symbol, Date.now());
           const result = buildErrorResult({
             timestamp,
             symbol: consensus.symbol,
@@ -1161,7 +1295,7 @@ export async function autoExecuteConsensus(
               normalizedSize,
               payload,
             },
-            circuitOpen: CIRCUIT_OPEN,
+            circuitOpen: await isExecutionCircuitOpen(consensus.symbol),
             rejectionReasons: mergeRejectionReasons(
               consensus.rejectionReasons,
               [
@@ -1222,6 +1356,12 @@ export async function autoExecuteConsensus(
             payload.data.order.filledPrice ??
             payload.data.order.referencePrice ??
             executionReferencePrice;
+          await persistOutcomeWindowEntry({
+            consensus,
+            decision,
+            order: payload.data.order,
+            entryPrice,
+          });
           await persistManagedOpenPosition({
             consensus,
             decision,
@@ -1243,7 +1383,7 @@ export async function autoExecuteConsensus(
         cacheExecutionResult(consensus, decision, result);
         return finalizeResult(result);
       } catch (caughtError) {
-        recordExecutionError(Date.now());
+        await recordExecutionError(consensus.symbol, Date.now());
         const result = buildErrorResult({
           timestamp,
           symbol: consensus.symbol,
@@ -1259,7 +1399,7 @@ export async function autoExecuteConsensus(
                 ? caughtError.message
                 : "Unknown execution error",
           },
-          circuitOpen: CIRCUIT_OPEN,
+          circuitOpen: await isExecutionCircuitOpen(consensus.symbol),
           rejectionReasons: mergeRejectionReasons(consensus.rejectionReasons, [
             {
               layer: "execution",

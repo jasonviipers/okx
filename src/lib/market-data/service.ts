@@ -1,6 +1,7 @@
 import "server-only";
 
 import { performance } from "node:perf_hooks";
+import { getOkxAccountModeLabel } from "@/lib/configs/okx";
 import {
   getCandles as getRestCandles,
   getOrderBook as getRestOrderBook,
@@ -59,6 +60,12 @@ const DEFAULT_REST_REFRESH_MS = 10_000;
 const DEFAULT_CANDLE_REFRESH_MS = 30_000;
 const DEFAULT_MARKET_WARMUP_TIMEOUT_MS = 5_000;
 const REQUIRED_WEBSOCKET_CHANNELS: OkxWsChannel[] = ["tickers", "books5"];
+
+export const MARKET_DATA_QUALITY_THRESHOLDS = {
+  maxStaleMs: 10_000,
+  requireWebsocket: true,
+  allowSyntheticFallback: false,
+} as const;
 
 const states = new Map<string, SymbolState>();
 let listenerAttached = false;
@@ -497,6 +504,7 @@ function buildStatus(
     symbol,
     timeframe,
     source: state.source,
+    synthetic: state.source === "fallback",
     realtime,
     stale,
     tradeable,
@@ -507,6 +515,16 @@ function buildStatus(
     lastEventAt: state.lastEventAt,
     warnings: [...warnings],
   };
+}
+
+export function isLiveQualitySnapshot(snapshot: MarketSnapshot): boolean {
+  return (
+    (!MARKET_DATA_QUALITY_THRESHOLDS.requireWebsocket ||
+      snapshot.status.realtime === true) &&
+    snapshot.status.stale === false &&
+    (MARKET_DATA_QUALITY_THRESHOLDS.allowSyntheticFallback ||
+      snapshot.status.synthetic !== true)
+  );
 }
 
 function reportStatusMetrics(status: MarketFeedStatus) {
@@ -645,6 +663,16 @@ export async function getRealtimeMarketContext(
   timeframe: Timeframe,
 ): Promise<MarketContext> {
   const snapshot = await getMarketSnapshot(symbol, timeframe);
+  return snapshot.context;
+}
+
+export function getAutonomyEvaluationMarketContext(
+  snapshot: MarketSnapshot,
+): MarketContext | null {
+  if (getOkxAccountModeLabel() === "live" && !isLiveQualitySnapshot(snapshot)) {
+    return null;
+  }
+
   return snapshot.context;
 }
 

@@ -2,6 +2,7 @@ import "server-only";
 
 import { clampConfidence } from "@/lib/agents/base-agent";
 import { markConsensusBlocked } from "@/lib/swarm/rejection-utils";
+import { SWARM_THRESHOLDS } from "@/lib/swarm/thresholds";
 import type { MarketContext } from "@/types/market";
 import type { DecisionHarnessReport, MemorySummary } from "@/types/memory";
 import type { ConsensusResult, TradeSignal } from "@/types/swarm";
@@ -89,7 +90,7 @@ export function applyDecisionHarness(
   );
   const blockedByHarness =
     consensus.signal !== "HOLD" &&
-    (nextConfidence < 0.58 ||
+    (nextConfidence < SWARM_THRESHOLDS.HARNESS_MIN_CONFIDENCE ||
       (memory.blockedRatio > 0.6 && memoryAlignmentScore < 0));
 
   const harness: DecisionHarnessReport = {

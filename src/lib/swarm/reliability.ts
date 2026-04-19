@@ -1,20 +1,24 @@
 import "server-only";
 
-import { getHistory } from "@/lib/persistence/history";
+import { clamp01 } from "@/lib/math-utils";
+import { getHistory, getOutcomeWindows } from "@/lib/persistence/history";
 import { markConsensusBlocked } from "@/lib/swarm/rejection-utils";
-import type { StoredSwarmRun } from "@/types/history";
+import type { OutcomeWindow, StoredSwarmRun } from "@/types/history";
 import type { ConsensusResult, ReliabilityReport } from "@/types/swarm";
 
 const MAX_HISTORY_LOOKBACK = 150;
-
-function clamp01(value: number): number {
-  return Math.max(0, Math.min(1, value));
-}
 
 function isStoredSwarmRun(
   entry: Awaited<ReturnType<typeof getHistory>>[number],
 ): entry is StoredSwarmRun {
   return entry.type === "swarm_run";
+}
+
+export function computeOutcomeReliability(windows: OutcomeWindow[]): number {
+  const positiveOutcomes = windows.filter(
+    (window) => (window.realizedPnl ?? 0) > 0,
+  ).length;
+  return clamp01(positiveOutcomes / Math.max(windows.length, 1));
 }
 
 export async function applyReliabilityWeighting(
@@ -24,7 +28,10 @@ export async function applyReliabilityWeighting(
     return consensus;
   }
 
-  const history = await getHistory(MAX_HISTORY_LOOKBACK);
+  const [history, outcomeWindows] = await Promise.all([
+    getHistory(MAX_HISTORY_LOOKBACK),
+    getOutcomeWindows(MAX_HISTORY_LOOKBACK),
+  ]);
   const relevantRuns = history.filter(
     (entry): entry is StoredSwarmRun =>
       isStoredSwarmRun(entry) &&
@@ -47,15 +54,26 @@ export async function applyReliabilityWeighting(
   ).length;
   const blockedRate = sampleSize > 0 ? blockedCount / sampleSize : 0;
   const hasEnoughComparableSuccesses = successfulComparableRuns.length >= 3;
-  const reliabilityScore =
+  const historyBasedScore =
     sampleSize > 0 && hasEnoughComparableSuccesses
       ? clamp01(alignedCount / sampleSize - blockedRate * 0.35)
       : 0.5;
+  const resolvedWindows = outcomeWindows.filter(
+    (window) =>
+      window.realizedPnl !== null && window.regime === consensus.regime?.regime,
+  );
+  const outcomeReliabilityScore =
+    resolvedWindows.length >= 5
+      ? computeOutcomeReliability(resolvedWindows)
+      : null;
+  const reliabilityScore = outcomeReliabilityScore ?? historyBasedScore;
 
   const notes = [
-    sampleSize > 0 && hasEnoughComparableSuccesses
-      ? "Reliability estimated from historical swarm runs with the same regime and selected engine."
-      : "Not enough successful comparable history yet; using neutral reliability prior.",
+    outcomeReliabilityScore !== null
+      ? "Reliability estimated from realized outcome windows for the active regime."
+      : sampleSize > 0 && hasEnoughComparableSuccesses
+        ? "Reliability estimated from historical swarm runs with the same regime and selected engine."
+        : "Not enough resolved outcomes yet; using historical-fit fallback.",
   ];
 
   let nextConfidence = consensus.confidence;

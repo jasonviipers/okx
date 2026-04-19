@@ -1,3 +1,4 @@
+import type { PortfolioState } from "@/types/portfolio";
 import type { RejectionReason, TradeSignal } from "@/types/swarm";
 
 export type DataSource =
@@ -100,6 +101,7 @@ export interface AutonomyStatus {
   lastSelectedCandidate?: AutonomyCandidateScore;
   lastRejectedReasons?: RejectionReason[];
   suppressedSymbols?: AutonomySuppressedSymbol[];
+  portfolioState?: PortfolioState;
 }
 
 export interface RuntimeStatus {

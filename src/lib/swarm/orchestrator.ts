@@ -14,6 +14,7 @@ import {
   getCachedSwarmResult,
   setCachedSwarmResult,
 } from "@/lib/redis/swarm-cache";
+import { parseNumber } from "@/lib/runtime-utils";
 import { buildSwarmDecision } from "@/lib/swarm/pipeline";
 import {
   incrementCounter,
@@ -46,10 +47,10 @@ for (const modelId of ACTIVE_SWARM_MODELS) {
 }
 
 function getDiagnosticVoteTimeoutMs() {
-  const parsed = Number(process.env.SWARM_DIAGNOSTIC_VOTE_TIMEOUT_MS);
-  return Number.isFinite(parsed) && parsed > 0
-    ? parsed
-    : DEFAULT_DIAGNOSTIC_VOTE_TIMEOUT_MS;
+  return parseNumber(
+    process.env.SWARM_DIAGNOSTIC_VOTE_TIMEOUT_MS,
+    DEFAULT_DIAGNOSTIC_VOTE_TIMEOUT_MS,
+  );
 }
 
 async function withVoteTimeout<T>(

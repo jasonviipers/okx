@@ -2,10 +2,16 @@ import "server-only";
 
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { average } from "@/lib/math-utils";
 import { getTicker } from "@/lib/okx/market";
 import { getTradeUpdates, type OkxTradeUpdateRow } from "@/lib/okx/orders";
 import { normalizeConsensusResult } from "@/lib/swarm/normalize-consensus";
-import type { StoredHistoryEntry, StoredTradeExecution } from "@/types/history";
+import type {
+  OutcomeWindow,
+  StoredHistoryEntry,
+  StoredTradeExecution,
+  StrategyPerformanceSummary,
+} from "@/types/history";
 import type { SwarmRunResult } from "@/types/swarm";
 import type {
   Order,
@@ -17,7 +23,9 @@ import type {
 
 const DATA_DIR = path.join(process.cwd(), ".data");
 const HISTORY_FILE = path.join(DATA_DIR, "history.json");
+const OUTCOME_WINDOWS_FILE = path.join(DATA_DIR, "outcome-windows.json");
 const OUTCOME_HORIZON_MINUTES = [5, 15, 60, 240, 1440] as const;
+let outcomeWindowWriteQueue: Promise<void> = Promise.resolve();
 
 async function ensureHistoryFile() {
   await mkdir(DATA_DIR, { recursive: true });
@@ -29,19 +37,38 @@ async function ensureHistoryFile() {
   }
 }
 
+async function ensureOutcomeWindowsFile() {
+  await mkdir(DATA_DIR, { recursive: true });
+
+  try {
+    await readFile(OUTCOME_WINDOWS_FILE, "utf8");
+  } catch {
+    await writeFile(OUTCOME_WINDOWS_FILE, "[]", "utf8");
+  }
+}
+
 async function readHistory(): Promise<StoredHistoryEntry[]> {
   await ensureHistoryFile();
   const raw = await readFile(HISTORY_FILE, "utf8");
   try {
     const entries = JSON.parse(raw) as StoredHistoryEntry[];
-    return entries.map((entry) =>
-      entry.type === "swarm_run"
-        ? {
-            ...entry,
-            consensus: normalizeConsensusResult(entry.consensus),
-          }
-        : entry,
-    );
+    const normalized: StoredHistoryEntry[] = [];
+
+    for (const entry of entries) {
+      if (entry.type !== "swarm_run") {
+        normalized.push(entry);
+        continue;
+      }
+
+      try {
+        normalized.push({
+          ...entry,
+          consensus: normalizeConsensusResult(entry.consensus),
+        });
+      } catch {}
+    }
+
+    return normalized;
   } catch {
     return [];
   }
@@ -50,6 +77,177 @@ async function readHistory(): Promise<StoredHistoryEntry[]> {
 async function writeHistory(entries: StoredHistoryEntry[]) {
   await ensureHistoryFile();
   await writeFile(HISTORY_FILE, JSON.stringify(entries, null, 2), "utf8");
+}
+
+function toFiniteNumber(value: unknown, fallback = 0): number {
+  const parsed =
+    typeof value === "number"
+      ? value
+      : typeof value === "string"
+        ? Number(value)
+        : Number.NaN;
+
+  return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+function toNullableFiniteNumber(value: unknown): number | null {
+  const parsed = toFiniteNumber(value, Number.NaN);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function sanitizeOutcomeWindow(value: Partial<OutcomeWindow>): OutcomeWindow {
+  const now = new Date().toISOString();
+  const toOutcomeReturn = (candidate: unknown) =>
+    toNullableFiniteNumber(candidate);
+
+  return {
+    orderId:
+      typeof value.orderId === "string" && value.orderId.trim().length > 0
+        ? value.orderId
+        : `outcome_${Date.now()}`,
+    symbol:
+      typeof value.symbol === "string" && value.symbol.trim().length > 0
+        ? value.symbol
+        : "UNKNOWN",
+    direction: value.direction === "SELL" ? "SELL" : "BUY",
+    entryPrice: Math.max(0, toFiniteNumber(value.entryPrice, 0)),
+    entryTime:
+      typeof value.entryTime === "string" && value.entryTime.trim().length > 0
+        ? value.entryTime
+        : now,
+    returnAt5m: toOutcomeReturn(value.returnAt5m),
+    returnAt15m: toOutcomeReturn(value.returnAt15m),
+    returnAt1h: toOutcomeReturn(value.returnAt1h),
+    returnAt4h: toOutcomeReturn(value.returnAt4h),
+    exitPrice: toNullableFiniteNumber(value.exitPrice),
+    exitTime:
+      typeof value.exitTime === "string" && value.exitTime.trim().length > 0
+        ? value.exitTime
+        : null,
+    realizedPnl: toNullableFiniteNumber(value.realizedPnl),
+    realizedSlippageBps: toNullableFiniteNumber(value.realizedSlippageBps),
+    featureSnapshot: Object.fromEntries(
+      Object.entries(value.featureSnapshot ?? {}).filter(
+        (entry): entry is [string, number] =>
+          Number.isFinite(entry[1]) && entry[0].trim().length > 0,
+      ),
+    ),
+    decisionConfidence: Math.max(
+      0,
+      toFiniteNumber(value.decisionConfidence, 0),
+    ),
+    expectedNetEdgeBps: toFiniteNumber(value.expectedNetEdgeBps, 0),
+    regime:
+      typeof value.regime === "string" && value.regime.trim().length > 0
+        ? value.regime
+        : "unknown",
+    selectedEngine:
+      typeof value.selectedEngine === "string" &&
+      value.selectedEngine.trim().length > 0
+        ? value.selectedEngine
+        : "none",
+    updatedAt:
+      typeof value.updatedAt === "string" && value.updatedAt.trim().length > 0
+        ? value.updatedAt
+        : now,
+  };
+}
+
+async function readOutcomeWindowsFile(): Promise<OutcomeWindow[]> {
+  await ensureOutcomeWindowsFile();
+  const raw = await readFile(OUTCOME_WINDOWS_FILE, "utf8");
+
+  try {
+    const parsed = JSON.parse(raw) as Partial<OutcomeWindow>[];
+    return Array.isArray(parsed)
+      ? parsed.map((entry) => sanitizeOutcomeWindow(entry))
+      : [];
+  } catch {
+    return [];
+  }
+}
+
+async function writeOutcomeWindowsFile(entries: OutcomeWindow[]) {
+  await ensureOutcomeWindowsFile();
+  const sanitized = entries
+    .map((entry) => sanitizeOutcomeWindow(entry))
+    .sort(
+      (left, right) =>
+        new Date(right.updatedAt).getTime() -
+        new Date(left.updatedAt).getTime(),
+    );
+  await writeFile(
+    OUTCOME_WINDOWS_FILE,
+    JSON.stringify(sanitized, null, 2),
+    "utf8",
+  );
+}
+
+function enqueueOutcomeWindowWrite<T>(operation: () => Promise<T>): Promise<T> {
+  const next = outcomeWindowWriteQueue.then(operation, operation);
+  outcomeWindowWriteQueue = next.then(
+    () => undefined,
+    () => undefined,
+  );
+  return next;
+}
+
+function mergeOutcomeWindow(
+  existing: OutcomeWindow | undefined,
+  next: OutcomeWindow,
+): OutcomeWindow {
+  if (!existing) {
+    return next;
+  }
+
+  return sanitizeOutcomeWindow({
+    ...existing,
+    ...next,
+    returnAt5m: next.returnAt5m ?? existing.returnAt5m,
+    returnAt15m: next.returnAt15m ?? existing.returnAt15m,
+    returnAt1h: next.returnAt1h ?? existing.returnAt1h,
+    returnAt4h: next.returnAt4h ?? existing.returnAt4h,
+    exitPrice: next.exitPrice ?? existing.exitPrice,
+    exitTime: next.exitTime ?? existing.exitTime,
+    realizedPnl: next.realizedPnl ?? existing.realizedPnl,
+    realizedSlippageBps:
+      next.realizedSlippageBps ?? existing.realizedSlippageBps,
+    featureSnapshot:
+      Object.keys(next.featureSnapshot).length > 0
+        ? next.featureSnapshot
+        : existing.featureSnapshot,
+    decisionConfidence:
+      next.decisionConfidence > 0
+        ? next.decisionConfidence
+        : existing.decisionConfidence,
+    expectedNetEdgeBps:
+      next.expectedNetEdgeBps !== 0
+        ? next.expectedNetEdgeBps
+        : existing.expectedNetEdgeBps,
+    regime: next.regime !== "unknown" ? next.regime : existing.regime,
+    selectedEngine:
+      next.selectedEngine !== "none"
+        ? next.selectedEngine
+        : existing.selectedEngine,
+    updatedAt: next.updatedAt,
+  });
+}
+
+function computeWindowReturn(
+  direction: OutcomeWindow["direction"],
+  entryPrice: number,
+  currentPrice: number,
+): number | null {
+  if (entryPrice <= 0 || currentPrice <= 0) {
+    return null;
+  }
+
+  const rawReturn =
+    direction === "BUY"
+      ? (currentPrice - entryPrice) / entryPrice
+      : (entryPrice - currentPrice) / entryPrice;
+
+  return round(rawReturn, 6);
 }
 
 function makeId(prefix: string): string {
@@ -438,6 +636,103 @@ export async function getTradeHistory(
     .slice(0, limit);
 }
 
+export async function upsertOutcomeWindow(
+  window: OutcomeWindow,
+): Promise<void> {
+  await enqueueOutcomeWindowWrite(async () => {
+    const nextWindow = sanitizeOutcomeWindow({
+      ...window,
+      updatedAt: new Date().toISOString(),
+    });
+    const entries = await readOutcomeWindowsFile();
+    const index = entries.findIndex(
+      (entry) => entry.orderId === nextWindow.orderId,
+    );
+
+    if (index >= 0) {
+      entries[index] = mergeOutcomeWindow(entries[index], nextWindow);
+    } else {
+      entries.unshift(nextWindow);
+    }
+
+    await writeOutcomeWindowsFile(entries.slice(0, 1_000));
+  });
+}
+
+export async function getOutcomeWindows(limit = 100): Promise<OutcomeWindow[]> {
+  await outcomeWindowWriteQueue;
+  const entries = await readOutcomeWindowsFile();
+  return entries.slice(0, limit);
+}
+
+export async function refreshOutcomeWindows(
+  limit = 200,
+): Promise<OutcomeWindow[]> {
+  const windows = await getOutcomeWindows(limit);
+  if (windows.length === 0) {
+    return [];
+  }
+
+  const symbols = [...new Set(windows.map((window) => window.symbol))];
+  const tickerResults = await Promise.allSettled(
+    symbols.map(async (symbol) => [symbol, await getTicker(symbol)] as const),
+  );
+  const tickerMap = new Map<string, number>();
+
+  for (const result of tickerResults) {
+    if (result.status === "fulfilled") {
+      tickerMap.set(result.value[0], result.value[1].last);
+    }
+  }
+
+  const now = Date.now();
+  const refreshed = windows.map((window) => {
+    const markPrice = tickerMap.get(window.symbol);
+    if (!markPrice || markPrice <= 0) {
+      return window;
+    }
+
+    const entryTimeMs = new Date(window.entryTime).getTime();
+    const resolved = {
+      returnAt5m:
+        window.returnAt5m ??
+        (now - entryTimeMs >= 5 * 60_000
+          ? computeWindowReturn(window.direction, window.entryPrice, markPrice)
+          : null),
+      returnAt15m:
+        window.returnAt15m ??
+        (now - entryTimeMs >= 15 * 60_000
+          ? computeWindowReturn(window.direction, window.entryPrice, markPrice)
+          : null),
+      returnAt1h:
+        window.returnAt1h ??
+        (now - entryTimeMs >= 60 * 60_000
+          ? computeWindowReturn(window.direction, window.entryPrice, markPrice)
+          : null),
+      returnAt4h:
+        window.returnAt4h ??
+        (now - entryTimeMs >= 4 * 60 * 60_000
+          ? computeWindowReturn(window.direction, window.entryPrice, markPrice)
+          : null),
+    };
+
+    return mergeOutcomeWindow(
+      window,
+      sanitizeOutcomeWindow({
+        ...window,
+        ...resolved,
+        updatedAt: new Date().toISOString(),
+      }),
+    );
+  });
+
+  await enqueueOutcomeWindowWrite(async () => {
+    await writeOutcomeWindowsFile(refreshed);
+  });
+
+  return refreshed;
+}
+
 export async function refreshTradeExecutionOutcomes(
   limit = 100,
 ): Promise<StoredTradeExecution[]> {
@@ -556,4 +851,90 @@ export async function refreshTradeExecutionOutcomes(
         entry.type === "trade_execution",
     )
     .slice(0, limit);
+}
+
+export async function buildStrategyPerformanceSummary(
+  regime?: string,
+): Promise<StrategyPerformanceSummary[]> {
+  const [outcomeWindows, history] = await Promise.all([
+    getOutcomeWindows(1_000),
+    getHistory(1_000),
+  ]);
+  const tradeExecutions = history.filter(
+    (entry): entry is StoredTradeExecution => entry.type === "trade_execution",
+  );
+  const swarmRuns = history.filter(
+    (entry): entry is Exclude<StoredHistoryEntry, StoredTradeExecution> =>
+      entry.type === "swarm_run",
+  );
+  const entryTradesByOrderId = new Map(
+    tradeExecutions.map((entry) => [
+      entry.order.okxOrderId ?? entry.order.id,
+      entry,
+    ]),
+  );
+  const relevantOutcomes = outcomeWindows.filter(
+    (window) =>
+      window.realizedPnl !== null && (!regime || window.regime === regime),
+  );
+  const groups = new Map<string, OutcomeWindow[]>();
+
+  for (const window of relevantOutcomes) {
+    const key = `${window.regime}::${window.selectedEngine}`;
+    const group = groups.get(key) ?? [];
+    group.push(window);
+    groups.set(key, group);
+  }
+
+  return [...groups.entries()].map(([key, windows]) => {
+    const [groupRegime, selectedEngine] = key.split("::");
+    const actualNetEdgeBpsValues = windows.map((window) => {
+      const tradeEntry = entryTradesByOrderId.get(window.orderId);
+      const notionalUsd = tradeEntry?.order.notionalUsd ?? 0;
+      return notionalUsd > 0 && window.realizedPnl !== null
+        ? (window.realizedPnl / notionalUsd) * 10_000
+        : 0;
+    });
+    const realizedPnls = windows
+      .map((window) => window.realizedPnl)
+      .filter((value): value is number => value !== null);
+    const slippages = windows
+      .map((window) => window.realizedSlippageBps)
+      .filter((value): value is number => value !== null);
+    const expectedEdges = windows.map((window) => window.expectedNetEdgeBps);
+    const missedTradeCount = swarmRuns.filter(
+      (entry) =>
+        entry.consensus.blocked &&
+        entry.consensus.regime.regime === groupRegime &&
+        entry.consensus.metaSelection.selectedEngine === selectedEngine &&
+        (entry.consensus.expectedNetEdgeBps ?? 0) > 0,
+    ).length;
+    const avgActualNetEdgeBps = average(actualNetEdgeBpsValues);
+    const avgExpectedNetEdgeBps = average(expectedEdges);
+
+    return {
+      regime: groupRegime ?? "unknown",
+      selectedEngine: selectedEngine ?? "none",
+      sampleSize: windows.length,
+      tradeCount: realizedPnls.length,
+      winRate:
+        realizedPnls.length > 0
+          ? Number(
+              (
+                realizedPnls.filter((value) => value > 0).length /
+                realizedPnls.length
+              ).toFixed(4),
+            )
+          : 0,
+      avgRealizedPnl: Number(average(realizedPnls).toFixed(4)),
+      avgSlippageBps: Number(average(slippages).toFixed(4)),
+      avgExpectedNetEdgeBps: Number(avgExpectedNetEdgeBps.toFixed(4)),
+      avgActualNetEdgeBps: Number(avgActualNetEdgeBps.toFixed(4)),
+      edgePredictionError: Number(
+        (avgExpectedNetEdgeBps - avgActualNetEdgeBps).toFixed(4),
+      ),
+      missedTradeCount,
+      generatedAt: new Date().toISOString(),
+    };
+  });
 }

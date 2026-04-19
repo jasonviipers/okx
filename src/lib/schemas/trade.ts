@@ -2,7 +2,11 @@ import { z } from "zod";
 import { aiModeSchema } from "@/lib/configs/models";
 
 const tradeSignalSchema = z.enum(["BUY", "SELL", "HOLD"]);
-const decisionSourceSchema = z.enum(["deterministic", "diagnostic_swarm"]);
+const decisionSourceSchema = z.enum([
+  "deterministic",
+  "diagnostic",
+  "diagnostic_swarm",
+]);
 const rejectionLayerSchema = z.enum([
   "validator",
   "meta_selector",

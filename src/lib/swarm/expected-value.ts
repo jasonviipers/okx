@@ -1,3 +1,4 @@
+import { parseNumber } from "@/lib/runtime-utils";
 import type { MarketContext } from "@/types/market";
 import type {
   ConsensusResult,
@@ -8,10 +9,7 @@ import {
   appendRejectionReason,
   markConsensusBlocked,
 } from "@/lib/swarm/rejection-utils";
-
-const DEFAULT_EXPECTED_FEE_BPS = 10;
-const DEFAULT_MIN_NET_EDGE_BPS = 8;
-const DEFAULT_MIN_REWARD_RISK = 1.35;
+import { SWARM_THRESHOLDS } from "@/lib/swarm/thresholds";
 
 function spreadBps(ctx: MarketContext): number {
   return ctx.ticker.last > 0
@@ -36,14 +34,17 @@ export function applyExpectedValueGate(
   consensus: ConsensusResult,
   ctx: MarketContext,
 ): ConsensusResult {
-  const estimatedFeeBps = Number(
-    process.env.EXPECTED_FEE_BPS || DEFAULT_EXPECTED_FEE_BPS,
+  const estimatedFeeBps = parseNumber(
+    process.env.EXPECTED_FEE_BPS,
+    SWARM_THRESHOLDS.EV_DEFAULT_FEE_BPS,
   );
-  const minNetEdgeBps = Number(
-    process.env.MIN_NET_EDGE_BPS || DEFAULT_MIN_NET_EDGE_BPS,
+  const minNetEdgeBps = parseNumber(
+    process.env.MIN_NET_EDGE_BPS,
+    SWARM_THRESHOLDS.EV_MIN_NET_EDGE_BPS,
   );
-  const minRewardRisk = Number(
-    process.env.MIN_REWARD_RISK || DEFAULT_MIN_REWARD_RISK,
+  const minRewardRisk = parseNumber(
+    process.env.MIN_REWARD_RISK,
+    SWARM_THRESHOLDS.EV_MIN_REWARD_RISK,
   );
 
   const spread = spreadBps(ctx);

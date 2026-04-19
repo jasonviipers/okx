@@ -4,14 +4,14 @@ import { buildDeterministicConsensus } from "@/lib/swarm/deterministic-engine";
 import { withTelemetrySpan } from "@/lib/telemetry/server";
 import type { MarketContext } from "@/types/market";
 import type { MemorySummary } from "@/types/memory";
-import type { AgentVote, ConsensusResult } from "@/types/swarm";
+import type { AgentVote, DecisionResult } from "@/types/swarm";
 
 export async function buildSwarmDecision(
   ctx: MarketContext,
   votes: AgentVote[],
   memorySummary?: MemorySummary,
   budgetRemainingUsd?: number,
-): Promise<{ consensus: ConsensusResult; memorySummary: MemorySummary }> {
+): Promise<{ consensus: DecisionResult; memorySummary: MemorySummary }> {
   return withTelemetrySpan(
     {
       name: "swarm.build_decision",

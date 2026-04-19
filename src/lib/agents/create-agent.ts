@@ -15,6 +15,7 @@ import {
   modelCanVote,
 } from "@/lib/configs/models";
 import type { AgentRoleConfig } from "@/lib/configs/roles";
+import { average } from "@/lib/math-utils";
 import { buildMemoryPrompt, getMemorySummary } from "@/lib/memory/aging-memory";
 import { checkRateLimit } from "@/lib/redis/rate-limiter";
 import type { Candle, MarketContext } from "@/types/market";
@@ -122,12 +123,6 @@ function parseModelVote(text: string, fallback: SignalScore): SignalScore {
   } catch {
     return fallback;
   }
-}
-
-function average(values: number[]): number {
-  return values.length === 0
-    ? 0
-    : values.reduce((sum, value) => sum + value, 0) / values.length;
 }
 
 function candleBody(candle: Candle): number {

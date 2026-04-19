@@ -7,7 +7,11 @@ import {
 import { getInstrumentRules, normalizeOrderSize } from "@/lib/okx/instruments";
 import { getTicker } from "@/lib/okx/market";
 import { getPositions, placeOrder } from "@/lib/okx/orders";
-import { recordTradeExecution } from "@/lib/persistence/history";
+import {
+  getTradeHistory,
+  recordTradeExecution,
+  upsertOutcomeWindow,
+} from "@/lib/persistence/history";
 import { parseBoolean, parseNumber } from "@/lib/runtime-utils";
 import {
   getOpenPositions,
@@ -28,7 +32,7 @@ import {
   warn as telemetryWarn,
   withTelemetrySpan,
 } from "@/lib/telemetry/server";
-import type { Position } from "@/types/trade";
+import type { Order, Position } from "@/types/trade";
 import {
   isExecutionCircuitOpen,
   recordExecutionCircuitError,
@@ -148,8 +152,8 @@ async function executeManagedExit(input: {
     | "stop_loss"
     | "trailing_stop";
   exitTargetIndex?: number;
-}): Promise<{ executed: boolean; exitSize?: number }> {
-  if (isExecutionCircuitOpen()) {
+}): Promise<{ executed: boolean; exitSize?: number; order?: Order }> {
+  if (await isExecutionCircuitOpen(input.position.instId)) {
     telemetryWarn(
       "position.monitor",
       "Managed exit skipped because the execution circuit breaker is open",
@@ -191,9 +195,10 @@ async function executeManagedExit(input: {
     return {
       executed: true,
       exitSize,
+      order,
     };
   } catch (caughtError) {
-    recordExecutionCircuitError();
+    await recordExecutionCircuitError(input.position.instId);
     telemetryError("position.monitor", "Managed exit execution failed", {
       currentPrice: input.currentPrice,
       exitReason: input.exitReason,
@@ -204,6 +209,82 @@ async function executeManagedExit(input: {
     });
     throw caughtError;
   }
+}
+
+function resolveExitFillPrice(
+  order: Order | undefined,
+  fallbackPrice: number,
+): number {
+  return (
+    order?.filledPrice ?? order?.referencePrice ?? order?.price ?? fallbackPrice
+  );
+}
+
+async function finalizeOutcomeWindowForManagedPosition(input: {
+  position: OpenPositionRecord;
+  exitPrice: number;
+  exitTime: string;
+}) {
+  const tradeHistory = await getTradeHistory(1_000);
+  const matchingExits = tradeHistory.filter(
+    (entry) =>
+      entry.executionContext?.positionOrderId === input.position.orderId &&
+      entry.executionContext.exitReason !== undefined,
+  );
+  const realizedPnl = Number(
+    matchingExits
+      .reduce((sum, entry) => {
+        const exitPrice =
+          entry.order.filledPrice ??
+          entry.order.referencePrice ??
+          entry.executionContext?.referencePrice;
+        return exitPrice
+          ? sum +
+              computeRealizedPnl(input.position, exitPrice, entry.order.size)
+          : sum;
+      }, 0)
+      .toFixed(8),
+  );
+  const totalExitSize = matchingExits.reduce(
+    (sum, entry) => sum + entry.order.size,
+    0,
+  );
+  const realizedSlippageBps =
+    totalExitSize > 0
+      ? Number(
+          (
+            matchingExits.reduce(
+              (sum, entry) =>
+                sum +
+                (entry.performance?.realizedSlippageBps ?? 0) *
+                  entry.order.size,
+              0,
+            ) / Math.max(totalExitSize, 1e-8)
+          ).toFixed(4),
+        )
+      : null;
+
+  await upsertOutcomeWindow({
+    orderId: input.position.orderId,
+    symbol: input.position.instId,
+    direction: input.position.direction,
+    entryPrice: input.position.entryPrice,
+    entryTime: new Date(input.position.timestamp).toISOString(),
+    returnAt5m: null,
+    returnAt15m: null,
+    returnAt1h: null,
+    returnAt4h: null,
+    exitPrice: Number(input.exitPrice.toFixed(8)),
+    exitTime: input.exitTime,
+    realizedPnl,
+    realizedSlippageBps,
+    featureSnapshot: {},
+    decisionConfidence: 0,
+    expectedNetEdgeBps: 0,
+    regime: "unknown",
+    selectedEngine: "none",
+    updatedAt: input.exitTime,
+  });
 }
 
 async function handleTakeProfitExit(
@@ -260,14 +341,19 @@ async function handleTakeProfitExit(
   const closed =
     remainingSize <= 0 ||
     nextPosition.tpHitCount >= nextPosition.takeProfitLevels.length;
+  const timestamp = new Date().toISOString();
 
   if (closed) {
+    await finalizeOutcomeWindowForManagedPosition({
+      position,
+      exitPrice: resolveExitFillPrice(result.order, currentPrice),
+      exitTime: timestamp,
+    });
     await removeOpenPosition(position.orderId);
   } else {
     nextPosition = await upsertOpenPosition(nextPosition);
   }
 
-  const timestamp = new Date().toISOString();
   info("position.monitor", "Take-profit exit executed", {
     exitedSize: result.exitSize,
     instId: position.instId,
@@ -317,12 +403,13 @@ async function handleFullExit(
   }
 
   const timestamp = new Date().toISOString();
+  const exitPrice = resolveExitFillPrice(result.order, currentPrice);
   const pnl =
     livePosition?.pnl !== undefined
       ? Number(livePosition.pnl.toFixed(8))
-      : computeRealizedPnl(position, currentPrice, result.exitSize);
+      : computeRealizedPnl(position, exitPrice, result.exitSize);
   info("position.monitor", "Managed protective exit executed", {
-    exitPrice: currentPrice,
+    exitPrice,
     exitReason,
     exitedSize: result.exitSize,
     instId: position.instId,
@@ -347,6 +434,11 @@ async function handleFullExit(
     },
   );
 
+  await finalizeOutcomeWindowForManagedPosition({
+    position,
+    exitPrice,
+    exitTime: timestamp,
+  });
   await removeOpenPosition(position.orderId);
 
   return true;

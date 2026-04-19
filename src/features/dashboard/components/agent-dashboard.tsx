@@ -363,7 +363,7 @@ export function AgentDashboard() {
                       blocked: boolean;
                       executionEligible: boolean;
                       blockReason?: string;
-                      votes: AgentVote[];
+                      votes?: AgentVote[];
                     };
                   },
                   idx: number,
@@ -412,7 +412,7 @@ export function AgentDashboard() {
                         </div>
                       )}
                       <div className="flex gap-1 mt-0.5">
-                        {c.votes.map((vote: AgentVote) => (
+                        {(c.votes ?? []).map((vote: AgentVote) => (
                           <span
                             key={vote.model}
                             className={cn(

@@ -1,15 +1,10 @@
+import { SWARM_THRESHOLDS } from "@/lib/swarm/thresholds";
 import type { MarketContext } from "@/types/market";
 import type { ConsensusResult } from "@/types/swarm";
 import {
   appendRejectionReason,
   markConsensusBlocked,
 } from "@/lib/swarm/rejection-utils";
-
-const MAX_SPREAD_PERCENT = 0.005;
-const MAX_VOLATILITY_PERCENT = 0.03;
-const MIN_CONFIDENCE = 0.6;
-const MIN_AGREEMENT = 0.6;
-const VETO_CONFIDENCE_THRESHOLD = 0.75;
 
 export function validateConsensus(
   consensus: ConsensusResult,
@@ -26,7 +21,7 @@ export function validateConsensus(
     if (
       vetoVote &&
       vetoVote.signal === "HOLD" &&
-      vetoVote.confidence > VETO_CONFIDENCE_THRESHOLD
+      vetoVote.confidence > SWARM_THRESHOLDS.VETO_CONFIDENCE_THRESHOLD
     ) {
       return {
         ...markConsensusBlocked(consensus, {
@@ -36,7 +31,9 @@ export function validateConsensus(
           detail: `Model ${vetoVote.model} issued a HOLD with veto confidence.`,
           metrics: {
             vetoConfidence: Number((vetoVote.confidence * 100).toFixed(4)),
-            vetoThreshold: Number((VETO_CONFIDENCE_THRESHOLD * 100).toFixed(4)),
+            vetoThreshold: Number(
+              (SWARM_THRESHOLDS.VETO_CONFIDENCE_THRESHOLD * 100).toFixed(4),
+            ),
           },
         }),
         validatedAt: new Date().toISOString(),
@@ -57,54 +54,62 @@ export function validateConsensus(
 
   let nextConsensus = consensus;
 
-  if (spreadPercent > MAX_SPREAD_PERCENT) {
+  if (spreadPercent > SWARM_THRESHOLDS.MAX_SPREAD_PERCENT) {
     nextConsensus = appendRejectionReason(nextConsensus, {
       layer: "validator",
       code: "spread_above_max",
       summary: "Spread exceeds the structural execution limit.",
-      detail: `Spread ${(spreadPercent * 100).toFixed(3)}% is above ${(MAX_SPREAD_PERCENT * 100).toFixed(3)}%.`,
+      detail: `Spread ${(spreadPercent * 100).toFixed(3)}% is above ${(SWARM_THRESHOLDS.MAX_SPREAD_PERCENT * 100).toFixed(3)}%.`,
       metrics: {
         spreadPercent: Number((spreadPercent * 100).toFixed(4)),
-        maxSpreadPercent: Number((MAX_SPREAD_PERCENT * 100).toFixed(4)),
+        maxSpreadPercent: Number(
+          (SWARM_THRESHOLDS.MAX_SPREAD_PERCENT * 100).toFixed(4),
+        ),
       },
     });
   }
 
-  if (volatilityPercent > MAX_VOLATILITY_PERCENT) {
+  if (volatilityPercent > SWARM_THRESHOLDS.MAX_VOLATILITY_PERCENT) {
     nextConsensus = appendRejectionReason(nextConsensus, {
       layer: "validator",
       code: "volatility_above_max",
       summary: "Last-candle volatility exceeds the structural limit.",
-      detail: `Last-candle volatility ${(volatilityPercent * 100).toFixed(3)}% is above ${(MAX_VOLATILITY_PERCENT * 100).toFixed(3)}%.`,
+      detail: `Last-candle volatility ${(volatilityPercent * 100).toFixed(3)}% is above ${(SWARM_THRESHOLDS.MAX_VOLATILITY_PERCENT * 100).toFixed(3)}%.`,
       metrics: {
         volatilityPercent: Number((volatilityPercent * 100).toFixed(4)),
-        maxVolatilityPercent: Number((MAX_VOLATILITY_PERCENT * 100).toFixed(4)),
+        maxVolatilityPercent: Number(
+          (SWARM_THRESHOLDS.MAX_VOLATILITY_PERCENT * 100).toFixed(4),
+        ),
       },
     });
   }
 
-  if (consensus.confidence < MIN_CONFIDENCE) {
+  if (consensus.confidence < SWARM_THRESHOLDS.MIN_CONFIDENCE) {
     nextConsensus = appendRejectionReason(nextConsensus, {
       layer: "validator",
       code: "confidence_below_min",
       summary: "Consensus confidence is below the structural minimum.",
-      detail: `Confidence ${(consensus.confidence * 100).toFixed(2)}% is below ${(MIN_CONFIDENCE * 100).toFixed(2)}%.`,
+      detail: `Confidence ${(consensus.confidence * 100).toFixed(2)}% is below ${(SWARM_THRESHOLDS.MIN_CONFIDENCE * 100).toFixed(2)}%.`,
       metrics: {
         confidence: Number((consensus.confidence * 100).toFixed(4)),
-        minConfidence: Number((MIN_CONFIDENCE * 100).toFixed(4)),
+        minConfidence: Number(
+          (SWARM_THRESHOLDS.MIN_CONFIDENCE * 100).toFixed(4),
+        ),
       },
     });
   }
 
-  if (consensus.agreement < MIN_AGREEMENT) {
+  if (consensus.agreement < SWARM_THRESHOLDS.MIN_AGREEMENT) {
     nextConsensus = appendRejectionReason(nextConsensus, {
       layer: "validator",
       code: "agreement_below_min",
       summary: "Agent agreement is below the structural minimum.",
-      detail: `Agreement ${(consensus.agreement * 100).toFixed(2)}% is below ${(MIN_AGREEMENT * 100).toFixed(2)}%.`,
+      detail: `Agreement ${(consensus.agreement * 100).toFixed(2)}% is below ${(SWARM_THRESHOLDS.MIN_AGREEMENT * 100).toFixed(2)}%.`,
       metrics: {
         agreement: Number((consensus.agreement * 100).toFixed(4)),
-        minAgreement: Number((MIN_AGREEMENT * 100).toFixed(4)),
+        minAgreement: Number(
+          (SWARM_THRESHOLDS.MIN_AGREEMENT * 100).toFixed(4),
+        ),
       },
     });
   }

@@ -1,10 +1,25 @@
 services:
+  redis:
+    image: redis:8.6-alpine
+    expose:
+      - "6379"
+    volumes:
+      - redis-data:/data
+    networks:
+      - app-network
+    restart: unless-stopped
+    command: redis-server --appendonly yes
+
   app:
     build:
       context: .
       dockerfile: Dockerfile
+    depends_on:
+      - redis
     env_file:
       - .env
+    environment:
+      REDIS_URL: redis://redis:6379
     expose:
       - "3000"
     volumes:
@@ -32,12 +47,16 @@ services:
       dockerfile: Dockerfile.cron
     depends_on:
       - app
+      - redis
     environment:
       CRON_SECRET: ${CRON_SECRET}
       WORKER_URL: http://app:3000/api/ai/system/autonomy/worker
     networks:
       - app-network
     restart: unless-stopped
+
+volumes:
+  redis-data:
 
 networks:
   app-network:

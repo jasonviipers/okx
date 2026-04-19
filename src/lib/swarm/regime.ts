@@ -1,15 +1,6 @@
+import { average, clamp01 } from "@/lib/math-utils";
 import type { MarketContext } from "@/types/market";
 import type { MarketRegime, RegimeAnalysis } from "@/types/swarm";
-
-function clamp01(value: number): number {
-  return Math.max(0, Math.min(1, value));
-}
-
-function average(values: number[]): number {
-  return values.length > 0
-    ? values.reduce((sum, value) => sum + value, 0) / values.length
-    : 0;
-}
 
 function spreadPercent(ctx: MarketContext): number {
   return ctx.ticker.last > 0
