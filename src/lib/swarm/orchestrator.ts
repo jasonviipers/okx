@@ -305,7 +305,7 @@ export async function collectDiagnosticVotes(
         warn("swarm.orchestrator", "Diagnostic veto layer did not vote", {
           ...diagnostic,
         });
-        throw new Error(
+        errors.push(
           `Missing veto diagnostic votes: ${JSON.stringify(diagnostic)}`,
         );
       }
