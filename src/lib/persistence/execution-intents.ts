@@ -1,53 +1,41 @@
 import "server-only";
 
-import { mkdir, readFile, writeFile } from "node:fs/promises";
-import path from "node:path";
+import { desc, eq } from "drizzle-orm";
+import { getDb } from "@/db";
+import { executionIntents } from "@/db/schema";
 import type { StoredExecutionIntent } from "@/types/history";
 import type { DecisionResult, ExecutionResult } from "@/types/swarm";
 
 export type ExecutionIntentRecord = StoredExecutionIntent;
 
-const DATA_DIR = path.join(process.cwd(), ".data");
-const EXECUTION_INTENTS_FILE = path.join(DATA_DIR, "execution-intents.json");
-
-async function ensureFile() {
-  await mkdir(DATA_DIR, { recursive: true });
-
-  try {
-    await readFile(EXECUTION_INTENTS_FILE, "utf8");
-  } catch {
-    await writeFile(EXECUTION_INTENTS_FILE, "[]", "utf8");
-  }
-}
-
-async function readIntents(): Promise<ExecutionIntentRecord[]> {
-  await ensureFile();
-  const raw = await readFile(EXECUTION_INTENTS_FILE, "utf8");
-  try {
-    return JSON.parse(raw) as ExecutionIntentRecord[];
-  } catch {
-    return [];
-  }
-}
-
-async function writeIntents(entries: ExecutionIntentRecord[]) {
-  await ensureFile();
-  await writeFile(
-    EXECUTION_INTENTS_FILE,
-    JSON.stringify(entries, null, 2),
-    "utf8",
-  );
-}
-
 function makeId() {
   return `intent_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function mapRow(
+  row: typeof executionIntents.$inferSelect,
+): ExecutionIntentRecord {
+  return {
+    id: row.id,
+    createdAt: row.createdAt,
+    updatedAt: row.updatedAt,
+    symbol: row.symbol,
+    timeframe: row.timeframe,
+    decision: row.decision,
+    confidence: row.confidence,
+    targetSize: row.targetSize,
+    normalizedSize: row.normalizedSize ?? undefined,
+    status: row.status,
+    reason: row.reason ?? undefined,
+    response: row.response,
+    decisionSnapshot: row.decisionSnapshot,
+  };
 }
 
 export async function createExecutionIntent(
   consensus: DecisionResult,
   targetSize: number,
 ): Promise<ExecutionIntentRecord> {
-  const entries = await readIntents();
   const timestamp = new Date().toISOString();
   const record: ExecutionIntentRecord = {
     id: makeId(),
@@ -74,34 +62,77 @@ export async function createExecutionIntent(
       rejectionReasons: consensus.rejectionReasons,
     },
   };
-  entries.unshift(record);
-  await writeIntents(entries.slice(0, 500));
+
+  await getDb()
+    .insert(executionIntents)
+    .values({
+      id: record.id,
+      createdAt: record.createdAt,
+      updatedAt: record.updatedAt,
+      symbol: record.symbol,
+      timeframe: record.timeframe,
+      decision: record.decision,
+      confidence: record.confidence,
+      targetSize: record.targetSize,
+      normalizedSize: record.normalizedSize ?? null,
+      status: record.status,
+      reason: record.reason ?? null,
+      response: record.response,
+      decisionSnapshot: record.decisionSnapshot,
+    });
+
   return record;
 }
 
 export async function getExecutionIntents(
   limit = 100,
 ): Promise<ExecutionIntentRecord[]> {
-  const entries = await readIntents();
-  return entries.slice(0, limit);
+  const rows = await getDb()
+    .select()
+    .from(executionIntents)
+    .orderBy(desc(executionIntents.createdAt))
+    .limit(limit);
+
+  return rows.map(mapRow);
 }
 
 export async function updateExecutionIntent(
   id: string,
   patch: Partial<ExecutionIntentRecord>,
 ) {
-  const entries = await readIntents();
-  const index = entries.findIndex((entry) => entry.id === id);
-  if (index < 0) {
+  const [currentRow] = await getDb()
+    .select()
+    .from(executionIntents)
+    .where(eq(executionIntents.id, id))
+    .limit(1);
+
+  if (!currentRow) {
     return;
   }
 
-  entries[index] = {
-    ...entries[index],
+  const current = mapRow(currentRow);
+  const next: ExecutionIntentRecord = {
+    ...current,
     ...patch,
     updatedAt: new Date().toISOString(),
   };
-  await writeIntents(entries.slice(0, 500));
+
+  await getDb()
+    .update(executionIntents)
+    .set({
+      updatedAt: next.updatedAt,
+      symbol: next.symbol,
+      timeframe: next.timeframe,
+      decision: next.decision,
+      confidence: next.confidence,
+      targetSize: next.targetSize,
+      normalizedSize: next.normalizedSize ?? null,
+      status: next.status,
+      reason: next.reason ?? null,
+      response: next.response,
+      decisionSnapshot: next.decisionSnapshot,
+    })
+    .where(eq(executionIntents.id, id));
 }
 
 export async function finalizeExecutionIntent(

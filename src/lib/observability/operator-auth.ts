@@ -5,7 +5,7 @@ import { NextResponse } from "next/server";
 import { env } from "@/env";
 
 function getOperatorToken() {
-  return env.TELEMETRY_TOKEN ?? env.CRON_SECRET;
+  return env.CRON_SECRET;
 }
 
 export function isOperatorAuthorized(

@@ -1,9 +1,15 @@
 import "server-only";
 
-import { and, desc, eq } from "drizzle-orm";
-import db, { dbFilePath } from "@/db";
+import { and, desc, eq, isNotNull } from "drizzle-orm";
+import { cosineDistance } from "drizzle-orm/sql/functions/vector";
+import { getDb } from "@/db";
 import { swarmMemory } from "@/db/schema";
+import { env } from "@/env";
 import { clamp } from "@/lib/math-utils";
+import {
+  buildMarketContextEmbedding,
+  buildSwarmMemoryEmbedding,
+} from "@/lib/memory/embeddings";
 import type { MarketContext, Timeframe } from "@/types/market";
 import type { MemoryRecall, MemoryRecord, MemorySummary } from "@/types/memory";
 import type { SwarmRunResult, TradeSignal } from "@/types/swarm";
@@ -102,22 +108,24 @@ function computeSimilarity(record: MemoryRecord, ctx: MarketContext): number {
 export async function storeSwarmMemory(result: SwarmRunResult): Promise<void> {
   const { marketContext, consensus } = result;
 
-  await db.insert(swarmMemory).values({
-    createdAt: new Date().toISOString(),
-    symbol: marketContext.symbol,
-    timeframe: marketContext.timeframe,
-    signal: consensus.signal,
-    confidence: consensus.confidence,
-    agreement: consensus.agreement,
-    blocked: consensus.blocked,
-    blockReason: consensus.blockReason ?? null,
-    price: marketContext.ticker.last,
-    change24h: marketContext.ticker.change24h,
-    spreadBps: spreadBps(marketContext),
-    volatilityPct: volatilityPct(marketContext),
-    imbalance: orderbookImbalance(marketContext),
-    summary: buildMemorySummaryLine(result),
-  });
+  await getDb()
+    .insert(swarmMemory)
+    .values({
+      symbol: marketContext.symbol,
+      timeframe: marketContext.timeframe,
+      signal: consensus.signal,
+      confidence: consensus.confidence,
+      agreement: consensus.agreement,
+      blocked: consensus.blocked,
+      blockReason: consensus.blockReason ?? null,
+      price: marketContext.ticker.last,
+      change24h: marketContext.ticker.change24h,
+      spreadBps: spreadBps(marketContext),
+      volatilityPct: volatilityPct(marketContext),
+      imbalance: orderbookImbalance(marketContext),
+      summary: buildMemorySummaryLine(result),
+      embedding: buildSwarmMemoryEmbedding(result),
+    });
 }
 
 export async function getRecentMemories(
@@ -127,7 +135,7 @@ export async function getRecentMemories(
 ): Promise<MemoryRecord[]> {
   const rows =
     symbol && timeframe
-      ? await db
+      ? await getDb()
           .select()
           .from(swarmMemory)
           .where(
@@ -138,7 +146,7 @@ export async function getRecentMemories(
           )
           .orderBy(desc(swarmMemory.createdAt))
           .limit(limit)
-      : await db
+      : await getDb()
           .select()
           .from(swarmMemory)
           .orderBy(desc(swarmMemory.createdAt))
@@ -150,19 +158,40 @@ export async function getRecentMemories(
 export async function getMemorySummary(
   ctx: MarketContext,
 ): Promise<MemorySummary> {
-  const rows = await db
+  const queryEmbedding = buildMarketContextEmbedding(ctx, {
+    summary: `${ctx.symbol} ${ctx.timeframe}`,
+  });
+  const similarityOrder = cosineDistance(swarmMemory.embedding, queryEmbedding);
+
+  const rows = await getDb()
     .select()
     .from(swarmMemory)
     .where(
       and(
         eq(swarmMemory.symbol, ctx.symbol),
         eq(swarmMemory.timeframe, ctx.timeframe),
+        isNotNull(swarmMemory.embedding),
       ),
     )
-    .orderBy(desc(swarmMemory.createdAt))
+    .orderBy(similarityOrder, desc(swarmMemory.createdAt))
     .limit(MAX_RECALL_CANDIDATES);
 
-  const records = rows.map(mapRow);
+  const fallbackRows =
+    rows.length > 0
+      ? rows
+      : await getDb()
+          .select()
+          .from(swarmMemory)
+          .where(
+            and(
+              eq(swarmMemory.symbol, ctx.symbol),
+              eq(swarmMemory.timeframe, ctx.timeframe),
+            ),
+          )
+          .orderBy(desc(swarmMemory.createdAt))
+          .limit(MAX_RECALL_CANDIDATES);
+
+  const records = fallbackRows.map(mapRow);
   const recalls: MemoryRecall[] = records.map((record) => {
     const ageHours = computeAgeHours(record.createdAt);
     const decayWeight = computeDecayWeight(ageHours);
@@ -263,5 +292,5 @@ export function buildMemoryPrompt(summary: MemorySummary): string {
 }
 
 export function getMemoryDbPath(): string {
-  return dbFilePath;
+  return env.DATABASE_URL ?? "DATABASE_URL not configured";
 }

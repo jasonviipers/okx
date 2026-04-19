@@ -1,36 +1,167 @@
 services:
-  redis:
-    image: redis:8.6-alpine
+  postgres:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-trading}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change-me-postgres-password}
+      POSTGRES_DB: ${POSTGRES_DB:-trading}
     expose:
-      - "6379"
-    volumes:
-      - redis-data:/data
+      - "5432"
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB || exit 1",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
     networks:
       - app-network
     restart: unless-stopped
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./postgres/init:/docker-entrypoint-initdb.d:ro
+
+  redis:
+    image: redis:8.6-alpine
     command: redis-server --appendonly yes
+    expose:
+      - "6379"
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
       timeout: 3s
-      retries: 5
+      retries: 10
       start_period: 5s
+    networks:
+      - app-network
+    restart: unless-stopped
+    volumes:
+      - redis-data:/data
+
+  minio:
+    image: minio/minio:latest
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-change-me-minio-root-password}
+    expose:
+      - "9000"
+    networks:
+      - app-network
+    ports:
+      - "9001:9001"
+    restart: unless-stopped
+    volumes:
+      - minio-data:/data
+
+  minio-init:
+    image: minio/mc:latest
+    depends_on:
+      minio:
+        condition: service_started
+    entrypoint: ["/bin/sh", "/init/minio-init.sh"]
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-change-me-minio-root-password}
+      MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY:-trading-app}
+      MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:-change-me-minio-app-password}
+      MINIO_BUCKET_TELEMETRY: ${MINIO_BUCKET_TELEMETRY:-telemetry}
+      MINIO_BUCKET_BACKUPS: ${MINIO_BUCKET_BACKUPS:-backups}
+      MINIO_BUCKET_MARKET_DATA: ${MINIO_BUCKET_MARKET_DATA:-market-data}
+    networks:
+      - app-network
+    restart: "no"
+    volumes:
+      - ./docker/minio-init.sh:/init/minio-init.sh:ro
+
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:latest
+    command: ["--config=/etc/otelcol-contrib/config.yaml"]
+    depends_on:
+      loki:
+        condition: service_started
+      prometheus:
+        condition: service_started
+      jaeger:
+        condition: service_started
+    expose:
+      - "4317"
+      - "4318"
+      - "8888"
+    networks:
+      - app-network
+    restart: unless-stopped
+    volumes:
+      - ./otel/otel-collector.yaml:/etc/otelcol-contrib/config.yaml:ro
+
+  loki:
+    image: grafana/loki:latest
+    command: ["-config.file=/etc/loki/loki-config.yaml"]
+    expose:
+      - "3100"
+    networks:
+      - app-network
+    restart: unless-stopped
+    volumes:
+      - loki-data:/loki
+      - ./loki/loki-config.yaml:/etc/loki/loki-config.yaml:ro
+
+  prometheus:
+    image: prom/prometheus:latest
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--web.enable-remote-write-receiver"
+    expose:
+      - "9090"
+    networks:
+      - app-network
+    restart: unless-stopped
+    volumes:
+      - prometheus-data:/prometheus
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+
+  jaeger:
+    image: jaegertracing/all-in-one:latest
+    environment:
+      COLLECTOR_OTLP_ENABLED: "true"
+      SPAN_STORAGE_TYPE: memory
+      QUERY_BASE_PATH: /jaeger
+    expose:
+      - "4317"
+    networks:
+      - app-network
+    ports:
+      - "${JAEGER_UI_PORT:-16686}:16686"
+    restart: unless-stopped
 
   app:
     build:
       context: .
       dockerfile: Dockerfile
     depends_on:
+      postgres:
+        condition: service_healthy
       redis:
-        condition: service_healthy   # wait until redis-cli ping succeeds
+        condition: service_healthy
+      minio-init:
+        condition: service_completed_successfully
+      otel-collector:
+        condition: service_started
     env_file:
       - .env
     environment:
-      REDIS_URL: redis://redis:6379
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379}
+      DATABASE_URL: ${DATABASE_URL:-postgresql://trading:change-me-postgres-password@postgres:5432/trading}
+      MINIO_ENDPOINT: ${MINIO_ENDPOINT:-http://minio:9000}
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-http://otel-collector:4317}
+      APP_URL: ${APP_URL:-http://localhost}
+      NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL:-http://localhost}
     expose:
       - "3000"
-    volumes:
-      - ./.data:/app/.data
     networks:
       - app-network
     restart: unless-stopped
@@ -39,6 +170,10 @@ services:
     image: nginx:alpine
     depends_on:
       app:
+        condition: service_started
+      grafana:
+        condition: service_started
+      jaeger:
         condition: service_started
     networks:
       - app-network
@@ -65,8 +200,38 @@ services:
       - app-network
     restart: unless-stopped
 
+  grafana:
+    image: grafana/grafana-oss:latest
+    depends_on:
+      prometheus:
+        condition: service_started
+      loki:
+        condition: service_started
+      jaeger:
+        condition: service_started
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: ${GF_SECURITY_ADMIN_PASSWORD:-change-me-grafana-password}
+      GF_AUTH_ANONYMOUS_ENABLED: "false"
+      GF_SERVER_ROOT_URL: "%(protocol)s://%(domain)s/grafana/"
+      GF_SERVER_SERVE_FROM_SUB_PATH: "true"
+    networks:
+      - app-network
+    ports:
+      - "3001:3000"
+    restart: unless-stopped
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+
 volumes:
   redis-data:
+  postgres-data:
+  minio-data:
+  prometheus-data:
+  grafana-data:
+  loki-data:
+  jaeger-data:
 
 networks:
   app-network:

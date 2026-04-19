@@ -8,7 +8,7 @@ import {
   incrementCounter,
   observeHistogram,
   withTelemetrySpan,
-} from "@/lib/telemetry/server";
+} from "@/lib/observability/telemetry";
 
 interface OkxEnvelope<T> {
   code?: string;

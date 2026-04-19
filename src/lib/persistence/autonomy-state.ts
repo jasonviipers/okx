@@ -1,7 +1,8 @@
 import "server-only";
 
-import { mkdir, readFile, writeFile } from "node:fs/promises";
-import path from "node:path";
+import { eq } from "drizzle-orm";
+import { getDb } from "@/db";
+import { autonomyState } from "@/db/schema";
 import { env } from "@/env";
 import { parseNumber } from "@/lib/runtime-utils";
 import type { AutonomyCandidateScore } from "@/types/api";
@@ -44,8 +45,7 @@ export interface StoredAutonomyState {
   leaseAcquiredAt?: string;
 }
 
-const DATA_DIR = path.join(process.cwd(), ".data");
-const AUTONOMY_FILE = path.join(DATA_DIR, "autonomy-state.json");
+const AUTONOMY_STATE_ID = "autonomy";
 
 function parseSelectionMode(value: string | undefined): AutonomySelectionMode {
   return value?.toLowerCase() === "fixed" ? "fixed" : "auto";
@@ -78,45 +78,80 @@ export function getDefaultAutonomyState(): StoredAutonomyState {
   };
 }
 
-async function ensureFile() {
-  await mkdir(DATA_DIR, { recursive: true });
+function normalizeAutonomyState(
+  state?: Partial<StoredAutonomyState> | null,
+): StoredAutonomyState {
+  return {
+    ...getDefaultAutonomyState(),
+    ...(state ?? {}),
+  };
+}
 
-  try {
-    await readFile(AUTONOMY_FILE, "utf8");
-  } catch {
-    await writeFile(
-      AUTONOMY_FILE,
-      JSON.stringify(getDefaultAutonomyState(), null, 2),
-      "utf8",
-    );
-  }
+async function upsertState(state: StoredAutonomyState) {
+  await getDb()
+    .insert(autonomyState)
+    .values({
+      id: AUTONOMY_STATE_ID,
+      state,
+      updatedAt: new Date().toISOString(),
+    })
+    .onConflictDoUpdate({
+      target: autonomyState.id,
+      set: {
+        state,
+        updatedAt: new Date().toISOString(),
+      },
+    });
 }
 
 export async function readAutonomyState(): Promise<StoredAutonomyState> {
-  await ensureFile();
-  const raw = await readFile(AUTONOMY_FILE, "utf8");
+  const [row] = await getDb()
+    .select()
+    .from(autonomyState)
+    .where(eq(autonomyState.id, AUTONOMY_STATE_ID))
+    .limit(1);
 
-  try {
-    const parsed = JSON.parse(raw) as Partial<StoredAutonomyState>;
-    return {
-      ...getDefaultAutonomyState(),
-      ...parsed,
-    };
-  } catch {
-    return getDefaultAutonomyState();
+  const normalizedState = normalizeAutonomyState(row?.state);
+  if (!row) {
+    await upsertState(normalizedState);
   }
+
+  return normalizedState;
 }
 
 export async function writeAutonomyState(state: StoredAutonomyState) {
-  await ensureFile();
-  await writeFile(AUTONOMY_FILE, JSON.stringify(state, null, 2), "utf8");
+  await upsertState(normalizeAutonomyState(state));
 }
 
 export async function updateAutonomyState(
   updater: (state: StoredAutonomyState) => StoredAutonomyState,
 ): Promise<StoredAutonomyState> {
-  const current = await readAutonomyState();
-  const next = updater(current);
-  await writeAutonomyState(next);
-  return next;
+  return getDb().transaction(async (tx) => {
+    const [row] = await tx
+      .select()
+      .from(autonomyState)
+      .where(eq(autonomyState.id, AUTONOMY_STATE_ID))
+      .for("update")
+      .limit(1);
+
+    const current = normalizeAutonomyState(row?.state);
+    const next = normalizeAutonomyState(updater(current));
+
+    await tx
+      .insert(autonomyState)
+      .values({
+        id: AUTONOMY_STATE_ID,
+        state: next,
+        updatedAt: new Date().toISOString(),
+      })
+      .onConflictDoUpdate({
+        target: autonomyState.id,
+        set: {
+          state: next,
+          updatedAt: new Date().toISOString(),
+        },
+      });
+
+    return next;
+  });
 }

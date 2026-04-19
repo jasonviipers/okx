@@ -1,7 +1,7 @@
 import { getMemorySummary } from "@/lib/memory/aging-memory";
 import { getAccountOverview } from "@/lib/okx/account";
 import { buildDeterministicConsensus } from "@/lib/swarm/deterministic-engine";
-import { withTelemetrySpan } from "@/lib/telemetry/server";
+import { withTelemetrySpan } from "@/lib/observability/telemetry";
 import type { MarketContext } from "@/types/market";
 import type { MemorySummary } from "@/types/memory";
 import type { AgentVote, DecisionResult } from "@/types/swarm";

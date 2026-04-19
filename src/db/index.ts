@@ -1,58 +1,56 @@
-import "dotenv/config";
-import { existsSync, mkdirSync } from "node:fs";
-import path from "node:path";
-import { pathToFileURL } from "node:url";
-import { createClient } from "@libsql/client";
-import { drizzle } from "drizzle-orm/libsql";
-import { migrate } from "drizzle-orm/libsql/migrator";
+import "server-only";
+
+import postgres, { type Sql } from "postgres";
+import { drizzle, type PostgresJsDatabase } from "drizzle-orm/postgres-js";
 import { env } from "@/env";
 import * as schema from "./schema";
 
-const DEFAULT_DB_FILE = ".data/okx.sqlite";
-const DEFAULT_MIGRATIONS_DIR = "src/db/migrations";
-const configuredDbFile = env.DB_FILE_NAME?.trim() || DEFAULT_DB_FILE;
-const configuredMigrationsDir =
-  env.DB_MIGRATIONS_DIR?.trim() || DEFAULT_MIGRATIONS_DIR;
+type Database = PostgresJsDatabase<typeof schema>;
 
-const dbFilePath = path.isAbsolute(configuredDbFile)
-  ? configuredDbFile
-  : path.join(process.cwd(), configuredDbFile);
-const migrationsFolder = path.isAbsolute(configuredMigrationsDir)
-  ? configuredMigrationsDir
-  : path.join(process.cwd(), configuredMigrationsDir);
-const migrationJournalPath = path.join(
-  migrationsFolder,
-  "meta",
-  "_journal.json",
-);
+let client: Sql | null = null;
+let db: Database | null = null;
 
-mkdirSync(path.dirname(dbFilePath), { recursive: true });
-
-const client = createClient({
-  url: pathToFileURL(dbFilePath).toString(),
-});
-
-const db = drizzle(client, { schema });
-
-// Skip migrations during `next build`. The build spawns many parallel workers
-// that all import this module at the same time, causing SQLITE_BUSY races.
-// Migrations run at server startup instead (when only one process is active).
-const isBuildPhase = process.env.NEXT_PHASE === "phase-production-build";
-
-if (!isBuildPhase) {
-  if (!existsSync(migrationJournalPath)) {
-    console.error(
-      `Migration assets missing at ${migrationJournalPath}. Copy src/db/migrations into the runtime image or set DB_MIGRATIONS_DIR.`,
-    );
-    process.exit(1);
+function getDatabaseUrl(): string {
+  const databaseUrl = env.DATABASE_URL?.trim();
+  if (!databaseUrl) {
+    throw new Error("DATABASE_URL is not configured.");
   }
 
-  // Auto-migrate on startup. Runs any pending migrations and no-ops if up to date.
-  migrate(db, { migrationsFolder }).catch((err) => {
-    console.error("Migration failed:", err);
-    process.exit(1);
-  });
+  return databaseUrl;
 }
 
-export default db;
-export { dbFilePath };
+function getConnectTimeoutSeconds(): number {
+  const parsed = Number(env.PGCONNECT_TIMEOUT ?? "10");
+  return Number.isFinite(parsed) && parsed > 0 ? Math.trunc(parsed) : 10;
+}
+
+export function getDbClient(): Sql {
+  if (!client) {
+    client = postgres(getDatabaseUrl(), {
+      connect_timeout: getConnectTimeoutSeconds(),
+      max: 20,
+      prepare: false,
+    });
+  }
+
+  return client;
+}
+
+export function getDb(): Database {
+  if (!db) {
+    db = drizzle(getDbClient(), { schema });
+  }
+
+  return db;
+}
+
+export async function closeDb() {
+  if (!client) {
+    return;
+  }
+
+  const currentClient = client;
+  client = null;
+  db = null;
+  await currentClient.end();
+}

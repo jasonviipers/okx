@@ -39,7 +39,7 @@ export async function getRuntimeStatus(): Promise<RuntimeStatus> {
       available: redisConfigured,
       detail: redisConfigured
         ? "Redis configured"
-        : "Redis not configured, file-backed persistence active",
+        : "Redis not configured, in-memory fallback active",
     },
     ollama: {
       configured: ollamaConfigured,
@@ -53,8 +53,8 @@ export async function getRuntimeStatus(): Promise<RuntimeStatus> {
       configured: webResearchConfigured,
       available: webResearchConfigured,
       detail: webResearchConfigured
-        ? "Ollama web research enabled"
-        : "Ollama web research disabled",
+        ? "web research enabled"
+        : "web research disabled",
     },
     autonomy: await getAutonomyStatus(),
     timestamp: new Date().toISOString(),
