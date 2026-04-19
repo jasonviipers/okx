@@ -377,6 +377,10 @@ function registerMetric(
   return definition;
 }
 
+function toFiniteMetricNumber(value: number, precision = 6): number {
+  return Number.isFinite(value) ? Number(value.toFixed(precision)) : 0;
+}
+
 function updateRuntimeMetrics() {
   const memoryUsage = process.memoryUsage();
   setGauge(
@@ -398,12 +402,12 @@ function updateRuntimeMetrics() {
   setGauge(
     "nodejs_eventloop_lag_seconds",
     "Observed mean event loop lag in seconds.",
-    Number((eventLoopDelay.mean / 1_000_000_000).toFixed(6)),
+    toFiniteMetricNumber(eventLoopDelay.mean / 1_000_000_000),
   );
   setGauge(
     "nodejs_eventloop_lag_max_seconds",
     "Observed max event loop lag in seconds.",
-    Number((eventLoopDelay.max / 1_000_000_000).toFixed(6)),
+    toFiniteMetricNumber(eventLoopDelay.max / 1_000_000_000),
   );
   setGauge(
     "nodejs_uptime_seconds",

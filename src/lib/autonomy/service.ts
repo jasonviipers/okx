@@ -1045,6 +1045,35 @@ function appendAutonomyRejection(
   };
 }
 
+function recordAutonomyRejectionReasons(
+  symbol: string,
+  timeframe: Timeframe,
+  rejectionReasons: RejectionReason[],
+) {
+  const seen = new Set<string>();
+
+  for (const reason of rejectionReasons) {
+    const layer = reason.layer ?? "autonomy";
+    const key = `${layer}:${reason.code}`;
+    if (seen.has(key)) {
+      continue;
+    }
+
+    seen.add(key);
+    incrementCounter(
+      "autonomy_rejection_reasons_total",
+      "Total autonomy candidate rejection reasons.",
+      1,
+      {
+        symbol: toAutonomySymbolKey(symbol),
+        timeframe,
+        layer,
+        code: reason.code,
+      },
+    );
+  }
+}
+
 function applyPortfolioConstraints(
   evaluation: AutonomySymbolEvaluation,
 ): AutonomySymbolEvaluation {
@@ -1362,6 +1391,14 @@ async function selectAutonomyRun(
                 throttleUntil: new Date(throttleUntil).toISOString(),
               },
             });
+          }
+
+          if (evaluation.result.consensus.rejectionReasons.length > 0) {
+            recordAutonomyRejectionReasons(
+              evaluation.symbol,
+              state.timeframe,
+              evaluation.result.consensus.rejectionReasons,
+            );
           }
 
           evaluations.push(evaluation);
