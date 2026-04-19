@@ -90,6 +90,18 @@ export interface TradeExecutionContext {
   normalizedSize?: number;
   expectedNetEdgeBps?: number;
   marketQualityScore?: number;
+  stopLoss?: number | null;
+  takeProfitLevels?: number[];
+  trailingStopDistancePct?: number;
+  positionOrderId?: string;
+  exitReason?:
+    | "take_profit_1"
+    | "take_profit_2"
+    | "take_profit_3"
+    | "stop_loss"
+    | "trailing_stop";
+  exitTargetIndex?: number;
+  remainingSizeAfterExit?: number;
 }
 
 export interface TradeOutcomeWindow {

@@ -69,6 +69,8 @@ export const OKX_ENDPOINTS = {
   placeOrder: "/api/v5/trade/order",
   cancelOrder: "/api/v5/trade/cancel-order",
   pendingOrders: "/api/v5/trade/orders-pending",
+  fills: "/api/v5/trade/fills",
+  fillsHistory: "/api/v5/trade/fills-history",
   positions: "/api/v5/account/positions",
 } as const;
 

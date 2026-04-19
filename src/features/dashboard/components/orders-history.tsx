@@ -26,6 +26,8 @@ export function OrdersAndHistory() {
     (fill: StoredTradeExecution) =>
       fill.success && fill.order.status === "filled",
   );
+  const historyBusy = tradeHistory.loading || tradeHistory.refreshing;
+  const intentsBusy = executionIntents.loading || executionIntents.refreshing;
   const priceHeader = activeTab === "attempts" ? "Edge" : "Price";
   const infoHeader = activeTab === "attempts" ? "Reason" : "Info";
 
@@ -33,7 +35,14 @@ export function OrdersAndHistory() {
     <Card size="sm" className="h-full flex flex-col overflow-hidden">
       <CardHeader>
         <CardTitle className="flex items-center justify-between w-full">
-          <span>Trade History</span>
+          <div className="flex items-center gap-2">
+            <span>Trade History</span>
+            {(activeTab === "attempts" ? intentsBusy : historyBusy) && (
+              <span className="text-[0.5rem] uppercase tracking-wider text-terminal-dim">
+                Syncing
+              </span>
+            )}
+          </div>
           <div className="flex gap-1">
             {(["fills", "trades", "attempts"] as const).map((tab) => (
               <Button
@@ -65,7 +74,15 @@ export function OrdersAndHistory() {
         </div>
 
         {activeTab === "fills" &&
-          (filledFills.length === 0 ? (
+          (tradeHistory.error ? (
+            <div className="px-2 py-3 text-[0.625rem] text-terminal-red text-center">
+              {tradeHistory.error}
+            </div>
+          ) : tradeHistory.loading && fills.length === 0 ? (
+            <div className="px-2 py-3 text-[0.625rem] text-terminal-dim text-center">
+              Loading filled orders...
+            </div>
+          ) : filledFills.length === 0 ? (
             <div className="px-2 py-3 text-[0.625rem] text-terminal-dim text-center">
               No filled orders
             </div>
@@ -108,7 +125,15 @@ export function OrdersAndHistory() {
           ))}
 
         {activeTab === "trades" &&
-          (fills.length === 0 ? (
+          (tradeHistory.error ? (
+            <div className="px-2 py-3 text-[0.625rem] text-terminal-red text-center">
+              {tradeHistory.error}
+            </div>
+          ) : tradeHistory.loading && fills.length === 0 ? (
+            <div className="px-2 py-3 text-[0.625rem] text-terminal-dim text-center">
+              Loading trade history...
+            </div>
+          ) : fills.length === 0 ? (
             <div className="px-2 py-3 text-[0.625rem] text-terminal-dim text-center">
               No trade history
             </div>
@@ -155,7 +180,15 @@ export function OrdersAndHistory() {
           ))}
 
         {activeTab === "attempts" &&
-          (intents.length === 0 ? (
+          (executionIntents.error ? (
+            <div className="px-2 py-3 text-[0.625rem] text-terminal-red text-center">
+              {executionIntents.error}
+            </div>
+          ) : executionIntents.loading && intents.length === 0 ? (
+            <div className="px-2 py-3 text-[0.625rem] text-terminal-dim text-center">
+              Loading execution attempts...
+            </div>
+          ) : intents.length === 0 ? (
             <div className="px-2 py-3 text-[0.625rem] text-terminal-dim text-center">
               No execution attempts yet
             </div>

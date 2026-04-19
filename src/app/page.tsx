@@ -169,13 +169,15 @@ function DashboardShell() {
 
   return (
     <div className="flex flex-col h-dvh bg-background text-foreground font-mono overflow-hidden">
-      {/* Top bar: Ticker Tape */}
-      <ErrorBoundary label="Ticker">
-        <TickerTape />
-      </ErrorBoundary>
+      {/* Top bar: Ticker Tape — desktop only */}
+      <div className="hidden lg:block">
+        <ErrorBoundary label="Ticker">
+          <TickerTape />
+        </ErrorBoundary>
+      </div>
 
-      {/* Symbol selector bar */}
-      <div className="flex items-center gap-1 px-2 py-0.5 border-b border-border bg-secondary/50 overflow-x-auto shrink-0">
+      {/* Symbol selector bar — desktop only */}
+      <div className="hidden lg:flex items-center gap-1 px-2 py-0.5 border-b border-border bg-secondary/50 overflow-x-auto shrink-0">
         {DEFAULT_SYMBOLS.map((sym) => (
           <Button
             key={sym}
@@ -219,11 +221,10 @@ function DashboardShell() {
       </div>
 
       {/* ── Mobile: Single panel with tab bar ── */}
-      <div className="flex-1 min-h-0 lg:hidden">
+      <div className="flex flex-col flex-1 min-h-0 lg:hidden">
         <MobilePanelContent />
+        <MobileTabBar />
       </div>
-      <MobileTabBar />
-
       {/* ── Desktop: Multi-column grid ── */}
       <div className="hidden lg:grid flex-1 grid-cols-[260px_1fr_280px] grid-rows-[1fr_auto] gap-px bg-border overflow-hidden p-0 m-0 min-h-0">
         {/* Left column: Asset Detail + Order Book */}

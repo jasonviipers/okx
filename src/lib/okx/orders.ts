@@ -36,6 +36,67 @@ interface OkxPositionRow {
   markPx?: string;
 }
 
+export interface OkxTradeUpdateRow {
+  ordId: string;
+  instId: string;
+  side: OrderSide;
+  state: string;
+  fillPx?: string;
+  fillSz?: string;
+  fillTime?: string;
+  fillNotionalUsd?: string;
+  avgPx?: string;
+  accFillSz?: string;
+}
+
+function buildTradeUpdateParams(symbol?: string) {
+  const params = new URLSearchParams({
+    instType: "SPOT",
+  });
+
+  if (symbol) {
+    params.set("instId", symbol);
+  }
+
+  return params;
+}
+
+async function getTradeUpdatesFromEndpoint(
+  path: string,
+  symbol?: string,
+): Promise<OkxTradeUpdateRow[]> {
+  if (!hasOkxTradingCredentials()) {
+    return [];
+  }
+
+  try {
+    return await okxPrivateGet<OkxTradeUpdateRow>(
+      path,
+      buildTradeUpdateParams(symbol),
+    );
+  } catch (error) {
+    if (
+      error instanceof OkxRequestError &&
+      (error.status === 401 || error.status === 403)
+    ) {
+      return [];
+    }
+
+    throw error;
+  }
+}
+
+export async function getTradeUpdates(
+  symbol?: string,
+): Promise<OkxTradeUpdateRow[]> {
+  const [recent, archive] = await Promise.all([
+    getTradeUpdatesFromEndpoint(OKX_ENDPOINTS.fills, symbol),
+    getTradeUpdatesFromEndpoint(OKX_ENDPOINTS.fillsHistory, symbol),
+  ]);
+
+  return [...recent, ...archive];
+}
+
 export async function placeOrder(input: PlaceOrderInput): Promise<Order> {
   const referencePrice = input.price ?? (await getTicker(input.symbol)).last;
   const notionalUsd = Number((referencePrice * input.size).toFixed(8));

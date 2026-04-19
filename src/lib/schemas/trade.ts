@@ -44,6 +44,21 @@ const tradeExecutionContextSchema = z.object({
   normalizedSize: z.number().finite().optional(),
   expectedNetEdgeBps: z.number().finite().optional(),
   marketQualityScore: z.number().finite().optional(),
+  stopLoss: z.number().finite().positive().nullable().optional(),
+  takeProfitLevels: z.array(z.number().finite().positive()).max(3).optional(),
+  trailingStopDistancePct: z.number().finite().positive().optional(),
+  positionOrderId: z.string().min(1).optional(),
+  exitReason: z
+    .enum([
+      "take_profit_1",
+      "take_profit_2",
+      "take_profit_3",
+      "stop_loss",
+      "trailing_stop",
+    ])
+    .optional(),
+  exitTargetIndex: z.number().int().nonnegative().optional(),
+  remainingSizeAfterExit: z.number().finite().nonnegative().optional(),
 });
 
 export const tradeExecutionRequestSchema = z.object({

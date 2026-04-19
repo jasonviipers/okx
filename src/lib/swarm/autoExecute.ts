@@ -14,6 +14,8 @@ import {
 } from "@/lib/persistence/execution-intents";
 import { getHistory } from "@/lib/persistence/history";
 import { nowIso, parseBoolean, parseNumber } from "@/lib/runtime-utils";
+import { upsertOpenPosition } from "@/lib/store/open-positions";
+import { getTrailingStopDistancePct } from "@/lib/swarm/trailing-stop";
 import {
   incrementCounter,
   observeHistogram,
@@ -51,6 +53,11 @@ const executionResults = new Map<
     validatedAt: string;
   }
 >();
+
+type ExitPlan = {
+  stopLoss: number | null;
+  takeProfitLevels: number[];
+};
 
 function normalizeDecision(consensus: ConsensusResult): TradeSignal {
   return consensus.decision ?? consensus.signal;
@@ -100,6 +107,163 @@ function mergeRejectionReasons(
     seen.add(key);
     return true;
   });
+}
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.min(max, Math.max(min, value));
+}
+
+function sanitizeTakeProfitLevels(
+  direction: TradeSignal,
+  levels: number[] | null | undefined,
+): number[] {
+  const directionLabel = direction === "SELL" ? "SELL" : "BUY";
+  const validLevels = (levels ?? []).filter(
+    (level) => Number.isFinite(level) && level > 0,
+  );
+  const uniqueLevels = [
+    ...new Set(validLevels.map((level) => level.toFixed(8))),
+  ].map((level) => Number(level));
+
+  return uniqueLevels
+    .sort((left, right) =>
+      directionLabel === "BUY" ? left - right : right - left,
+    )
+    .slice(0, 3);
+}
+
+function deriveFallbackExitPlan(
+  consensus: ConsensusResult,
+  decision: TradeSignal,
+  referencePrice: number,
+): ExitPlan {
+  const direction = decision === "SELL" ? "SELL" : "BUY";
+  const volatilityLongBps =
+    consensus.featureSummary?.volatilityLongBps ??
+    consensus.featureSummary?.volatilityShortBps ??
+    80;
+  const marketQualityScore = consensus.marketQualityScore ?? 0.6;
+  const volatilityPct = Math.max(0.4, volatilityLongBps / 100);
+  const stopDistancePct = clamp(
+    volatilityPct * (marketQualityScore >= 0.7 ? 1.4 : 1.8),
+    0.75,
+    3,
+  );
+  const rewardMultipliers = [1, 1.8, 2.6];
+  const stopLoss =
+    direction === "BUY"
+      ? Number((referencePrice * (1 - stopDistancePct / 100)).toFixed(8))
+      : Number((referencePrice * (1 + stopDistancePct / 100)).toFixed(8));
+  const takeProfitLevels = rewardMultipliers.map((multiplier) => {
+    const movePct = (stopDistancePct * multiplier) / 100;
+    return direction === "BUY"
+      ? Number((referencePrice * (1 + movePct)).toFixed(8))
+      : Number((referencePrice * (1 - movePct)).toFixed(8));
+  });
+
+  return {
+    stopLoss,
+    takeProfitLevels: sanitizeTakeProfitLevels(direction, takeProfitLevels),
+  };
+}
+
+function resolveExitPlan(
+  consensus: ConsensusResult,
+  decision: TradeSignal,
+  referencePrice: number,
+): ExitPlan {
+  const extendedConsensus = consensus as ConsensusResult & {
+    stop_loss?: number | null;
+    stopLoss?: number | null;
+    take_profit?: number[] | null;
+    takeProfitLevels?: number[] | null;
+    exitPlan?: {
+      stop_loss?: number | null;
+      stopLoss?: number | null;
+      take_profit?: number[] | null;
+      takeProfitLevels?: number[] | null;
+    } | null;
+  };
+  const explicitStopLoss =
+    extendedConsensus.stopLoss ??
+    extendedConsensus.stop_loss ??
+    extendedConsensus.exitPlan?.stopLoss ??
+    extendedConsensus.exitPlan?.stop_loss ??
+    null;
+  const explicitTakeProfits = sanitizeTakeProfitLevels(
+    decision,
+    extendedConsensus.takeProfitLevels ??
+      extendedConsensus.take_profit ??
+      extendedConsensus.exitPlan?.takeProfitLevels ??
+      extendedConsensus.exitPlan?.take_profit ??
+      null,
+  );
+  const fallbackPlan = deriveFallbackExitPlan(
+    consensus,
+    decision,
+    referencePrice,
+  );
+
+  return {
+    stopLoss:
+      explicitStopLoss !== null &&
+      Number.isFinite(explicitStopLoss) &&
+      explicitStopLoss > 0
+        ? explicitStopLoss
+        : fallbackPlan.stopLoss,
+    takeProfitLevels:
+      explicitTakeProfits.length > 0
+        ? explicitTakeProfits
+        : fallbackPlan.takeProfitLevels,
+  };
+}
+
+async function persistManagedOpenPosition(input: {
+  consensus: ConsensusResult;
+  decision: TradeSignal;
+  order: NonNullable<ExecutionResult["order"]>;
+  normalizedSize: number;
+  entryPrice: number;
+  exitPlan: ExitPlan;
+}) {
+  if (input.decision !== "BUY" || input.normalizedSize <= 0) {
+    return;
+  }
+
+  const timestamp = Date.now();
+  const orderId = input.order.okxOrderId ?? input.order.id;
+  await upsertOpenPosition({
+    orderId,
+    instId: input.consensus.symbol,
+    direction: input.decision,
+    entryPrice: input.entryPrice,
+    size: input.normalizedSize,
+    remainingSize: input.normalizedSize,
+    stopLoss: input.exitPlan.stopLoss,
+    takeProfitLevels: input.exitPlan.takeProfitLevels,
+    tpHitCount: 0,
+    trailingStopActive: false,
+    trailingStopPrice: null,
+    trailingStopAnchorPrice: null,
+    trailingStopDistancePct: getTrailingStopDistancePct(),
+    exchangePositionMissingCount: 0,
+    lastKnownPrice: input.entryPrice,
+    lastCheckedAt: timestamp,
+    timestamp,
+    updatedAt: timestamp,
+  });
+  telemetryInfo(
+    "swarm.auto_execute",
+    "Persisted managed open position for automated exits",
+    {
+      entryPrice: input.entryPrice,
+      orderId,
+      size: input.normalizedSize,
+      stopLoss: input.exitPlan.stopLoss,
+      symbol: input.consensus.symbol,
+      takeProfitLevels: input.exitPlan.takeProfitLevels,
+    },
+  );
 }
 
 function buildHoldResult(input: {
@@ -324,6 +488,14 @@ function recordExecutionError(timestamp: number) {
       `[${nowIso()}] [AutoExec] CRITICAL: circuit breaker opened after ${executionErrorTimestamps.length} execution errors within 60 seconds`,
     );
   }
+}
+
+export function isExecutionCircuitOpen(): boolean {
+  return CIRCUIT_OPEN;
+}
+
+export function recordExecutionCircuitError() {
+  recordExecutionError(Date.now());
 }
 
 function logResult(result: ExecutionResult) {
@@ -763,6 +935,12 @@ export async function autoExecuteConsensus(
           consensus.symbol,
           consensus.timeframe,
         );
+        const executionReferencePrice = marketSnapshot.context.ticker.last;
+        const exitPlan = resolveExitPlan(
+          consensus,
+          decision,
+          executionReferencePrice,
+        );
 
         if (accountMode === "live" && !marketSnapshot.status.realtime) {
           const result = buildHoldResult({
@@ -947,11 +1125,14 @@ export async function autoExecuteConsensus(
             source: "swarm_auto",
             decisionSnapshot: buildTradeDecisionSnapshot(consensus),
             executionContext: {
-              referencePrice: marketSnapshot.context.ticker.last,
+              referencePrice: executionReferencePrice,
               targetNotionalUsd: Number(targetNotionalUsd.toFixed(8)),
               normalizedSize: Number(normalizedSize.toFixed(8)),
               expectedNetEdgeBps: consensus.expectedNetEdgeBps,
               marketQualityScore: consensus.marketQualityScore,
+              stopLoss: exitPlan.stopLoss,
+              takeProfitLevels: exitPlan.takeProfitLevels,
+              trailingStopDistancePct: getTrailingStopDistancePct(),
             },
           }),
         });
@@ -1036,6 +1217,20 @@ export async function autoExecuteConsensus(
           normalizedSize,
           payload,
         });
+        if (payload?.data?.order) {
+          const entryPrice =
+            payload.data.order.filledPrice ??
+            payload.data.order.referencePrice ??
+            executionReferencePrice;
+          await persistManagedOpenPosition({
+            consensus,
+            decision,
+            order: payload.data.order,
+            normalizedSize: Number(normalizedSize.toFixed(8)),
+            entryPrice,
+            exitPlan,
+          });
+        }
         await finalizeExecutionIntent(executionIntent.id, result, {
           normalizedSize,
           response: {

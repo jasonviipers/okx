@@ -3,6 +3,7 @@ import "server-only";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { getTicker } from "@/lib/okx/market";
+import { getTradeUpdates, type OkxTradeUpdateRow } from "@/lib/okx/orders";
 import { normalizeConsensusResult } from "@/lib/swarm/normalize-consensus";
 import type { StoredHistoryEntry, StoredTradeExecution } from "@/types/history";
 import type { SwarmRunResult } from "@/types/swarm";
@@ -79,6 +80,59 @@ function getEntryReferencePrice(
   );
 }
 
+function parseOkxNumber(value?: string): number | undefined {
+  if (!value) {
+    return undefined;
+  }
+
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    return undefined;
+  }
+
+  return parsed;
+}
+
+function parseOkxTimestamp(value?: string): string | undefined {
+  if (!value) {
+    return undefined;
+  }
+
+  const millis = Number(value);
+  if (Number.isFinite(millis) && millis > 0) {
+    return new Date(millis).toISOString();
+  }
+
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    return undefined;
+  }
+
+  return parsed.toISOString();
+}
+
+function mapOkxStateToOrderStatus(state?: string): Order["status"] | undefined {
+  switch (state) {
+    case "filled":
+      return "filled";
+    case "canceled":
+    case "mmp_canceled":
+      return "cancelled";
+    case "rejected":
+      return "rejected";
+    case "live":
+    case "partially_filled":
+      return "pending";
+    default:
+      return undefined;
+  }
+}
+
+function getTradeUpdateSortValue(update: OkxTradeUpdateRow): number {
+  const filledAt = parseOkxTimestamp(update.fillTime);
+  return filledAt ? new Date(filledAt).getTime() : 0;
+}
+
 function computeSignedReturnBps(
   order: Order,
   entryPrice: number,
@@ -145,14 +199,105 @@ function buildInitialPerformance(
   };
 }
 
+function deriveBasePerformance(
+  entry: StoredTradeExecution,
+): TradePerformanceMetrics {
+  const nextSeed = buildInitialPerformance(entry.order, entry.executionContext);
+  if (!entry.performance) {
+    return nextSeed;
+  }
+
+  const seedChanged =
+    entry.performance.referencePrice !== nextSeed.referencePrice ||
+    entry.performance.filledPrice !== nextSeed.filledPrice ||
+    entry.performance.realizedSlippageBps !== nextSeed.realizedSlippageBps ||
+    entry.performance.realizedSlippageUsd !== nextSeed.realizedSlippageUsd;
+
+  if (!seedChanged) {
+    return entry.performance;
+  }
+
+  const existingWindows = new Map(
+    entry.performance.outcomeWindows.map((window) => [
+      window.horizonMinutes,
+      window,
+    ]),
+  );
+
+  return {
+    ...nextSeed,
+    latestMarkPrice:
+      entry.performance.latestMarkPrice ?? nextSeed.latestMarkPrice,
+    latestObservedAt:
+      entry.performance.latestObservedAt ?? nextSeed.latestObservedAt,
+    latestSignedReturnBps:
+      entry.performance.latestSignedReturnBps ?? nextSeed.latestSignedReturnBps,
+    latestPnlUsd: entry.performance.latestPnlUsd ?? nextSeed.latestPnlUsd,
+    latestPnlPct: entry.performance.latestPnlPct ?? nextSeed.latestPnlPct,
+    outcomeWindows: nextSeed.outcomeWindows.map(
+      (window) => existingWindows.get(window.horizonMinutes) ?? window,
+    ),
+  };
+}
+
+function syncTradeEntryWithOkxUpdate(
+  entry: StoredTradeExecution,
+  update: OkxTradeUpdateRow,
+): { entry: StoredTradeExecution; changed: boolean } {
+  const nextStatus =
+    mapOkxStateToOrderStatus(update.state) ?? entry.order.status;
+  const nextFilledPrice =
+    parseOkxNumber(update.avgPx) ??
+    parseOkxNumber(update.fillPx) ??
+    entry.order.filledPrice;
+  const nextFilledAt =
+    parseOkxTimestamp(update.fillTime) ?? entry.order.filledAt;
+  const nextNotionalUsd =
+    parseOkxNumber(update.fillNotionalUsd) ?? entry.order.notionalUsd;
+
+  const nextOrder: Order = {
+    ...entry.order,
+    status: nextStatus,
+    filledPrice: nextFilledPrice,
+    filledAt: nextFilledAt,
+    notionalUsd: nextNotionalUsd,
+  };
+  const nextSuccess =
+    nextStatus === "cancelled" || nextStatus === "rejected"
+      ? false
+      : entry.success;
+  const changed =
+    nextOrder.status !== entry.order.status ||
+    nextOrder.filledPrice !== entry.order.filledPrice ||
+    nextOrder.filledAt !== entry.order.filledAt ||
+    nextOrder.notionalUsd !== entry.order.notionalUsd ||
+    nextSuccess !== entry.success;
+
+  if (!changed) {
+    return { entry, changed: false };
+  }
+
+  const nextEntry: StoredTradeExecution = {
+    ...entry,
+    order: nextOrder,
+    success: nextSuccess,
+  };
+
+  return {
+    entry: {
+      ...nextEntry,
+      performance: deriveBasePerformance(nextEntry),
+    },
+    changed: true,
+  };
+}
+
 function refreshTradeEntryPerformance(
   entry: StoredTradeExecution,
   markPrice?: number,
   observedAt = new Date().toISOString(),
 ): { entry: StoredTradeExecution; changed: boolean } {
-  const basePerformance =
-    entry.performance ??
-    buildInitialPerformance(entry.order, entry.executionContext);
+  const basePerformance = deriveBasePerformance(entry);
   const entryPrice =
     basePerformance.filledPrice ??
     basePerformance.referencePrice ??
@@ -304,9 +449,65 @@ export async function refreshTradeExecutionOutcomes(
     return [];
   }
 
+  const pendingOrdersBySymbol = new Map<string, string[]>();
+  for (const trade of trades) {
+    if (trade.order.okxOrderId && trade.order.status === "pending") {
+      const symbolOrders = pendingOrdersBySymbol.get(trade.symbol) ?? [];
+      symbolOrders.push(trade.order.okxOrderId);
+      pendingOrdersBySymbol.set(trade.symbol, symbolOrders);
+    }
+  }
+
+  const okxTradeUpdates = new Map<string, OkxTradeUpdateRow>();
+  if (pendingOrdersBySymbol.size > 0) {
+    const updateResults = await Promise.allSettled(
+      [...pendingOrdersBySymbol.entries()].map(async ([symbol, orderIds]) => {
+        const updates = await getTradeUpdates(symbol);
+        const orderIdSet = new Set(orderIds);
+
+        return updates.filter((update) => orderIdSet.has(update.ordId));
+      }),
+    );
+
+    for (const result of updateResults) {
+      if (result.status !== "fulfilled") {
+        continue;
+      }
+
+      for (const update of result.value) {
+        const previous = okxTradeUpdates.get(update.ordId);
+        if (
+          !previous ||
+          getTradeUpdateSortValue(update) >= getTradeUpdateSortValue(previous)
+        ) {
+          okxTradeUpdates.set(update.ordId, update);
+        }
+      }
+    }
+  }
+
+  let changed = false;
+  let nextEntries = entries.map((entry) => {
+    if (entry.type !== "trade_execution" || !entry.order.okxOrderId) {
+      return entry;
+    }
+
+    const update = okxTradeUpdates.get(entry.order.okxOrderId);
+    if (!update) {
+      return entry;
+    }
+
+    const synced = syncTradeEntryWithOkxUpdate(entry, update);
+    changed ||= synced.changed;
+    return synced.entry;
+  });
+
+  const tradeEntries = nextEntries.filter(
+    (entry): entry is StoredTradeExecution => entry.type === "trade_execution",
+  );
   const candidateSymbols = [
     ...new Set(
-      trades
+      tradeEntries
         .filter((entry) => {
           const entryPrice =
             entry.performance?.filledPrice ??
@@ -330,9 +531,8 @@ export async function refreshTradeExecutionOutcomes(
     }
   }
 
-  let changed = false;
   const observedAt = new Date().toISOString();
-  const nextEntries = entries.map((entry) => {
+  nextEntries = nextEntries.map((entry) => {
     if (entry.type !== "trade_execution") {
       return entry;
     }

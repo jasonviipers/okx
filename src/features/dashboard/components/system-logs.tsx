@@ -92,16 +92,13 @@ export function SystemLogs() {
       <CardHeader>
         <CardTitle className="flex items-center justify-between w-full">
           <span>System Logs</span>
-          <span className="text-[0.5625rem] text-terminal-dim">
-            {entries.length}
-          </span>
         </CardTitle>
         <CardAction>
           <div className="flex gap-0.5">
             {(["INFO", "WARN", "ERROR", "DEBUG"] as const).map((level) => (
               <Button
                 key={level}
-                variant={filter.levels.has(level) ? "default" : "ghost"}
+                variant={filter.levels.has(level) ? "ghost" : "default"}
                 size="xs"
                 className={cn(
                   "text-[0.5rem]",

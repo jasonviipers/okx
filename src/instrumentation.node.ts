@@ -1,4 +1,5 @@
 import { ensureAutonomyBootState } from "@/lib/autonomy/service";
+import { ensurePositionMonitorBootState } from "@/lib/swarm/position-monitor";
 import {
   info,
   initTelemetry,
@@ -16,4 +17,5 @@ export async function registerNodeInstrumentation() {
   }
 
   await ensureAutonomyBootState();
+  ensurePositionMonitorBootState();
 }
