@@ -79,17 +79,19 @@ export async function GET(req: NextRequest) {
           });
         }
         if (errors.length > 0) {
-          sendEvent({
-            type: "pipeline",
-            timestamp: new Date().toISOString(),
-            symbol,
-            timeframe,
-            message: errors.join("; "),
-            pipeline: {
-              stage: "diagnostics",
-              detail: errors.join("; "),
-            },
-          });
+          for (const error of errors) {
+            sendEvent({
+              type: "pipeline",
+              timestamp: new Date().toISOString(),
+              symbol,
+              timeframe,
+              message: error,
+              pipeline: {
+                stage: "diagnostics",
+                detail: error,
+              },
+            });
+          }
         }
 
         sendEvent({

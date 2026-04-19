@@ -26,7 +26,7 @@ import {
 import type { MarketContext } from "@/types/market";
 import type { AgentVote, SwarmRunResult } from "@/types/swarm";
 
-const DEFAULT_DIAGNOSTIC_VOTE_TIMEOUT_MS = 5_000;
+const DEFAULT_DIAGNOSTIC_VOTE_TIMEOUT_MS = 8_000;
 
 for (const modelId of ACTIVE_SWARM_MODELS) {
   assertCanReason(modelId);
@@ -306,7 +306,7 @@ export async function collectDiagnosticVotes(
           ...diagnostic,
         });
         errors.push(
-          `Missing veto diagnostic votes: ${JSON.stringify(diagnostic)}`,
+          `Diagnostic veto commentary unavailable from ${missingVetos.join(", ")}; continuing with partial diagnostics.`,
         );
       }
 
