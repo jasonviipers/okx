@@ -9,13 +9,20 @@ services:
       - app-network
     restart: unless-stopped
     command: redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
 
   app:
     build:
       context: .
       dockerfile: Dockerfile
     depends_on:
-      - redis
+      redis:
+        condition: service_healthy   # wait until redis-cli ping succeeds
     env_file:
       - .env
     environment:
@@ -31,7 +38,8 @@ services:
   nginx:
     image: nginx:alpine
     depends_on:
-      - app
+      app:
+        condition: service_started
     networks:
       - app-network
     ports:
@@ -46,8 +54,10 @@ services:
       context: .
       dockerfile: Dockerfile.cron
     depends_on:
-      - app
-      - redis
+      app:
+        condition: service_started
+      redis:
+        condition: service_healthy
     environment:
       CRON_SECRET: ${CRON_SECRET}
       WORKER_URL: http://app:3000/api/ai/system/autonomy/worker
