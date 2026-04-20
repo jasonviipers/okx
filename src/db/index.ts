@@ -1,5 +1,11 @@
 import "dotenv/config";
-import { existsSync, mkdirSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { createRequire } from "node:module";
 import path from "node:path";
 import { arch, platform } from "node:process";
@@ -113,17 +119,83 @@ function getSqliteVssLoadablePath(name: "vector0" | "vss0") {
   );
 }
 
-function loadSqliteVssExtensions(sqlite: InstanceType<typeof BetterSqlite3>) {
+function loadSqliteVssExtensions(
+  sqlite: InstanceType<typeof BetterSqlite3>,
+): boolean {
   if (isBuildPhase) {
-    return;
+    return false;
   }
 
   try {
     sqlite.loadExtension(getSqliteVssLoadablePath("vector0"));
     sqlite.loadExtension(getSqliteVssLoadablePath("vss0"));
+    return true;
   } catch (error) {
     console.warn("sqlite-vss extension not available:", error);
+    return false;
   }
+}
+
+function migrationRequiresVectorSearch(sql: string): boolean {
+  return /\bvss0\b|swarm_memory_vss|sqlite-vss/i.test(sql);
+}
+
+function getMigrationsFolderForRuntime(vectorSearchEnabled: boolean): string {
+  if (vectorSearchEnabled) {
+    return migrationsFolder;
+  }
+
+  const migrationJournal = JSON.parse(
+    readFileSync(migrationJournalPath, "utf8"),
+  ) as {
+    version: string;
+    dialect: string;
+    entries: Array<{
+      idx: number;
+      version: string;
+      when: number;
+      tag: string;
+      breakpoints: boolean;
+    }>;
+  };
+
+  const compatibleEntries = migrationJournal.entries.filter((entry) => {
+    const migrationPath = path.join(migrationsFolder, `${entry.tag}.sql`);
+    const migrationSql = readFileSync(migrationPath, "utf8");
+    return !migrationRequiresVectorSearch(migrationSql);
+  });
+  const skippedCount =
+    migrationJournal.entries.length - compatibleEntries.length;
+
+  if (skippedCount > 0) {
+    console.warn(
+      `sqlite-vss unavailable; skipping ${skippedCount} vector migration${skippedCount === 1 ? "" : "s"} for this runtime.`,
+    );
+  }
+
+  rmSync(fallbackMigrationsFolder, { recursive: true, force: true });
+  mkdirSync(path.join(fallbackMigrationsFolder, "meta"), { recursive: true });
+
+  for (const entry of compatibleEntries) {
+    const sourcePath = path.join(migrationsFolder, `${entry.tag}.sql`);
+    const targetPath = path.join(fallbackMigrationsFolder, `${entry.tag}.sql`);
+    writeFileSync(targetPath, readFileSync(sourcePath, "utf8"), "utf8");
+  }
+
+  writeFileSync(
+    path.join(fallbackMigrationsFolder, "meta", "_journal.json"),
+    JSON.stringify(
+      {
+        ...migrationJournal,
+        entries: compatibleEntries,
+      },
+      null,
+      2,
+    ),
+    "utf8",
+  );
+
+  return fallbackMigrationsFolder;
 }
 
 const dbFilePath = isBuildPhase ? ":memory:" : resolveDatabasePath();
@@ -138,6 +210,11 @@ const migrationJournalPath = path.join(
   "meta",
   "_journal.json",
 );
+const fallbackMigrationsFolder = path.join(
+  /* turbopackIgnore: true */ process.cwd(),
+  ".data",
+  "_migrations-no-vss",
+);
 
 if (!isBuildPhase) {
   mkdirSync(path.dirname(dbFilePath), { recursive: true });
@@ -148,7 +225,7 @@ sqlite.pragma("foreign_keys = ON");
 if (!isBuildPhase) {
   sqlite.pragma("journal_mode = WAL");
 }
-loadSqliteVssExtensions(sqlite);
+const vectorSearchEnabled = loadSqliteVssExtensions(sqlite);
 
 const db = drizzle(sqlite, { schema });
 
@@ -162,10 +239,14 @@ if (!isBuildPhase) {
 
   // Auto-migrate on startup. Runs any pending migrations and no-ops if up to date.
   try {
-    migrate(db, { migrationsFolder });
-    sqlite.exec(`CREATE VIRTUAL TABLE IF NOT EXISTS swarm_memory_vss USING vss0(
-      embedding(1536)
-    )`);
+    migrate(db, {
+      migrationsFolder: getMigrationsFolderForRuntime(vectorSearchEnabled),
+    });
+    if (vectorSearchEnabled) {
+      sqlite.exec(`CREATE VIRTUAL TABLE IF NOT EXISTS swarm_memory_vss USING vss0(
+        embedding(1536)
+      )`);
+    }
   } catch (err) {
     console.error("Migration failed:", err);
     process.exit(1);
