@@ -1168,7 +1168,7 @@ function applyPortfolioConstraints(
   }
 
   if (
-    decision !== "HOLD" &&
+    decision === "BUY" &&
     symbolAllocation &&
     symbolAllocation.allocationPct >= symbolAllocation.maxAllocationPct
   ) {
