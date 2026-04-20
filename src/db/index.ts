@@ -131,7 +131,9 @@ function loadSqliteVssExtensions(
     sqlite.loadExtension(getSqliteVssLoadablePath("vss0"));
     return true;
   } catch (error) {
-    console.warn("sqlite-vss extension not available:", error);
+    console.warn(
+      `sqlite-vss extension not available: ${error instanceof Error ? error.message : String(error)}`,
+    );
     return false;
   }
 }
@@ -254,4 +256,4 @@ if (!isBuildPhase) {
 }
 
 export default db;
-export { dbFilePath, sqlite };
+export { dbFilePath, sqlite, vectorSearchEnabled };

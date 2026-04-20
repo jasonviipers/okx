@@ -1,13 +1,20 @@
-import { sqlite } from "@/db";
+import { sqlite, vectorSearchEnabled } from "@/db";
 
-let vectorSearchUnavailable = false;
+let vectorSearchUnavailable = !vectorSearchEnabled;
+
+function getVectorErrorMessage(error: unknown): string {
+  if (error instanceof Error) {
+    return error.message;
+  }
+
+  return String(error);
+}
 
 function markVectorSearchUnavailable(error: unknown) {
   if (!vectorSearchUnavailable) {
     vectorSearchUnavailable = true;
     console.warn(
-      "[Vector] sqlite-vss unavailable; vector operations disabled.",
-      error,
+      `[Vector] sqlite-vss unavailable; vector operations disabled. ${getVectorErrorMessage(error)}`,
     );
   }
 }

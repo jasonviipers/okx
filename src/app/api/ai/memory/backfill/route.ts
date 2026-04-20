@@ -1,5 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server";
-import { sqlite } from "@/db";
+import { sqlite, vectorSearchEnabled } from "@/db";
 import { generateEmbedding } from "@/lib/ai/embeddings";
 import { isGoogleGenerativeAIConfigured } from "@/lib/ai/google";
 import {
@@ -23,6 +23,17 @@ export async function POST(request: NextRequest) {
   if (!isGoogleGenerativeAIConfigured()) {
     return NextResponse.json(
       { error: "Google Generative AI is not configured for embeddings." },
+      { status: 503 },
+    );
+  }
+
+  if (!vectorSearchEnabled) {
+    return NextResponse.json(
+      {
+        error: "Vector search is unavailable on this runtime.",
+        details:
+          "sqlite-vss is not supported in this environment; use linux-x64 or darwin for vector backfill.",
+      },
       { status: 503 },
     );
   }
