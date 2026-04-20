@@ -3,6 +3,7 @@ import "server-only";
 import { performance } from "node:perf_hooks";
 import { env } from "@/env";
 import { getOkxAccountModeLabel } from "@/lib/configs/okx";
+import { MARKET_DATA_QUALITY_THRESHOLDS } from "@/lib/market-data/thresholds";
 import {
   getCandles as getRestCandles,
   getOrderBook as getRestOrderBook,
@@ -60,12 +61,6 @@ const DEFAULT_REST_REFRESH_MS = 10_000;
 const DEFAULT_CANDLE_REFRESH_MS = 30_000;
 const DEFAULT_MARKET_WARMUP_TIMEOUT_MS = 5_000;
 const REQUIRED_WEBSOCKET_CHANNELS: OkxWsChannel[] = ["tickers", "books5"];
-
-export const MARKET_DATA_QUALITY_THRESHOLDS = {
-  maxStaleMs: 10_000,
-  requireWebsocket: true,
-  allowSyntheticFallback: false,
-} as const;
 
 const states = new Map<string, SymbolState>();
 let listenerAttached = false;

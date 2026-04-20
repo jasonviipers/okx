@@ -30,7 +30,10 @@ import {
   updateAutonomyState,
   writeAutonomyState,
 } from "@/lib/persistence/autonomy-state";
-import { getHistory, refreshOutcomeWindows } from "@/lib/persistence/history";
+import {
+  refreshOutcomeWindows,
+  refreshTradeExecutionOutcomes,
+} from "@/lib/persistence/history";
 import { parseNumber } from "@/lib/runtime-utils";
 import { autoExecuteConsensus } from "@/lib/swarm/autoExecute";
 import { runSwarm } from "@/lib/swarm/orchestrator";
@@ -288,14 +291,11 @@ function isSymbolSuppressed(
 }
 
 async function getTodayExecutedNotionalUsd() {
-  const history = await getHistory(200);
+  const history = await refreshTradeExecutionOutcomes(200).catch(() => []);
   const since = Date.now() - 24 * 60 * 60 * 1000;
 
   return history.reduce((sum, entry) => {
-    if (
-      entry.type !== "trade_execution" ||
-      new Date(entry.timestamp).getTime() < since
-    ) {
+    if (new Date(entry.timestamp).getTime() < since) {
       return sum;
     }
 

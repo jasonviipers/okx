@@ -38,9 +38,11 @@ interface OkxPositionRow {
 
 export interface OkxTradeUpdateRow {
   ordId: string;
+  tradeId?: string;
   instId: string;
   side: OrderSide;
   state: string;
+  ordType?: string;
   fillPx?: string;
   fillSz?: string;
   fillTime?: string;

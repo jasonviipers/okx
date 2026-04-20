@@ -1,11 +1,11 @@
 import { readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { computeReplayMetrics } from "@/lib/replay/metrics";
 import { runReplay } from "@/lib/replay/engine";
+import { computeReplayMetrics } from "@/lib/replay/metrics";
 import type { ReplaySnapshot } from "@/lib/replay/types";
 
 function getArg(flag: string): string | undefined {
-  const index = process.argv.findIndex((value) => value === flag);
+  const index = process.argv.indexOf(flag);
   return index >= 0 ? process.argv[index + 1] : undefined;
 }
 
@@ -21,7 +21,7 @@ async function main() {
 
   const raw = await readFile(path.resolve(inputFile), "utf8");
   const snapshots = JSON.parse(raw) as ReplaySnapshot[];
-  const outcomes = runReplay(snapshots);
+  const outcomes = await runReplay(snapshots);
   const metrics = computeReplayMetrics(outcomes);
   const payload = {
     metrics,

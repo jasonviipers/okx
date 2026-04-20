@@ -326,9 +326,17 @@ function mapOkxStateToOrderStatus(state?: string): Order["status"] | undefined {
   }
 }
 
+function mapOkxOrderType(ordType?: string): Order["type"] {
+  return ordType === "limit" ? "limit" : "market";
+}
+
 function getTradeUpdateSortValue(update: OkxTradeUpdateRow): number {
   const filledAt = parseOkxTimestamp(update.fillTime);
   return filledAt ? new Date(filledAt).getTime() : 0;
+}
+
+function getTradeEntrySortValue(entry: StoredHistoryEntry): number {
+  return new Date(entry.timestamp).getTime();
 }
 
 function computeSignedReturnBps(
@@ -488,6 +496,82 @@ function syncTradeEntryWithOkxUpdate(
     },
     changed: true,
   };
+}
+
+function buildBackfilledTradeExecution(
+  update: OkxTradeUpdateRow,
+): StoredTradeExecution | null {
+  const status = mapOkxStateToOrderStatus(update.state) ?? "filled";
+  const filledPrice =
+    parseOkxNumber(update.avgPx) ?? parseOkxNumber(update.fillPx);
+  const size =
+    parseOkxNumber(update.accFillSz) ?? parseOkxNumber(update.fillSz);
+  const filledAt = parseOkxTimestamp(update.fillTime);
+
+  if (!filledAt || !size || size <= 0) {
+    return null;
+  }
+
+  const notionalUsd =
+    parseOkxNumber(update.fillNotionalUsd) ??
+    (filledPrice ? Number((filledPrice * size).toFixed(8)) : undefined);
+  const order: Order = {
+    id: update.ordId,
+    symbol: update.instId,
+    side: update.side,
+    type: mapOkxOrderType(update.ordType),
+    size,
+    notionalUsd,
+    filledPrice,
+    referencePrice: filledPrice,
+    status,
+    createdAt: filledAt,
+    filledAt,
+    okxOrderId: update.ordId,
+  };
+  const entry: StoredTradeExecution = {
+    id: `trade_backfill_${update.ordId}`,
+    type: "trade_execution",
+    timestamp: filledAt,
+    symbol: update.instId,
+    order,
+    success: status !== "cancelled" && status !== "rejected",
+  };
+
+  return {
+    ...entry,
+    performance: buildInitialPerformance(order),
+  };
+}
+
+async function getHistoryTradeUpdates(
+  limit: number,
+): Promise<Map<string, OkxTradeUpdateRow>> {
+  const updates = await getTradeUpdates();
+  const byOrderId = new Map<string, OkxTradeUpdateRow>();
+
+  for (const update of updates) {
+    if (!update.ordId || !update.instId) {
+      continue;
+    }
+
+    const previous = byOrderId.get(update.ordId);
+    if (
+      !previous ||
+      getTradeUpdateSortValue(update) >= getTradeUpdateSortValue(previous)
+    ) {
+      byOrderId.set(update.ordId, update);
+    }
+  }
+
+  return new Map(
+    [...byOrderId.entries()]
+      .sort(
+        (left, right) =>
+          getTradeUpdateSortValue(right[1]) - getTradeUpdateSortValue(left[1]),
+      )
+      .slice(0, Math.max(limit, 200)),
+  );
 }
 
 function refreshTradeEntryPerformance(
@@ -740,46 +824,15 @@ export async function refreshTradeExecutionOutcomes(
   const trades = entries.filter(
     (entry): entry is StoredTradeExecution => entry.type === "trade_execution",
   );
-  if (trades.length === 0) {
-    return [];
-  }
-
-  const pendingOrdersBySymbol = new Map<string, string[]>();
-  for (const trade of trades) {
-    if (trade.order.okxOrderId && trade.order.status === "pending") {
-      const symbolOrders = pendingOrdersBySymbol.get(trade.symbol) ?? [];
-      symbolOrders.push(trade.order.okxOrderId);
-      pendingOrdersBySymbol.set(trade.symbol, symbolOrders);
-    }
-  }
-
-  const okxTradeUpdates = new Map<string, OkxTradeUpdateRow>();
-  if (pendingOrdersBySymbol.size > 0) {
-    const updateResults = await Promise.allSettled(
-      [...pendingOrdersBySymbol.entries()].map(async ([symbol, orderIds]) => {
-        const updates = await getTradeUpdates(symbol);
-        const orderIdSet = new Set(orderIds);
-
-        return updates.filter((update) => orderIdSet.has(update.ordId));
-      }),
-    );
-
-    for (const result of updateResults) {
-      if (result.status !== "fulfilled") {
-        continue;
-      }
-
-      for (const update of result.value) {
-        const previous = okxTradeUpdates.get(update.ordId);
-        if (
-          !previous ||
-          getTradeUpdateSortValue(update) >= getTradeUpdateSortValue(previous)
-        ) {
-          okxTradeUpdates.set(update.ordId, update);
-        }
-      }
-    }
-  }
+  const shouldFetchTradeUpdates =
+    trades.length === 0 ||
+    trades.length < limit ||
+    trades.some((trade) => trade.order.status === "pending");
+  const okxTradeUpdates = shouldFetchTradeUpdates
+    ? await getHistoryTradeUpdates(limit).catch(
+        () => new Map<string, OkxTradeUpdateRow>(),
+      )
+    : new Map<string, OkxTradeUpdateRow>();
 
   let changed = false;
   let nextEntries = entries.map((entry) => {
@@ -797,9 +850,37 @@ export async function refreshTradeExecutionOutcomes(
     return synced.entry;
   });
 
+  const knownOrderIds = new Set(
+    nextEntries.flatMap((entry) =>
+      entry.type === "trade_execution" && entry.order.okxOrderId
+        ? [entry.order.okxOrderId]
+        : [],
+    ),
+  );
+  const backfilledEntries = [...okxTradeUpdates.values()]
+    .filter((update) => !knownOrderIds.has(update.ordId))
+    .map(buildBackfilledTradeExecution)
+    .filter((entry): entry is StoredTradeExecution => entry !== null);
+
+  if (backfilledEntries.length > 0) {
+    changed = true;
+    nextEntries = [...backfilledEntries, ...nextEntries]
+      .sort(
+        (left, right) =>
+          getTradeEntrySortValue(right) - getTradeEntrySortValue(left),
+      )
+      .slice(0, 500);
+  }
+
   const tradeEntries = nextEntries.filter(
     (entry): entry is StoredTradeExecution => entry.type === "trade_execution",
   );
+  if (tradeEntries.length === 0) {
+    if (changed) {
+      await writeHistory(nextEntries);
+    }
+    return [];
+  }
   const candidateSymbols = [
     ...new Set(
       tradeEntries

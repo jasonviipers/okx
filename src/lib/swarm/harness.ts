@@ -1,5 +1,3 @@
-import "server-only";
-
 import { clampConfidence } from "@/lib/agents/base-agent";
 import { markConsensusBlocked } from "@/lib/swarm/rejection-utils";
 import { SWARM_THRESHOLDS } from "@/lib/swarm/thresholds";

@@ -1,6 +1,8 @@
 import { getMemorySummary } from "@/lib/memory/aging-memory";
 import { getAccountOverview } from "@/lib/okx/account";
+import { applyDecisionPolicy } from "@/lib/swarm/decision-policy";
 import { buildDeterministicConsensus } from "@/lib/swarm/deterministic-engine";
+import { applyReliabilityWeighting } from "@/lib/swarm/reliability";
 import { withTelemetrySpan } from "@/lib/telemetry/server";
 import type { MarketContext } from "@/types/market";
 import type { MemorySummary } from "@/types/memory";
@@ -26,12 +28,18 @@ export async function buildSwarmDecision(
       const resolvedMemorySummary =
         memorySummary ?? (await getMemorySummary(ctx));
       const accountOverview = await getAccountOverview(ctx.symbol);
-      const consensus = buildDeterministicConsensus({
+      const baseConsensus = buildDeterministicConsensus({
         ctx,
         accountOverview,
         votes,
         memorySummary: resolvedMemorySummary,
         budgetRemainingUsd,
+      });
+      const consensus = await applyDecisionPolicy({
+        consensus: baseConsensus,
+        ctx,
+        memorySummary: resolvedMemorySummary,
+        afterExpectedValue: applyReliabilityWeighting,
       });
       span.addAttributes({
         decision: consensus.decision ?? consensus.signal,

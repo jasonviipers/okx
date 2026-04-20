@@ -18,7 +18,10 @@ import {
   finalizeExecutionIntent,
   updateExecutionIntent,
 } from "@/lib/persistence/execution-intents";
-import { getHistory, upsertOutcomeWindow } from "@/lib/persistence/history";
+import {
+  refreshTradeExecutionOutcomes,
+  upsertOutcomeWindow,
+} from "@/lib/persistence/history";
 import { cacheGet, cacheIncrement, cacheSet } from "@/lib/redis/client";
 import { nowIso, parseBoolean, parseNumber } from "@/lib/runtime-utils";
 import { upsertOpenPosition } from "@/lib/store/open-positions";
@@ -480,12 +483,10 @@ async function checkExecutionRiskGuards(
     env.MAX_DAILY_TRADES,
     SWARM_THRESHOLDS.DEFAULT_MAX_DAILY_TRADES,
   );
-  const history = await getHistory(200);
+  const tradeHistory = await refreshTradeExecutionOutcomes(200).catch(() => []);
   const since = Date.now() - 24 * 60 * 60 * 1000;
-  const dailyTrades = history.filter(
-    (entry) =>
-      entry.type === "trade_execution" &&
-      new Date(entry.timestamp).getTime() >= since,
+  const dailyTrades = tradeHistory.filter(
+    (entry) => new Date(entry.timestamp).getTime() >= since,
   ).length;
 
   if (dailyTrades >= maxDailyTrades) {
@@ -508,11 +509,8 @@ async function checkExecutionRiskGuards(
     !hasLiveBrokerBudget &&
     liveTradingBudgetUsd > 0
   ) {
-    const usedBudgetUsd = history.reduce((sum, entry) => {
-      if (
-        entry.type !== "trade_execution" ||
-        new Date(entry.timestamp).getTime() < since
-      ) {
+    const usedBudgetUsd = tradeHistory.reduce((sum, entry) => {
+      if (new Date(entry.timestamp).getTime() < since) {
         return sum;
       }
 

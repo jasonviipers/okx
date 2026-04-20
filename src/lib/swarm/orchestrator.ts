@@ -103,7 +103,9 @@ export async function runSwarm(
     },
     async (span) => {
       const startedAt = Date.now();
-      const cached = options?.forceFresh
+      const shouldUseCache =
+        !options?.forceFresh && options?.budgetRemainingUsd === undefined;
+      const cached = !shouldUseCache
         ? null
         : await getCachedSwarmResult(ctx.symbol, ctx.timeframe);
       if (cached) {
@@ -128,7 +130,9 @@ export async function runSwarm(
         memorySummary,
         options?.budgetRemainingUsd,
       );
-      await setCachedSwarmResult(ctx.symbol, ctx.timeframe, consensus);
+      if (shouldUseCache) {
+        await setCachedSwarmResult(ctx.symbol, ctx.timeframe, consensus);
+      }
 
       const result = {
         consensus,
