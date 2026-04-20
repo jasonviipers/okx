@@ -5,8 +5,11 @@ import {
   finalizeVote,
   summarizeMemoryForDisplay,
 } from "@/lib/agents/base-agent";
+import {
+  getMarketResearchDigest,
+  isGoogleSearchConfigured,
+} from "@/lib/ai/google-search";
 import { getOllamaModel, isOllamaConfigured } from "@/lib/ai/ollama";
-import { getMarketResearchDigest } from "@/lib/ai/ollama-web";
 import type { AIModel } from "@/lib/configs/models";
 import {
   assertCanReason,
@@ -582,7 +585,7 @@ export function createAgent(modelId: string, roleConfig: AgentRoleConfig) {
               "External research was added to the agent context.",
           }
         : {
-            status: isOllamaConfigured() ? "failed" : "unavailable",
+            status: isGoogleSearchConfigured() ? "failed" : "unavailable",
             searched: true,
             focus: researchDecision.focus,
             rationale:
@@ -639,8 +642,8 @@ export function createAgent(modelId: string, roleConfig: AgentRoleConfig) {
       }
     } else {
       const suffix = researchContext
-        ? " [Ollama offline; heuristic used without web synthesis]"
-        : " [Ollama offline; heuristic used]";
+        ? " [Ollama reasoning offline; heuristic used with Gemini Search context]"
+        : " [Ollama reasoning offline; heuristic used]";
       resolvedVote = {
         ...heuristicVote,
         reasoning: `${heuristicVote.reasoning}${suffix}${memoryLabel ? ` ${memoryLabel}` : ""}`,

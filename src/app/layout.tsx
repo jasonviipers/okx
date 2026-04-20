@@ -1,15 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
-import { Inter } from "next/font/google";
-import { JetBrains_Mono } from "next/font/google";
-import { cn } from "@/lib/utils";
 import { TooltipProvider } from "@/components/ui/tooltip";
-
-const inter = Inter({ subsets: ["latin"], variable: "--font-inter" });
-const jetbrainsMono = JetBrains_Mono({
-  subsets: ["latin"],
-  variable: "--font-jetbrains",
-});
+import { cn } from "@/lib/utils";
 
 export const viewport: Viewport = {
   width: "device-width",
@@ -31,15 +23,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html
-      lang="en"
-      className={cn(
-        "h-full antialiased",
-        "font-mono",
-        inter.variable,
-        jetbrainsMono.variable,
-      )}
-    >
+    <html lang="en" className={cn("h-full antialiased", "font-mono")}>
       <body className="min-h-full flex flex-col">
         <TooltipProvider>{children}</TooltipProvider>
       </body>

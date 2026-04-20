@@ -1,8 +1,8 @@
 import "server-only";
 
 import { env } from "@/env";
+import { isGoogleSearchConfigured } from "@/lib/ai/google-search";
 import { isOllamaConfigured } from "@/lib/ai/ollama";
-import { isOllamaWebSearchConfigured } from "@/lib/ai/ollama-web";
 import {
   ensureAutonomyBootState,
   getAutonomyStatus,
@@ -25,7 +25,7 @@ export async function getRuntimeStatus(): Promise<RuntimeStatus> {
   const okxConfigured = hasOkxTradingCredentials();
   const redisConfigured = isRedisConfigured();
   const ollamaConfigured = isOllamaConfigured();
-  const webResearchConfigured = isOllamaWebSearchConfigured();
+  const webResearchConfigured = isGoogleSearchConfigured();
   const accountOverview = okxConfigured
     ? await getAccountOverview().catch(() => undefined)
     : undefined;
@@ -63,8 +63,8 @@ export async function getRuntimeStatus(): Promise<RuntimeStatus> {
       configured: webResearchConfigured,
       available: webResearchConfigured,
       detail: webResearchConfigured
-        ? "Ollama web research enabled"
-        : "Ollama web research disabled",
+        ? "Gemini Search enabled"
+        : "Gemini Search disabled",
     },
     autonomy: await getAutonomyStatus(),
     timestamp: new Date().toISOString(),

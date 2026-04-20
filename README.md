@@ -7,10 +7,43 @@ It combines:
 - live and demo OKX market/account connectivity
 - a role-based AI swarm for signal generation
 - validator and veto layers for safer trade decisions
-- Ollama-backed model reasoning with optional web research
+- Ollama-backed model reasoning with Gemini-grounded web research
 - a terminal-style dashboard for operators
 - Redis-backed caching and throttling
 - local durable history for swarm runs and executions
+
+## Quick Start
+
+### Prerequisites
+
+- Docker + Docker Compose v2
+- 4 GB RAM minimum
+
+### Start Everything
+
+```bash
+cp .env.example .env
+# Edit .env — change all "change-me" values
+docker compose -f docker-compose.full.yml up -d
+```
+
+### Service URLs
+
+| Service | URL |
+| --- | --- |
+| App | http://localhost |
+| Grafana | http://localhost:3001 (admin / see .env) |
+| MinIO Console | http://localhost:9001 |
+| Jaeger UI | http://localhost:16686 |
+| Prometheus | http://localhost:9090 |
+
+### First-Time Migration
+
+```bash
+# After containers are healthy:
+bash scripts/migrate-uploads.sh
+bash scripts/backfill-vectors.sh
+```
 
 ## Core Concepts
 
@@ -42,8 +75,7 @@ The system computes weighted consensus, then runs structural and veto validation
 
 When configured, agents can enrich their decision context using:
 
-- Ollama `web_search`
-- Ollama `web_fetch`
+- Gemini Search grounding via `@ai-sdk/google`
 
 Research is cached briefly to avoid duplicate lookups across agents.
 
@@ -143,7 +175,17 @@ OLLAMA_BASE_URL=http://localhost:11434
 OLLAMA_API_KEY=
 ```
 
-`OLLAMA_API_KEY` is also used for Ollama web research when enabled.
+Use Ollama for the existing reasoning models.
+
+### Google Generative AI
+
+```bash
+GOOGLE_GENERATIVE_AI_API_KEY=
+GOOGLE_EMBEDDING_MODEL=gemini-embedding-001
+GOOGLE_SEARCH_MODEL=gemini-2.5-flash
+```
+
+Google now powers vector embeddings and Gemini Search-grounded research.
 
 ## Getting Started
 
@@ -179,7 +221,7 @@ The footer shows runtime service status and account mode.
 - `OKX LIVE` means private requests are live-account scoped
 - `OKX PAPER` means simulated-trading header mode
 - `REDIS MEM` means Redis is not configured and memory fallback is active
-- `SEARCH WEB` means Ollama web research is enabled
+- `SEARCH WEB` means Gemini Search grounding is enabled
 
 ### Fallback market data
 

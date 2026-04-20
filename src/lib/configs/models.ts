@@ -55,7 +55,7 @@ export const MODEL_ROLES: Record<AIModel, ModelRole> = {
 export interface RoleCapabilities {
   /** May submit a BUY/SELL/HOLD vote into the swarm */
   canVote: boolean;
-  /** May perform web research via Ollama web search */
+  /** May perform web research via Gemini Search grounding */
   canUseWebSearch: boolean;
   /** Acts as a veto layer — HOLD overrides consensus */
   isVetoLayer: boolean;
@@ -124,7 +124,7 @@ export function modelCanVote(modelId: AIModel): boolean {
   return ROLE_CAPABILITIES[role].canVote;
 }
 
-/** Returns true if this model may call Ollama web search. */
+/** Returns true if this model may call Gemini Search-grounded research. */
 export function modelCanUseWebSearch(modelId: AIModel): boolean {
   const role = MODEL_ROLES[modelId];
   return ROLE_CAPABILITIES[role].canUseWebSearch;
