@@ -17,7 +17,10 @@ import {
 import { getHistory, upsertOutcomeWindow } from "@/lib/persistence/history";
 import { cacheGet, cacheIncrement, cacheSet } from "@/lib/redis/client";
 import { nowIso, parseBoolean, parseNumber } from "@/lib/runtime-utils";
-import { upsertOpenPosition } from "@/lib/store/open-positions";
+import {
+  removeOpenPositionsForInstrument,
+  upsertOpenPosition,
+} from "@/lib/store/open-positions";
 import { SWARM_THRESHOLDS } from "@/lib/swarm/thresholds";
 import { getTrailingStopDistancePct } from "@/lib/swarm/trailing-stop";
 import {
@@ -93,6 +96,7 @@ function buildTradeDecisionSnapshot(
     signal: consensus.signal,
     directionalSignal: consensus.directionalSignal,
     decision: consensus.decision ?? consensus.signal,
+    marketType: consensus.marketType,
     confidence: consensus.confidence,
     agreement: consensus.agreement,
     executionEligible: consensus.executionEligible,
@@ -266,7 +270,12 @@ async function persistManagedOpenPosition(input: {
   entryPrice: number;
   exitPlan: ExitPlan;
 }) {
-  if (input.decision !== "BUY" || input.normalizedSize <= 0) {
+  if (
+    input.decision === "HOLD" ||
+    input.normalizedSize <= 0 ||
+    input.order.reduceOnly === true ||
+    (input.consensus.marketType === "spot" && input.decision !== "BUY")
+  ) {
     return;
   }
 
@@ -385,18 +394,25 @@ function buildErrorResult(input: {
   };
 }
 
-async function deriveExecutableSize(
-  decision: TradeSignal,
-  symbol: string,
-  targetNotionalUsd: number,
-): Promise<{
+async function deriveExecutableSize(input: {
+  decision: TradeSignal;
+  symbol: string;
+  targetNotionalUsd: number;
+  currentPosition?: Awaited<ReturnType<typeof getPositions>>[number];
+}): Promise<{
   size: number;
+  marketType: NonNullable<DecisionResult["marketType"]>;
+  tdMode?: NonNullable<
+    Awaited<ReturnType<typeof getAccountOverview>>["buyingPower"]["tdMode"]
+  >;
+  posSide?: Awaited<ReturnType<typeof getPositions>>[number]["posSide"];
+  reduceOnly?: boolean;
   reason?: string;
   response: Record<string, unknown>;
 }> {
   const [overview, ticker] = await Promise.all([
-    getAccountOverview(symbol),
-    getTicker(symbol),
+    getAccountOverview(input.symbol),
+    getTicker(input.symbol),
   ]);
   const maxBalanceUsagePct = parseNumber(
     env.MAX_BALANCE_USAGE_PCT,
@@ -406,13 +422,82 @@ async function deriveExecutableSize(
     env.MIN_TRADE_NOTIONAL,
     SWARM_THRESHOLDS.DEFAULT_MIN_TRADE_NOTIONAL,
   );
+  const marketType =
+    overview.buyingPower.marketType ??
+    consensusMarketTypeFromSymbol(input.symbol);
+  const tdMode = overview.buyingPower.tdMode;
+  const contractSizeUsd =
+    overview.buyingPower.contractSizeUsd ??
+    (ticker.last > 0 ? ticker.last : undefined);
+  const currentPosition = input.currentPosition;
+  const currentPositionOpposesDecision =
+    currentPosition &&
+    ((currentPosition.side === "buy" && input.decision === "SELL") ||
+      (currentPosition.side === "sell" && input.decision === "BUY"));
 
-  if (decision === "BUY") {
+  if (currentPositionOpposesDecision && marketType !== "spot") {
+    const size = Number(currentPosition.size.toFixed(8));
+    const notional = Math.max(currentPosition.notionalUsd ?? 0, 0);
+    return {
+      size,
+      marketType,
+      tdMode,
+      posSide: currentPosition.posSide,
+      reduceOnly: true,
+      response: {
+        currentPositionSide: currentPosition.side,
+        currentPositionSize: currentPosition.size,
+        currentPositionNotionalUsd: currentPosition.notionalUsd,
+        derivedFrom: "position-close-reduce-only",
+      },
+    };
+  }
+
+  if (input.decision === "BUY") {
+    if (marketType !== "spot") {
+      const availableContracts = overview.buyingPower.buy * maxBalanceUsagePct;
+      const targetContracts =
+        contractSizeUsd && contractSizeUsd > 0
+          ? input.targetNotionalUsd / contractSizeUsd
+          : 0;
+      const size = Math.min(availableContracts, targetContracts);
+      const notional = size * Math.max(contractSizeUsd ?? 0, 0);
+      if (notional < minTradeNotional || size <= 0) {
+        return {
+          size: 0,
+          marketType,
+          tdMode,
+          reason: "insufficient derivative buying power for live buy",
+          response: {
+            availableContracts,
+            contractSizeUsd,
+            minTradeNotional,
+            settleCurrency: overview.buyingPower.settleCurrency,
+          },
+        };
+      }
+
+      return {
+        size: Number(size.toFixed(8)),
+        marketType,
+        tdMode,
+        response: {
+          availableContracts,
+          contractSizeUsd,
+          notional,
+          settleCurrency: overview.buyingPower.settleCurrency,
+          derivedFrom: "derivative-buying-power",
+        },
+      };
+    }
+
     const availableQuote = overview.buyingPower.buy * maxBalanceUsagePct;
-    const notional = Math.min(targetNotionalUsd, availableQuote);
+    const notional = Math.min(input.targetNotionalUsd, availableQuote);
     if (notional < minTradeNotional || ticker.ask <= 0) {
       return {
         size: 0,
+        marketType,
+        tdMode,
         reason: "insufficient quote buying power for live buy",
         response: {
           availableQuote,
@@ -424,6 +509,8 @@ async function deriveExecutableSize(
 
     return {
       size: Number((notional / ticker.ask).toFixed(8)),
+      marketType,
+      tdMode,
       response: {
         availableQuote,
         notional,
@@ -433,14 +520,55 @@ async function deriveExecutableSize(
     };
   }
 
+  if (marketType !== "spot") {
+    const availableContracts = overview.buyingPower.sell * maxBalanceUsagePct;
+    const targetContracts =
+      contractSizeUsd && contractSizeUsd > 0
+        ? input.targetNotionalUsd / contractSizeUsd
+        : 0;
+    const size = Math.min(availableContracts, targetContracts);
+    const notional = size * Math.max(contractSizeUsd ?? 0, 0);
+
+    if (notional < minTradeNotional || size <= 0) {
+      return {
+        size: 0,
+        marketType,
+        tdMode,
+        reason: "insufficient derivative selling power for live sell",
+        response: {
+          availableContracts,
+          contractSizeUsd,
+          minTradeNotional,
+          settleCurrency: overview.buyingPower.settleCurrency,
+        },
+      };
+    }
+
+    return {
+      size: Number(size.toFixed(8)),
+      marketType,
+      tdMode,
+      response: {
+        availableContracts,
+        contractSizeUsd,
+        notional,
+        settleCurrency: overview.buyingPower.settleCurrency,
+        derivedFrom: "derivative-selling-power",
+      },
+    };
+  }
+
   const availableBase = overview.buyingPower.sell * maxBalanceUsagePct;
-  const targetBaseSize = ticker.bid > 0 ? targetNotionalUsd / ticker.bid : 0;
+  const targetBaseSize =
+    ticker.bid > 0 ? input.targetNotionalUsd / ticker.bid : 0;
   const size = Math.min(availableBase, targetBaseSize);
   const notional = size * ticker.bid;
 
   if (notional < minTradeNotional || size <= 0) {
     return {
       size: 0,
+      marketType,
+      tdMode,
       reason: "insufficient base inventory for live sell",
       response: {
         availableBase,
@@ -452,6 +580,8 @@ async function deriveExecutableSize(
 
   return {
     size: Number(size.toFixed(8)),
+    marketType,
+    tdMode,
     response: {
       availableBase,
       notional,
@@ -461,11 +591,22 @@ async function deriveExecutableSize(
   };
 }
 
+function consensusMarketTypeFromSymbol(
+  symbol: string,
+): NonNullable<DecisionResult["marketType"]> {
+  return symbol.endsWith("-SWAP")
+    ? "swap"
+    : /-\d{6,8}$/i.test(symbol)
+      ? "futures"
+      : "spot";
+}
+
 async function checkExecutionRiskGuards(
   consensus: DecisionResult,
   decision: TradeSignal,
 ): Promise<{
   allowed: boolean;
+  currentPosition?: Awaited<ReturnType<typeof getPositions>>[number];
   reason?: string;
   response?: Record<string, unknown>;
 }> {
@@ -528,6 +669,7 @@ async function checkExecutionRiskGuards(
   ) {
     return {
       allowed: false,
+      currentPosition: existing,
       reason: "existing same-direction position already open",
       response: {
         existingSide: existing.side,
@@ -536,7 +678,7 @@ async function checkExecutionRiskGuards(
     };
   }
 
-  return { allowed: true };
+  return { allowed: true, currentPosition: existing };
 }
 
 function getExecutionCircuitKey(symbol: string): string {
@@ -762,7 +904,7 @@ function mapExecutionGuardReason(
           code: "same_direction_position_exists",
           summary: "A same-direction position is already open.",
           detail:
-            "Execution was skipped to avoid stacking the same spot exposure.",
+            "Execution was skipped to avoid stacking the same directional exposure.",
           metrics: response,
         },
       ];
@@ -784,6 +926,28 @@ function mapExecutionGuardReason(
           summary: "Insufficient base inventory for SELL.",
           detail:
             "Spot execution cannot sell more base inventory than is available.",
+          metrics: response,
+        },
+      ];
+    case "insufficient derivative buying power for live buy":
+      return [
+        {
+          layer: "execution",
+          code: "insufficient_derivative_buying_power",
+          summary: "Insufficient derivatives buying power for BUY.",
+          detail:
+            "Available futures or swap capacity cannot support the target long order.",
+          metrics: response,
+        },
+      ];
+    case "insufficient derivative selling power for live sell":
+      return [
+        {
+          layer: "execution",
+          code: "insufficient_derivative_selling_power",
+          summary: "Insufficient derivatives capacity for SELL.",
+          detail:
+            "Available futures or swap capacity cannot support the target short order.",
           metrics: response,
         },
       ];
@@ -1168,11 +1332,12 @@ export async function autoExecuteConsensus(
           return finalizeResult(result);
         }
 
-        const executionPlan = await deriveExecutableSize(
+        const executionPlan = await deriveExecutableSize({
           decision,
-          consensus.symbol,
+          symbol: consensus.symbol,
           targetNotionalUsd,
-        );
+          currentPosition: riskGuard.currentPosition,
+        });
         if (executionPlan.size <= 0) {
           const result = buildHoldResult({
             timestamp,
@@ -1194,7 +1359,10 @@ export async function autoExecuteConsensus(
           return finalizeResult(result);
         }
 
-        const instrumentRules = await getInstrumentRules(consensus.symbol);
+        const instrumentRules = await getInstrumentRules(
+          consensus.symbol,
+          executionPlan.marketType,
+        );
         const normalizedSize = normalizeOrderSize(
           executionPlan.size,
           instrumentRules.lotSize,
@@ -1251,17 +1419,22 @@ export async function autoExecuteConsensus(
             signal: decision,
             action: decision,
             symbol: consensus.symbol,
+            marketType: executionPlan.marketType,
             size: Number(normalizedSize.toFixed(8)),
             mode: "ai_only",
             confirmed: true,
             source: "swarm_auto",
             decisionSnapshot: buildTradeDecisionSnapshot(consensus),
             executionContext: {
+              marketType: executionPlan.marketType,
               referencePrice: executionReferencePrice,
               targetNotionalUsd: Number(targetNotionalUsd.toFixed(8)),
               normalizedSize: Number(normalizedSize.toFixed(8)),
               expectedNetEdgeBps: consensus.expectedNetEdgeBps,
               marketQualityScore: consensus.marketQualityScore,
+              tdMode: executionPlan.tdMode,
+              posSide: executionPlan.posSide,
+              reduceOnly: executionPlan.reduceOnly,
               stopLoss: exitPlan.stopLoss,
               takeProfitLevels: exitPlan.takeProfitLevels,
               trailingStopDistancePct: getTrailingStopDistancePct(),
@@ -1347,6 +1520,7 @@ export async function autoExecuteConsensus(
           symbol: consensus.symbol,
           decision,
           normalizedSize,
+          reduceOnly: executionPlan.reduceOnly,
           payload,
         });
         if (payload?.data?.order) {
@@ -1360,6 +1534,9 @@ export async function autoExecuteConsensus(
             order: payload.data.order,
             entryPrice,
           });
+          if (executionPlan.reduceOnly === true) {
+            await removeOpenPositionsForInstrument(consensus.symbol);
+          }
           await persistManagedOpenPosition({
             consensus,
             decision,

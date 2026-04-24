@@ -4,17 +4,28 @@ import { env } from "@/env";
 import {
   getOkxAccountModeLabel,
   getOkxPrivateAuthHint,
+  getOkxTradeModeForMarketType,
   hasOkxTradingCredentials,
   OKX_ENDPOINTS,
 } from "@/lib/configs/okx";
 import { OkxRequestError, okxPrivateGet } from "@/lib/okx/client";
-import { getConfiguredAutonomousQuoteCurrencies } from "@/lib/okx/instruments";
+import {
+  estimateInstrumentNotionalUsd,
+  estimateInstrumentUnitNotionalUsd,
+  getConfiguredAutonomousQuoteCurrencies,
+  getInstrumentRules,
+} from "@/lib/okx/instruments";
+import { getTicker } from "@/lib/okx/market";
+import {
+  isDerivativeMarketType,
+  resolveMarketType,
+} from "@/lib/okx/market-types";
 import { parseNumber } from "@/lib/runtime-utils";
-import { approximateAvailableUsd, parseSpotSymbol } from "@/lib/trade-utils";
+import { approximateAvailableUsd } from "@/lib/trade-utils";
 import type {
   AccountAssetBalance,
   AccountOverview,
-  SpotBuyingPower,
+  TradingBuyingPower,
 } from "@/types/trade";
 
 interface OkxBalanceDetailRow {
@@ -38,9 +49,11 @@ interface OkxBalanceRow {
   details: OkxBalanceDetailRow[];
 }
 
-interface OkxMaxAvailRow {
-  availBuy: string;
-  availSell: string;
+interface OkxMaxSizeRow {
+  ccy?: string;
+  instId: string;
+  maxBuy: string;
+  maxSell: string;
 }
 
 interface OkxFundingBalanceRow {
@@ -143,16 +156,38 @@ function mapFundingBalances(
     .sort((a, b) => b.equity - a.equity);
 }
 
+function buildEmptyBuyingPower(symbol?: string): TradingBuyingPower {
+  const marketType = symbol ? resolveMarketType(symbol) : undefined;
+
+  return {
+    symbol,
+    marketType,
+    buy: 0,
+    sell: 0,
+    buyUnit: marketType === "spot" ? "quote" : "contract",
+    sellUnit: marketType === "spot" ? "base" : "contract",
+    buyNotionalUsd: 0,
+    sellNotionalUsd: 0,
+    tdMode: marketType ? getOkxTradeModeForMarketType(marketType) : "cash",
+    posSide:
+      marketType && isDerivativeMarketType(marketType) ? "net" : undefined,
+    shortingSupported: marketType ? isDerivativeMarketType(marketType) : false,
+  };
+}
+
 function buildCashAvailableUsd(
   tradingBalances: AccountAssetBalance[],
   symbol?: string,
 ): number {
-  const symbolParts = parseSpotSymbol(symbol);
+  const quoteFromSymbol =
+    resolveMarketType(symbol) === "spot"
+      ? symbol?.split("-")[1]?.trim().toUpperCase()
+      : undefined;
   const quoteCurrencies = new Set(
     [
       ...DEFAULT_CASH_LIKE_CURRENCIES,
       ...getConfiguredAutonomousQuoteCurrencies(),
-      symbolParts?.quote,
+      quoteFromSymbol,
     ]
       .map(toCurrencyKey)
       .filter(Boolean),
@@ -178,13 +213,7 @@ function buildEmptyOverview(
     adjustedEquity: 0,
     isoEquity: 0,
     unrealizedPnl: 0,
-    buyingPower: {
-      symbol,
-      quoteCurrency: parseSpotSymbol(symbol)?.quote,
-      baseCurrency: parseSpotSymbol(symbol)?.base,
-      buy: 0,
-      sell: 0,
-    },
+    buyingPower: buildEmptyBuyingPower(symbol),
     tradingBalances: [],
     fundingBalances: [],
     accountMode: getOkxAccountModeLabel(),
@@ -267,6 +296,127 @@ async function getCachedAccountState(): Promise<CachedAccountState> {
   return inFlightAccountState;
 }
 
+function getTradingBalance(
+  tradingBalances: AccountAssetBalance[],
+  currency: string | undefined,
+) {
+  if (!currency) {
+    return undefined;
+  }
+
+  return tradingBalances.find(
+    (detail) => detail.currency.trim().toUpperCase() === currency.toUpperCase(),
+  );
+}
+
+function buildFallbackBuyingPower(
+  symbol: string | undefined,
+  tradingBalances: AccountAssetBalance[],
+): TradingBuyingPower {
+  return {
+    ...buildEmptyBuyingPower(symbol),
+    buy: tradingBalances.reduce(
+      (sum, balance) => sum + balance.availableBalance,
+      0,
+    ),
+    buyUnit: "currency",
+  };
+}
+
+async function buildSpotBuyingPower(input: {
+  symbol: string;
+  tradingBalances: AccountAssetBalance[];
+}): Promise<TradingBuyingPower> {
+  const instrumentRules = await getInstrumentRules(input.symbol, "spot");
+  const quoteBalance = getTradingBalance(
+    input.tradingBalances,
+    instrumentRules.quoteCurrency,
+  );
+  const baseBalance = getTradingBalance(
+    input.tradingBalances,
+    instrumentRules.baseCurrency,
+  );
+
+  return {
+    symbol: input.symbol,
+    marketType: "spot",
+    quoteCurrency: instrumentRules.quoteCurrency,
+    baseCurrency: instrumentRules.baseCurrency,
+    settleCurrency: instrumentRules.settleCurrency,
+    buy: Math.max(quoteBalance?.availableBalance ?? 0, 0),
+    sell: Math.max(baseBalance?.availableBalance ?? 0, 0),
+    buyUnit: "quote",
+    sellUnit: "base",
+    buyNotionalUsd: Math.max(approximateAvailableUsd(quoteBalance), 0),
+    sellNotionalUsd: Math.max(approximateAvailableUsd(baseBalance), 0),
+    tdMode: "cash",
+    shortingSupported: false,
+  };
+}
+
+async function buildDerivativeBuyingPower(
+  symbol: string,
+): Promise<{ buyingPower: TradingBuyingPower; warning?: string }> {
+  const instrumentRules = await getInstrumentRules(symbol);
+  const tdMode = getOkxTradeModeForMarketType(instrumentRules.marketType);
+  let rows: OkxMaxSizeRow[] = [];
+  let warning: string | undefined;
+
+  try {
+    rows = await okxPrivateGet<OkxMaxSizeRow>(
+      OKX_ENDPOINTS.maxSize,
+      new URLSearchParams({
+        instId: symbol,
+        tdMode,
+      }),
+    );
+  } catch (error) {
+    if (error instanceof OkxRequestError && error.status === 400) {
+      warning =
+        "OKX rejected the derivative size lookup for this instrument. Balance data is still available.";
+    } else {
+      throw error;
+    }
+  }
+
+  const ticker = await getTicker(symbol);
+  const contractSizeUsd = estimateInstrumentUnitNotionalUsd(
+    instrumentRules,
+    ticker.last,
+  );
+  const maxSize = rows[0];
+  const buy = Math.max(parseNumber(maxSize?.maxBuy, 0), 0);
+  const sell = Math.max(parseNumber(maxSize?.maxSell, 0), 0);
+
+  return {
+    buyingPower: {
+      symbol,
+      marketType: instrumentRules.marketType,
+      quoteCurrency: instrumentRules.quoteCurrency,
+      baseCurrency: instrumentRules.baseCurrency,
+      settleCurrency: instrumentRules.settleCurrency,
+      buy,
+      sell,
+      buyUnit: "contract",
+      sellUnit: "contract",
+      buyNotionalUsd: estimateInstrumentNotionalUsd(
+        instrumentRules,
+        ticker.last,
+        buy,
+      ),
+      sellNotionalUsd: estimateInstrumentNotionalUsd(
+        instrumentRules,
+        ticker.last,
+        sell,
+      ),
+      contractSizeUsd,
+      tdMode,
+      shortingSupported: true,
+    },
+    warning,
+  };
+}
+
 export async function getAccountOverview(
   symbol?: string,
 ): Promise<AccountOverview> {
@@ -282,78 +432,27 @@ export async function getAccountOverview(
   }
 
   try {
-    const symbolParts = parseSpotSymbol(symbol);
     const accountState = await getCachedAccountState();
     const balance = accountState.balance;
     const fundingBalanceRows = accountState.fundingBalances;
-
-    let maxAvailRows: OkxMaxAvailRow[] = [];
-    let buyingPowerWarning: string | undefined;
-
-    if (symbol && !symbolParts) {
-      try {
-        maxAvailRows = await okxPrivateGet<OkxMaxAvailRow>(
-          OKX_ENDPOINTS.maxAvailSize,
-          new URLSearchParams({
-            instId: symbol,
-            tdMode: "cash",
-          }),
-        );
-      } catch (error) {
-        if (error instanceof OkxRequestError && error.status === 400) {
-          buyingPowerWarning =
-            "OKX rejected the buying power lookup for this symbol. Balance data is still available.";
-        } else {
-          throw error;
-        }
-      }
-    }
-
-    const buyingPower = maxAvailRows[0];
     const tradingBalances = mapTradingBalances(balance?.details);
     const fundingBalances = mapFundingBalances(fundingBalanceRows);
-    const derivedSpotBuyingPower: SpotBuyingPower | undefined = symbolParts
-      ? {
-          symbol,
-          quoteCurrency: symbolParts.quote,
-          baseCurrency: symbolParts.base,
-          buy:
-            tradingBalances.find(
-              (detail) => detail.currency === symbolParts.quote,
-            )?.availableBalance ?? 0,
-          sell:
-            tradingBalances.find(
-              (detail) => detail.currency === symbolParts.base,
-            )?.availableBalance ?? 0,
-        }
-      : undefined;
-
-    const requestBuyingPower: SpotBuyingPower = {
-      symbol,
-      quoteCurrency: symbolParts?.quote,
-      baseCurrency: symbolParts?.base,
-      buy: parseNumber(buyingPower?.availBuy, 0),
-      sell: parseNumber(buyingPower?.availSell, 0),
-    };
-
-    const fallbackBuyingPower: SpotBuyingPower | undefined =
-      !symbolParts && tradingBalances.length > 0
-        ? {
-            symbol,
-            quoteCurrency: undefined,
-            baseCurrency: undefined,
-            buy: tradingBalances.reduce(
-              (sum, b) => sum + b.availableBalance,
-              0,
-            ),
-            sell: 0,
-          }
-        : undefined;
-
-    const finalBuyingPower =
-      requestBuyingPower.buy > 0 || requestBuyingPower.sell > 0
-        ? requestBuyingPower
-        : (fallbackBuyingPower ?? requestBuyingPower);
+    const marketType = symbol ? resolveMarketType(symbol) : undefined;
+    const buyingPowerResult =
+      symbol && isDerivativeMarketType(marketType)
+        ? await buildDerivativeBuyingPower(symbol)
+        : symbol
+          ? {
+              buyingPower: await buildSpotBuyingPower({
+                symbol,
+                tradingBalances,
+              }),
+              warning: undefined,
+            }
+          : {
+              buyingPower: buildFallbackBuyingPower(symbol, tradingBalances),
+              warning: undefined,
+            };
 
     const totalAvailableEquity = parseNumber(balance?.availEq, 0);
     const derivedAvailableEquity =
@@ -374,19 +473,12 @@ export async function getAccountOverview(
       unrealizedPnl: parseNumber(balance?.upl, 0),
       marginRatio: toMarginRatio(balance?.imr, balance?.mmr),
       notionalUsd: parseNumber(balance?.notionalUsd, 0),
-      buyingPower: derivedSpotBuyingPower ?? finalBuyingPower,
+      buyingPower: buyingPowerResult.buyingPower,
       tradingBalances,
       fundingBalances,
       accountMode: getOkxAccountModeLabel(),
       updatedAt: new Date(accountState.fetchedAt).toISOString(),
-      warning: mergeWarnings(
-        derivedSpotBuyingPower ||
-          maxAvailRows.length > 0 ||
-          fundingBalances.length > 0
-          ? undefined
-          : buyingPowerWarning,
-        accountState.warning,
-      ),
+      warning: mergeWarnings(buyingPowerResult.warning, accountState.warning),
     };
   } catch (error) {
     if (

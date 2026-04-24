@@ -1,14 +1,19 @@
 import type { AIMode } from "@/lib/configs/models";
 import type { DecisionSource, RejectionReason, TradeSignal } from "./swarm";
 
+export type MarketType = "spot" | "futures" | "swap";
 export type OrderSide = "buy" | "sell";
 export type OrderType = "market" | "limit";
 export type OrderStatus = "pending" | "filled" | "cancelled" | "rejected";
 export type AccountMode = "live" | "paper";
+export type MarginMode = "cash" | "cross" | "isolated";
+export type PositionSide = "net" | "long" | "short";
+export type BuyingPowerUnit = "base" | "quote" | "contract" | "currency";
 
 export interface Order {
   id: string;
   symbol: string;
+  marketType?: MarketType;
   side: OrderSide;
   type: OrderType;
   size: number;
@@ -21,16 +26,23 @@ export interface Order {
   filledAt?: string; // ISO timestamp
   okxOrderId?: string; // OKX order ID
   accountMode?: AccountMode;
+  tdMode?: MarginMode;
+  posSide?: PositionSide;
+  reduceOnly?: boolean;
 }
 
 export interface Position {
   symbol: string;
+  marketType?: MarketType;
   side: OrderSide;
+  posSide?: PositionSide;
   size: number;
   entryPrice: number;
   currentPrice: number;
   pnl: number; // unrealized P&L
   pnlPercent: number;
+  notionalUsd?: number;
+  marginMode?: Exclude<MarginMode, "cash">;
   openedAt: string; // ISO timestamp
 }
 
@@ -43,12 +55,22 @@ export interface AccountAssetBalance {
   unrealizedPnl: number;
 }
 
-export interface SpotBuyingPower {
+export interface TradingBuyingPower {
   symbol?: string;
+  marketType?: MarketType;
   quoteCurrency?: string;
   baseCurrency?: string;
+  settleCurrency?: string;
   buy: number;
   sell: number;
+  buyUnit: BuyingPowerUnit;
+  sellUnit: BuyingPowerUnit;
+  buyNotionalUsd: number;
+  sellNotionalUsd: number;
+  contractSizeUsd?: number;
+  tdMode?: MarginMode;
+  posSide?: PositionSide;
+  shortingSupported?: boolean;
 }
 
 export interface AccountOverview {
@@ -60,7 +82,7 @@ export interface AccountOverview {
   unrealizedPnl: number;
   marginRatio?: number;
   notionalUsd?: number;
-  buyingPower: SpotBuyingPower;
+  buyingPower: TradingBuyingPower;
   tradingBalances: AccountAssetBalance[];
   fundingBalances: AccountAssetBalance[];
   accountMode: AccountMode;
@@ -72,6 +94,7 @@ export interface TradeDecisionSnapshot {
   signal: TradeSignal;
   directionalSignal: TradeSignal;
   decision: TradeSignal;
+  marketType?: MarketType;
   confidence: number;
   agreement: number;
   executionEligible: boolean;
@@ -85,11 +108,15 @@ export interface TradeDecisionSnapshot {
 }
 
 export interface TradeExecutionContext {
+  marketType?: MarketType;
   referencePrice?: number;
   targetNotionalUsd?: number;
   normalizedSize?: number;
   expectedNetEdgeBps?: number;
   marketQualityScore?: number;
+  tdMode?: MarginMode;
+  posSide?: PositionSide;
+  reduceOnly?: boolean;
   stopLoss?: number | null;
   takeProfitLevels?: number[];
   trailingStopDistancePct?: number;
@@ -130,6 +157,7 @@ export interface TradePerformanceMetrics {
 export interface TradeExecutionRequest {
   signal: TradeSignal;
   symbol: string;
+  marketType?: MarketType;
   size: number;
   price?: number;
   mode: AIMode;

@@ -61,6 +61,8 @@ const optionalIntegerString = z.preprocess(
 
 const okxAccountModes = ["live", "demo", "paper"] as const;
 const okxApiRegions = ["global", "us", "eu", "au"] as const;
+const okxDerivativeTradeModes = ["cross", "isolated"] as const;
+const okxPositionModes = ["net", "long_short"] as const;
 const autonomousSelectionModes = ["auto", "fixed"] as const;
 const timeframes = [
   "1m",
@@ -86,6 +88,8 @@ export const env = createEnv({
     OKX_BASE_URL: optionalUrl,
     OKX_WS_URL: optionalUrl,
     OKX_ACCOUNT_MODE: z.enum(okxAccountModes).optional(),
+    OKX_DERIVATIVES_TD_MODE: z.enum(okxDerivativeTradeModes).optional(),
+    OKX_POSITION_MODE: z.enum(okxPositionModes).optional(),
     REDIS_URL: optionalUrl,
     DATABASE_URL: optionalString,
     POSTGRES_USER: optionalString,
@@ -108,6 +112,7 @@ export const env = createEnv({
     AUTONOMOUS_SYMBOL_SELECTION: z.enum(autonomousSelectionModes).optional(),
     AUTONOMOUS_SYMBOL: optionalString,
     AUTONOMOUS_SYMBOLS: optionalString,
+    AUTONOMOUS_MARKET_TYPES: optionalString,
     AUTONOMOUS_QUOTE_CURRENCIES: optionalString,
     AUTONOMOUS_QUOTE_CURRENCY: optionalString,
     AUTONOMOUS_SYMBOL_LIMIT: optionalIntegerString,
@@ -155,6 +160,8 @@ export const env = createEnv({
     OKX_BASE_URL: process.env.OKX_BASE_URL,
     OKX_WS_URL: process.env.OKX_WS_URL,
     OKX_ACCOUNT_MODE: process.env.OKX_ACCOUNT_MODE,
+    OKX_DERIVATIVES_TD_MODE: process.env.OKX_DERIVATIVES_TD_MODE,
+    OKX_POSITION_MODE: process.env.OKX_POSITION_MODE,
     REDIS_URL: process.env.REDIS_URL,
     DATABASE_URL: process.env.DATABASE_URL,
     POSTGRES_USER: process.env.POSTGRES_USER,
@@ -177,6 +184,7 @@ export const env = createEnv({
     AUTONOMOUS_SYMBOL_SELECTION: process.env.AUTONOMOUS_SYMBOL_SELECTION,
     AUTONOMOUS_SYMBOL: process.env.AUTONOMOUS_SYMBOL,
     AUTONOMOUS_SYMBOLS: process.env.AUTONOMOUS_SYMBOLS,
+    AUTONOMOUS_MARKET_TYPES: process.env.AUTONOMOUS_MARKET_TYPES,
     AUTONOMOUS_QUOTE_CURRENCIES: process.env.AUTONOMOUS_QUOTE_CURRENCIES,
     AUTONOMOUS_QUOTE_CURRENCY: process.env.AUTONOMOUS_QUOTE_CURRENCY,
     AUTONOMOUS_SYMBOL_LIMIT: process.env.AUTONOMOUS_SYMBOL_LIMIT,

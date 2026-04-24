@@ -35,7 +35,17 @@ interface OkxTickerRow {
   ts: string;
 }
 
-type OkxCandleRow = [string, string, string, string, string, string, string?];
+type OkxCandleRow = [
+  string,
+  string,
+  string,
+  string,
+  string,
+  string,
+  string?,
+  string?,
+  string?,
+];
 
 interface OkxBookRow {
   asks: [string, string, string, string][];
@@ -181,14 +191,17 @@ function mapTicker(row: OkxTickerRow): OKXTicker {
 }
 
 function mapCandle(row: OkxCandleRow): Candle {
+  const baseVolume = parseNumber(row[5], 0);
+  const quoteVolume = parseNumber(row[7] ?? row[6], 0);
+
   return {
     timestamp: toIso(row[0]),
     open: parseNumber(row[1], 0),
     high: parseNumber(row[2], 0),
     low: parseNumber(row[3], 0),
     close: parseNumber(row[4], 0),
-    volume: parseNumber(row[5], 0),
-    quoteVolume: parseNumber(row[6], 0),
+    volume: baseVolume,
+    quoteVolume,
   };
 }
 

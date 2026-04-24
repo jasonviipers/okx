@@ -2,6 +2,7 @@ import { z } from "zod";
 import { aiModeSchema } from "@/lib/configs/models";
 
 const tradeSignalSchema = z.enum(["BUY", "SELL", "HOLD"]);
+const marketTypeSchema = z.enum(["spot", "futures", "swap"]);
 const decisionSourceSchema = z.enum([
   "deterministic",
   "diagnostic",
@@ -30,6 +31,7 @@ const tradeDecisionSnapshotSchema = z.object({
   signal: tradeSignalSchema,
   directionalSignal: tradeSignalSchema,
   decision: tradeSignalSchema,
+  marketType: marketTypeSchema.optional(),
   confidence: z.number().finite(),
   agreement: z.number().finite(),
   executionEligible: z.boolean(),
@@ -43,11 +45,15 @@ const tradeDecisionSnapshotSchema = z.object({
 });
 
 const tradeExecutionContextSchema = z.object({
+  marketType: marketTypeSchema.optional(),
   referencePrice: z.number().finite().optional(),
   targetNotionalUsd: z.number().finite().optional(),
   normalizedSize: z.number().finite().optional(),
   expectedNetEdgeBps: z.number().finite().optional(),
   marketQualityScore: z.number().finite().optional(),
+  tdMode: z.enum(["cash", "cross", "isolated"]).optional(),
+  posSide: z.enum(["net", "long", "short"]).optional(),
+  reduceOnly: z.boolean().optional(),
   stopLoss: z.number().finite().positive().nullable().optional(),
   takeProfitLevels: z.array(z.number().finite().positive()).max(3).optional(),
   trailingStopDistancePct: z.number().finite().positive().optional(),
@@ -68,6 +74,7 @@ const tradeExecutionContextSchema = z.object({
 export const tradeExecutionRequestSchema = z.object({
   signal: tradeSignalSchema,
   symbol: z.string().min(1),
+  marketType: marketTypeSchema.optional(),
   size: z.number().positive(),
   price: z.number().finite().positive().optional(),
   mode: aiModeSchema,

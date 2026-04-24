@@ -440,18 +440,29 @@ function buildRejectionReasons(input: {
       input.features.maxExecutableSellUsd <
       input.features.minimumTradeNotionalUsd
     ) {
-      const flatSpotAccount = input.features.availableBaseUsd <= 0;
+      const flatSpotAccount =
+        input.features.marketType === "spot" &&
+        input.features.availableBaseUsd <= 0;
       rejections.push({
         layer: "execution",
-        code: flatSpotAccount
-          ? "spot_shorting_not_available"
-          : "sell_inventory_too_small",
-        summary: flatSpotAccount
-          ? "Spot account is flat, so the bearish setup resolves to HOLD."
-          : "SELL is not executable with the available spot inventory.",
-        detail: flatSpotAccount
-          ? "The engine detected a bearish setup, but there is no base inventory available and spot mode cannot open a synthetic short."
-          : "Base inventory does not clear the minimum trade notional for this symbol.",
+        code:
+          input.features.marketType === "spot"
+            ? flatSpotAccount
+              ? "spot_shorting_not_available"
+              : "sell_inventory_too_small"
+            : "derivative_sell_capacity_too_small",
+        summary:
+          input.features.marketType === "spot"
+            ? flatSpotAccount
+              ? "Spot account is flat, so the bearish setup resolves to HOLD."
+              : "SELL is not executable with the available spot inventory."
+            : "SELL is not executable with the available futures or swap capacity.",
+        detail:
+          input.features.marketType === "spot"
+            ? flatSpotAccount
+              ? "The engine detected a bearish setup, but there is no base inventory available and spot mode cannot open a synthetic short."
+              : "Base inventory does not clear the minimum trade notional for this symbol."
+            : "The bearish setup did not clear the minimum executable contract size under the current derivatives buying power.",
         metrics: {
           maxExecutableSellUsd: Number(
             input.features.maxExecutableSellUsd.toFixed(4),
@@ -460,6 +471,7 @@ function buildRejectionReasons(input: {
           minimumTradeNotionalUsd: Number(
             input.features.minimumTradeNotionalUsd.toFixed(4),
           ),
+          marketType: input.features.marketType,
         },
       });
     }
@@ -717,6 +729,7 @@ export function buildDeterministicConsensus(input: {
 
   return {
     symbol: input.ctx.symbol,
+    marketType: features.marketType,
     timeframe: input.ctx.timeframe,
     signal: directionalSignal,
     directionalSignal,

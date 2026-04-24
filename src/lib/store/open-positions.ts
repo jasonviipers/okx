@@ -305,3 +305,26 @@ export async function removeOpenPosition(orderId: string): Promise<boolean> {
     return true;
   });
 }
+
+export async function removeOpenPositionsForInstrument(
+  instId: string,
+): Promise<number> {
+  return enqueueWrite(async () => {
+    const rows = await getDb()
+      .select()
+      .from(openPositions)
+      .where(eq(openPositions.instId, instId));
+
+    if (rows.length === 0) {
+      return 0;
+    }
+
+    for (const row of rows) {
+      await getDb()
+        .delete(openPositions)
+        .where(eq(openPositions.orderId, row.orderId));
+    }
+
+    return rows.length;
+  });
+}

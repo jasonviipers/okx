@@ -1,7 +1,7 @@
 import type { SwarmRole } from "@/lib/configs/roles";
 import type { MarketContext, Timeframe } from "@/types/market";
 import type { DecisionHarnessReport, MemorySummary } from "@/types/memory";
-import type { Order } from "@/types/trade";
+import type { MarketType, Order } from "@/types/trade";
 
 export type TradeSignal = "BUY" | "SELL" | "HOLD";
 export type RejectionLayer =
@@ -135,6 +135,7 @@ export interface RejectionReason {
  */
 export type DecisionResult = {
   symbol: string;
+  marketType?: MarketType;
   timeframe: Timeframe;
   signal: TradeSignal;
   directionalSignal: TradeSignal;
@@ -175,6 +176,7 @@ export type DecisionResult = {
  */
 export interface ConsensusResult {
   symbol: string;
+  marketType?: MarketType;
   timeframe: Timeframe;
   signal: TradeSignal;
   directionalSignal: TradeSignal;

@@ -174,6 +174,10 @@ async function executeManagedExit(input: {
       side: getExitSide(input.position.direction),
       type: "market",
       size: exitSize,
+      reduceOnly: true,
+      posSide: input.position.direction === "BUY" ? "long" : "short",
+      currentPositionSide:
+        input.position.direction === "BUY" ? "long" : "short",
     });
 
     const remainingSizeAfterExit = Number(

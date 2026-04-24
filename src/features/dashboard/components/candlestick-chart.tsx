@@ -30,6 +30,73 @@ import {
 } from "@/features/dashboard/dashboard-context";
 import { useMarketSnapshot } from "@/features/dashboard/hooks/use-market-data";
 import { useTradeMarkers } from "@/features/dashboard/hooks/use-trade-markers";
+import type { Candle } from "@/types/market";
+
+const LIGHTWEIGHT_CHARTS_VALUE_LIMIT = 90_071_992_547_409.91;
+
+function isChartSafeNumber(value: number): boolean {
+  return (
+    Number.isFinite(value) && Math.abs(value) <= LIGHTWEIGHT_CHARTS_VALUE_LIMIT
+  );
+}
+
+function toChartTime(timestamp: string): Time | null {
+  const epochSeconds = new Date(timestamp).getTime() / 1000;
+  return Number.isFinite(epochSeconds) ? (epochSeconds as Time) : null;
+}
+
+function getChartVolume(candle: Candle): number {
+  const candidates = [candle.quoteVolume, candle.volume];
+  for (const candidate of candidates) {
+    if (
+      candidate !== undefined &&
+      candidate >= 0 &&
+      isChartSafeNumber(candidate)
+    ) {
+      return candidate;
+    }
+  }
+
+  return 0;
+}
+
+type NormalizedChartCandle = {
+  time: Time;
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+  volume: number;
+};
+
+function normalizeCandlesForChart(candles: Candle[]): NormalizedChartCandle[] {
+  return candles.flatMap((candle) => {
+    const time = toChartTime(candle.timestamp);
+    if (!time) {
+      return [];
+    }
+
+    if (
+      !isChartSafeNumber(candle.open) ||
+      !isChartSafeNumber(candle.high) ||
+      !isChartSafeNumber(candle.low) ||
+      !isChartSafeNumber(candle.close)
+    ) {
+      return [];
+    }
+
+    return [
+      {
+        time,
+        open: candle.open,
+        high: candle.high,
+        low: candle.low,
+        close: candle.close,
+        volume: getChartVolume(candle),
+      },
+    ];
+  });
+}
 
 function computeEMA(data: number[], period: number): number[] {
   const ema: number[] = [];
@@ -273,65 +340,79 @@ export function CandlestickChart() {
         (a, b) =>
           new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime(),
       );
-
-      const candleData: CandlestickData<Time>[] = sorted.map((c) => ({
-        time: (new Date(c.timestamp).getTime() / 1000) as Time,
-        open: c.open,
-        high: c.high,
-        low: c.low,
-        close: c.close,
-      }));
-
-      const volumeData: HistogramData<Time>[] = sorted.map((c) => ({
-        time: (new Date(c.timestamp).getTime() / 1000) as Time,
-        value: c.volume,
-        color: c.close >= c.open ? "#00d4aa40" : "#ff444440",
-      }));
-
-      const closes = sorted.map((c) => c.close);
-      const ema9Data = showEMA9 ? computeEMA(closes, 9) : null;
-      const ema21Data = showEMA21 ? computeEMA(closes, 21) : null;
-      const bb = showBB ? computeBollingerBands(closes, 20, 2) : null;
-
-      candleSeriesRef.current.setData(candleData);
-      volumeSeriesRef.current.setData(volumeData);
-
-      if (showEMA9 && ema9Data && ema9SeriesRef.current) {
-        ema9SeriesRef.current.setData(
-          ema9Data
-            .map((v, i) => ({ time: candleData[i].time, value: v }))
-            .filter((p) => !Number.isNaN(p.value)),
+      const normalizedCandles = normalizeCandlesForChart(sorted);
+      if (normalizedCandles.length === 0) {
+        candleSeriesRef.current.setData([]);
+        volumeSeriesRef.current.setData([]);
+        ema9SeriesRef.current?.setData([]);
+        ema21SeriesRef.current?.setData([]);
+        bbUpperRef.current?.setData([]);
+        bbLowerRef.current?.setData([]);
+        bbMiddleRef.current?.setData([]);
+      } else {
+        const candleData: CandlestickData<Time>[] = normalizedCandles.map(
+          (c) => ({
+            time: c.time,
+            open: c.open,
+            high: c.high,
+            low: c.low,
+            close: c.close,
+          }),
         );
-      }
-      if (showEMA21 && ema21Data && ema21SeriesRef.current) {
-        ema21SeriesRef.current.setData(
-          ema21Data
-            .map((v, i) => ({ time: candleData[i].time, value: v }))
-            .filter((p) => !Number.isNaN(p.value)),
+
+        const volumeData: HistogramData<Time>[] = normalizedCandles.map(
+          (c) => ({
+            time: c.time,
+            value: c.volume,
+            color: c.close >= c.open ? "#00d4aa40" : "#ff444440",
+          }),
         );
-      }
-      if (
-        showBB &&
-        bb &&
-        bbUpperRef.current &&
-        bbLowerRef.current &&
-        bbMiddleRef.current
-      ) {
-        bbUpperRef.current.setData(
-          bb.upper
-            .map((v, i) => ({ time: candleData[i].time, value: v }))
-            .filter((p) => !Number.isNaN(p.value)),
-        );
-        bbLowerRef.current.setData(
-          bb.lower
-            .map((v, i) => ({ time: candleData[i].time, value: v }))
-            .filter((p) => !Number.isNaN(p.value)),
-        );
-        bbMiddleRef.current.setData(
-          bb.sma
-            .map((v, i) => ({ time: candleData[i].time, value: v }))
-            .filter((p) => !Number.isNaN(p.value)),
-        );
+
+        const closes = normalizedCandles.map((c) => c.close);
+        const ema9Data = showEMA9 ? computeEMA(closes, 9) : null;
+        const ema21Data = showEMA21 ? computeEMA(closes, 21) : null;
+        const bb = showBB ? computeBollingerBands(closes, 20, 2) : null;
+
+        candleSeriesRef.current.setData(candleData);
+        volumeSeriesRef.current.setData(volumeData);
+
+        if (showEMA9 && ema9Data && ema9SeriesRef.current) {
+          ema9SeriesRef.current.setData(
+            ema9Data
+              .map((v, i) => ({ time: candleData[i].time, value: v }))
+              .filter((p) => !Number.isNaN(p.value)),
+          );
+        }
+        if (showEMA21 && ema21Data && ema21SeriesRef.current) {
+          ema21SeriesRef.current.setData(
+            ema21Data
+              .map((v, i) => ({ time: candleData[i].time, value: v }))
+              .filter((p) => !Number.isNaN(p.value)),
+          );
+        }
+        if (
+          showBB &&
+          bb &&
+          bbUpperRef.current &&
+          bbLowerRef.current &&
+          bbMiddleRef.current
+        ) {
+          bbUpperRef.current.setData(
+            bb.upper
+              .map((v, i) => ({ time: candleData[i].time, value: v }))
+              .filter((p) => !Number.isNaN(p.value)),
+          );
+          bbLowerRef.current.setData(
+            bb.lower
+              .map((v, i) => ({ time: candleData[i].time, value: v }))
+              .filter((p) => !Number.isNaN(p.value)),
+          );
+          bbMiddleRef.current.setData(
+            bb.sma
+              .map((v, i) => ({ time: candleData[i].time, value: v }))
+              .filter((p) => !Number.isNaN(p.value)),
+          );
+        }
       }
     }
 

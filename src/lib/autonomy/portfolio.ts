@@ -2,6 +2,10 @@ import "server-only";
 
 import { env } from "@/env";
 import { getAccountOverview } from "@/lib/okx/account";
+import {
+  estimateInstrumentNotionalUsd,
+  getInstrumentRules,
+} from "@/lib/okx/instruments";
 import { parseNumber } from "@/lib/runtime-utils";
 import { getOpenPositions } from "@/lib/store/open-positions";
 import { SWARM_THRESHOLDS } from "@/lib/swarm/thresholds";
@@ -41,16 +45,33 @@ export async function buildPortfolioState(
       ...openPositions.map((position) => position.instId),
     ]),
   ];
+  const instrumentRulesEntries = await Promise.all(
+    uniqueSymbols.map(
+      async (symbol) => [symbol, await getInstrumentRules(symbol)] as const,
+    ),
+  );
+  const instrumentRulesMap = new Map(instrumentRulesEntries);
   const maxAllocationPct = getMaxSymbolAllocationPct();
   const totalDeployedUsd = openPositions.reduce((sum, position) => {
     const referencePrice = position.lastKnownPrice ?? position.entryPrice;
-    return sum + position.remainingSize * Math.max(referencePrice, 0);
+    const instrumentRules = instrumentRulesMap.get(position.instId);
+    return (
+      sum +
+      (instrumentRules
+        ? estimateInstrumentNotionalUsd(
+            instrumentRules,
+            Math.max(referencePrice, 0),
+            position.remainingSize,
+          )
+        : position.remainingSize * Math.max(referencePrice, 0))
+    );
   }, 0);
   const totalBudgetUsd =
     liveTradingBudgetUsd > 0
       ? liveTradingBudgetUsd
       : Math.max(
           accountOverview.totalEquity,
+          accountOverview.availableEquity,
           accountOverview.cashAvailableUsd,
           0,
         );
@@ -59,7 +80,17 @@ export async function buildPortfolioState(
       .filter((position) => position.instId === symbol)
       .reduce((sum, position) => {
         const referencePrice = position.lastKnownPrice ?? position.entryPrice;
-        return sum + position.remainingSize * Math.max(referencePrice, 0);
+        const instrumentRules = instrumentRulesMap.get(position.instId);
+        return (
+          sum +
+          (instrumentRules
+            ? estimateInstrumentNotionalUsd(
+                instrumentRules,
+                Math.max(referencePrice, 0),
+                position.remainingSize,
+              )
+            : position.remainingSize * Math.max(referencePrice, 0))
+        );
       }, 0);
     const allocationPct =
       totalDeployedUsd > 0 ? currentNotionalUsd / totalDeployedUsd : 0;

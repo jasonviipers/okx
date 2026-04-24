@@ -9,6 +9,7 @@
 //   deepseek-v3.2   strategy        → trend_follower      (w: 1.00)
 //   gemma4:31b      signal_worker   → momentum_analyst    (w: 0.90)
 //   kimi-k2.5       signal_worker   → sentiment_reader    (w: 0.85)
+//   kimi-k2.6       signal_worker   → sentiment_reader    (w: 0.85)
 //   ministral-3     risk            → macro_filter        (w: 0.80)  ← veto
 //   glm-5.1         validator       → execution_tactician (w: 0.80)  ← veto
 //   qwen3.5         execution       → (no swarm role — order routing only)
@@ -230,6 +231,7 @@ export const MODEL_SWARM_ROLE_MAP: Record<string, SwarmRole> = {
   "deepseek-v3.2:cloud": "trend_follower",
   "gemma4:31b-cloud": "momentum_analyst",
   "kimi-k2.5:cloud": "sentiment_reader",
+  "kimi-k2.6:cloud": "sentiment_reader",
   "ministral-3:cloud": "macro_filter",
   "glm-5.1:cloud": "execution_tactician",
 };

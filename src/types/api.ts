@@ -1,5 +1,6 @@
 import type { PortfolioState } from "@/types/portfolio";
 import type { RejectionReason, TradeSignal } from "@/types/swarm";
+import type { MarketType } from "@/types/trade";
 
 export type DataSource =
   | "okx"
@@ -48,6 +49,7 @@ export interface MarketDataStatus {
 
 export interface AutonomyCandidateScore {
   symbol: string;
+  marketType?: MarketType;
   score: number;
   tradeable: boolean;
   realtime: boolean;
@@ -65,7 +67,7 @@ export interface AutonomyCandidateScore {
   portfolioConcentrationPct?: number;
   symbolBudgetRemainingUsd?: number;
   quoteBudgetAvailableUsd?: number;
-  positionState?: "flat" | "long";
+  positionState?: "flat" | "long" | "short";
   rejectionReasons: RejectionReason[];
 }
 

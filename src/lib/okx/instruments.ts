@@ -2,15 +2,27 @@ import "server-only";
 
 import { env } from "@/env";
 import { OKX_ENDPOINTS } from "@/lib/configs/okx";
+import {
+  fromOkxInstType,
+  getConfiguredAutonomousMarketTypes,
+  isDerivativeMarketType,
+  resolveMarketType,
+  toOkxInstType,
+} from "@/lib/okx/market-types";
 import { okxPublicGet } from "@/lib/okx/client";
 import { getCachedJson, setCachedJson } from "@/lib/redis/swarm-cache";
 import { parseNumber } from "@/lib/runtime-utils";
-import type { AccountAssetBalance } from "@/types/trade";
+import type { AccountAssetBalance, MarketType } from "@/types/trade";
 
 interface OkxInstrumentRow {
   instId: string;
   instType?: string;
+  baseCcy?: string;
   quoteCcy?: string;
+  settleCcy?: string;
+  instFamily?: string;
+  ctVal?: string;
+  ctValCcy?: string;
   tickSz: string;
   lotSz: string;
   minSz: string;
@@ -19,6 +31,7 @@ interface OkxInstrumentRow {
 
 interface OkxTickerRow {
   instId: string;
+  instType?: string;
   last: string;
   bidPx?: string;
   askPx?: string;
@@ -27,6 +40,14 @@ interface OkxTickerRow {
 
 export interface InstrumentRules {
   symbol: string;
+  marketType: MarketType;
+  okxInstType: "SPOT" | "FUTURES" | "SWAP";
+  baseCurrency?: string;
+  quoteCurrency?: string;
+  settleCurrency?: string;
+  family?: string;
+  contractValue: number;
+  contractValueCurrency?: string;
   tickSize: number;
   lotSize: number;
   minSize: number;
@@ -44,37 +65,15 @@ const DEFAULT_AUTONOMOUS_SYMBOLS = [
   "LINK-USDT",
 ] as const;
 const DEFAULT_AUTONOMOUS_QUOTES = ["USDT", "EUR", "USDC"] as const;
-const INSTRUMENTS_CACHE_KEY = "okx:spot-instruments";
 const INSTRUMENTS_CACHE_TTL_SECONDS = 300;
-const TICKERS_CACHE_KEY = "okx:spot-tickers";
 const TICKERS_CACHE_TTL_SECONDS = 30;
 
-export async function getInstrumentRules(
-  symbol: string,
-): Promise<InstrumentRules> {
-  const [row] = await okxPublicGet<OkxInstrumentRow>(
-    OKX_ENDPOINTS.instruments,
-    new URLSearchParams({
-      instType: "SPOT",
-      instId: symbol,
-    }),
-  );
-
-  return {
-    symbol,
-    tickSize: parseNumber(row?.tickSz, 0.00000001),
-    lotSize: parseNumber(row?.lotSz, 0.00000001),
-    minSize: parseNumber(row?.minSz, 0),
-    state: row?.state ?? "live",
-  };
+function getInstrumentCacheKey(marketType: MarketType) {
+  return `okx:instruments:${toOkxInstType(marketType).toLowerCase()}`;
 }
 
-export function normalizeOrderSize(size: number, lotSize: number): number {
-  if (lotSize <= 0) {
-    return size;
-  }
-
-  return Math.floor(size / lotSize) * lotSize;
+function getTickersCacheKey(marketType: MarketType) {
+  return `okx:tickers:${toOkxInstType(marketType).toLowerCase()}`;
 }
 
 function parseSymbolList(value: string | undefined): string[] {
@@ -108,6 +107,124 @@ function isLeveragedToken(baseAsset: string): boolean {
 
 function getDefaultAutonomousBases(): string[] {
   return DEFAULT_AUTONOMOUS_SYMBOLS.map(extractBaseAsset);
+}
+
+function toInstrumentRules(
+  row: OkxInstrumentRow,
+  symbol: string,
+): InstrumentRules {
+  const marketType = fromOkxInstType(row.instType) ?? resolveMarketType(symbol);
+
+  return {
+    symbol,
+    marketType,
+    okxInstType: toOkxInstType(marketType),
+    baseCurrency: row.baseCcy?.trim().toUpperCase(),
+    quoteCurrency: row.quoteCcy?.trim().toUpperCase(),
+    settleCurrency: row.settleCcy?.trim().toUpperCase(),
+    family: row.instFamily?.trim().toUpperCase(),
+    contractValue: parseNumber(row.ctVal, 0),
+    contractValueCurrency: row.ctValCcy?.trim().toUpperCase(),
+    tickSize: parseNumber(row.tickSz, 0.00000001),
+    lotSize: parseNumber(row.lotSz, 0.00000001),
+    minSize: parseNumber(row.minSz, 0),
+    state: row.state ?? "live",
+  };
+}
+
+async function listInstrumentRowsForMarketType(
+  marketType: MarketType,
+): Promise<OkxInstrumentRow[]> {
+  const cacheKey = getInstrumentCacheKey(marketType);
+  const cached = await getCachedJson<OkxInstrumentRow[]>(cacheKey);
+  if (cached) {
+    return cached;
+  }
+
+  const rows = await okxPublicGet<OkxInstrumentRow>(
+    OKX_ENDPOINTS.instruments,
+    new URLSearchParams({
+      instType: toOkxInstType(marketType),
+    }),
+  );
+  await setCachedJson(cacheKey, rows, INSTRUMENTS_CACHE_TTL_SECONDS);
+  return rows;
+}
+
+async function listTickerRowsForMarketType(
+  marketType: MarketType,
+): Promise<OkxTickerRow[]> {
+  const cacheKey = getTickersCacheKey(marketType);
+  const cached = await getCachedJson<OkxTickerRow[]>(cacheKey);
+  if (cached) {
+    return cached;
+  }
+
+  const rows = await okxPublicGet<OkxTickerRow>(
+    OKX_ENDPOINTS.tickers,
+    new URLSearchParams({
+      instType: toOkxInstType(marketType),
+    }),
+  );
+  await setCachedJson(cacheKey, rows, TICKERS_CACHE_TTL_SECONDS);
+  return rows;
+}
+
+async function findInstrumentRowBySymbol(
+  symbol: string,
+  explicitMarketType?: MarketType,
+): Promise<OkxInstrumentRow | undefined> {
+  const preferred = resolveMarketType(symbol, explicitMarketType);
+  const marketTypes: MarketType[] = explicitMarketType
+    ? [preferred]
+    : [preferred, ...getConfiguredAutonomousMarketTypes()].filter(
+        (value, index, values) => values.indexOf(value) === index,
+      );
+
+  for (const marketType of marketTypes) {
+    const rows = await listInstrumentRowsForMarketType(marketType);
+    const row = rows.find(
+      (candidate) =>
+        candidate.instId.trim().toUpperCase() === symbol.toUpperCase(),
+    );
+    if (row) {
+      return row;
+    }
+  }
+
+  return undefined;
+}
+
+export async function getInstrumentRules(
+  symbol: string,
+  explicitMarketType?: MarketType,
+): Promise<InstrumentRules> {
+  const row = await findInstrumentRowBySymbol(symbol, explicitMarketType);
+  if (row) {
+    return toInstrumentRules(row, symbol);
+  }
+
+  const marketType = resolveMarketType(symbol, explicitMarketType);
+  return {
+    symbol,
+    marketType,
+    okxInstType: toOkxInstType(marketType),
+    baseCurrency: extractBaseAsset(symbol),
+    quoteCurrency: extractQuoteAsset(symbol),
+    tickSize: 0.00000001,
+    lotSize: 0.00000001,
+    minSize: 0,
+    contractValue: 0,
+    state: "live",
+  };
+}
+
+export function normalizeOrderSize(size: number, lotSize: number): number {
+  if (lotSize <= 0) {
+    return size;
+  }
+
+  return Math.floor(size / lotSize) * lotSize;
 }
 
 export function getConfiguredAutonomousBaseAssets(
@@ -177,40 +294,24 @@ function getHeldBaseAssetsFromBalances(
   );
 }
 
-async function listSpotInstrumentRows(): Promise<OkxInstrumentRow[]> {
-  const cached = await getCachedJson<OkxInstrumentRow[]>(INSTRUMENTS_CACHE_KEY);
-  if (cached) {
-    return cached;
-  }
-
-  const rows = await okxPublicGet<OkxInstrumentRow>(
-    OKX_ENDPOINTS.instruments,
-    new URLSearchParams({
-      instType: "SPOT",
-    }),
+async function listInstrumentRows(
+  marketTypes: MarketType[],
+): Promise<OkxInstrumentRow[]> {
+  const batches = await Promise.all(
+    marketTypes.map((marketType) =>
+      listInstrumentRowsForMarketType(marketType),
+    ),
   );
-  await setCachedJson(
-    INSTRUMENTS_CACHE_KEY,
-    rows,
-    INSTRUMENTS_CACHE_TTL_SECONDS,
-  );
-  return rows;
+  return batches.flat();
 }
 
-async function listSpotTickerRows(): Promise<OkxTickerRow[]> {
-  const cached = await getCachedJson<OkxTickerRow[]>(TICKERS_CACHE_KEY);
-  if (cached) {
-    return cached;
-  }
-
-  const rows = await okxPublicGet<OkxTickerRow>(
-    OKX_ENDPOINTS.tickers,
-    new URLSearchParams({
-      instType: "SPOT",
-    }),
+async function listTickerRows(
+  marketTypes: MarketType[],
+): Promise<OkxTickerRow[]> {
+  const batches = await Promise.all(
+    marketTypes.map((marketType) => listTickerRowsForMarketType(marketType)),
   );
-  await setCachedJson(TICKERS_CACHE_KEY, rows, TICKERS_CACHE_TTL_SECONDS);
-  return rows;
+  return batches.flat();
 }
 
 function estimateQuoteVolume(row: OkxTickerRow): number {
@@ -219,45 +320,74 @@ function estimateQuoteVolume(row: OkxTickerRow): number {
   return last * vol24h;
 }
 
+function getPreferredQuoteCurrency(row: OkxInstrumentRow): string {
+  return (
+    row.quoteCcy?.trim().toUpperCase() ??
+    row.settleCcy?.trim().toUpperCase() ??
+    extractQuoteAsset(row.instId)
+  );
+}
+
+function matchesConfiguredQuote(
+  row: OkxInstrumentRow,
+  quoteCurrencies: string[],
+): boolean {
+  if (quoteCurrencies.length === 0) {
+    return true;
+  }
+
+  const quotes = new Set(quoteCurrencies.map((quote) => quote.toUpperCase()));
+  const quoteCurrency = row.quoteCcy?.trim().toUpperCase();
+  const settleCurrency = row.settleCcy?.trim().toUpperCase();
+
+  return (
+    (quoteCurrency ? quotes.has(quoteCurrency) : false) ||
+    (settleCurrency ? quotes.has(settleCurrency) : false)
+  );
+}
+
 function getDynamicBaseAssetsFromMarket(
   rows: OkxInstrumentRow[],
   tickers: OkxTickerRow[],
   quoteCurrencies: string[],
   limit: number,
 ): string[] {
-  const liveSymbols = new Set(
-    rows
-      .filter((row) => (row.state ?? "live") === "live")
-      .map((row) => row.instId.trim().toUpperCase()),
+  const instrumentMap = new Map(
+    rows.map((row) => [row.instId.trim().toUpperCase(), row]),
   );
-  const quoteSet = new Set(quoteCurrencies.map((quote) => quote.toUpperCase()));
 
   return uniqueUppercase(
     tickers
       .filter((row) => {
         const symbol = row.instId.trim().toUpperCase();
-        const base = extractBaseAsset(symbol);
-        const quote = extractQuoteAsset(symbol);
+        const instrument = instrumentMap.get(symbol);
+        const base =
+          instrument?.baseCcy?.trim().toUpperCase() ?? extractBaseAsset(symbol);
 
         return (
-          liveSymbols.has(symbol) &&
-          quoteSet.has(quote) &&
+          instrument !== undefined &&
+          (instrument.state ?? "live") === "live" &&
           base.length > 0 &&
-          quote.length > 0 &&
-          base !== quote &&
-          !isLeveragedToken(base)
+          !isLeveragedToken(base) &&
+          matchesConfiguredQuote(instrument, quoteCurrencies)
         );
       })
       .sort(
         (left, right) => estimateQuoteVolume(right) - estimateQuoteVolume(left),
       )
       .slice(0, Math.max(limit * 4, 24))
-      .map((row) => extractBaseAsset(row.instId)),
+      .map((row) => {
+        const instrument = instrumentMap.get(row.instId.trim().toUpperCase());
+        return (
+          instrument?.baseCcy?.trim().toUpperCase() ??
+          extractBaseAsset(row.instId)
+        );
+      }),
   );
 }
 
 export async function listSpotInstruments(quoteCurrency = "USDT") {
-  const rows = await listSpotInstrumentRows();
+  const rows = await listInstrumentRowsForMarketType("spot");
 
   return rows
     .filter(
@@ -275,12 +405,17 @@ export async function getAutonomousSymbolUniverse(options?: {
   explicitSymbols?: string[];
   quoteCurrencies?: string[];
   balances?: AccountAssetBalance[];
+  marketTypes?: MarketType[];
   limit?: number;
 }): Promise<string[]> {
   const limit = Math.max(
     1,
     Math.min(20, options?.limit ?? parseNumber(env.AUTONOMOUS_SYMBOL_LIMIT, 8)),
   );
+  const marketTypes =
+    options?.marketTypes && options.marketTypes.length > 0
+      ? options.marketTypes
+      : getConfiguredAutonomousMarketTypes();
   const manualBaseAssets = getConfiguredAutonomousBaseAssets(
     options?.explicitSymbols,
   );
@@ -288,8 +423,8 @@ export async function getAutonomousSymbolUniverse(options?: {
     ...(options?.quoteCurrencies ?? []),
     ...getConfiguredAutonomousQuoteCurrencies(),
   ]);
-  const rows = await listSpotInstrumentRows();
-  const tickers = await listSpotTickerRows();
+  const rows = await listInstrumentRows(marketTypes);
+  const tickers = await listTickerRows(marketTypes);
   const heldBaseAssets = options?.balances
     ? getHeldBaseAssetsFromBalances(options.balances, quoteCurrencies)
     : [];
@@ -304,40 +439,123 @@ export async function getAutonomousSymbolUniverse(options?: {
     ...dynamicBaseAssets,
     ...manualBaseAssets,
   ]);
-  const rankedSymbols: string[] = [];
+  const tickerVolumeMap = new Map(
+    tickers.map((row) => [
+      row.instId.trim().toUpperCase(),
+      estimateQuoteVolume(row),
+    ]),
+  );
 
-  for (const quoteCurrency of quoteCurrencies) {
-    const matchesForQuote = rows
-      .filter((row) => {
-        const quote =
-          row.quoteCcy?.toUpperCase() ??
-          row.instId.split("-")[1]?.toUpperCase() ??
-          "";
-        const base = extractBaseAsset(row.instId);
-
-        return (
-          row.instId &&
-          (row.state ?? "live") === "live" &&
-          quote === quoteCurrency &&
-          baseAssets.includes(base)
-        );
-      })
-      .sort((left, right) => {
-        const leftBaseIndex = baseAssets.indexOf(extractBaseAsset(left.instId));
-        const rightBaseIndex = baseAssets.indexOf(
-          extractBaseAsset(right.instId),
-        );
+  const rankedSymbols = rows
+    .filter((row) => {
+      const base =
+        row.baseCcy?.trim().toUpperCase() ?? extractBaseAsset(row.instId);
+      return (
+        row.instId &&
+        (row.state ?? "live") === "live" &&
+        baseAssets.includes(base) &&
+        matchesConfiguredQuote(row, quoteCurrencies)
+      );
+    })
+    .sort((left, right) => {
+      const leftBaseIndex = baseAssets.indexOf(
+        left.baseCcy?.trim().toUpperCase() ?? extractBaseAsset(left.instId),
+      );
+      const rightBaseIndex = baseAssets.indexOf(
+        right.baseCcy?.trim().toUpperCase() ?? extractBaseAsset(right.instId),
+      );
+      if (leftBaseIndex !== rightBaseIndex) {
         return leftBaseIndex - rightBaseIndex;
-      })
-      .map((row) => row.instId);
+      }
 
-    rankedSymbols.push(...matchesForQuote);
-  }
+      const leftMarketIndex = marketTypes.indexOf(
+        fromOkxInstType(left.instType) ?? resolveMarketType(left.instId),
+      );
+      const rightMarketIndex = marketTypes.indexOf(
+        fromOkxInstType(right.instType) ?? resolveMarketType(right.instId),
+      );
+      if (leftMarketIndex !== rightMarketIndex) {
+        return leftMarketIndex - rightMarketIndex;
+      }
+
+      return (
+        (tickerVolumeMap.get(right.instId.trim().toUpperCase()) ?? 0) -
+        (tickerVolumeMap.get(left.instId.trim().toUpperCase()) ?? 0)
+      );
+    })
+    .map((row) => row.instId);
 
   const uniqueSymbols = [...new Set(rankedSymbols)];
   if (uniqueSymbols.length > 0) {
     return uniqueSymbols.slice(0, limit);
   }
 
+  const fallbackByVolume = [...tickers]
+    .sort(
+      (left, right) => estimateQuoteVolume(right) - estimateQuoteVolume(left),
+    )
+    .map((row) => row.instId);
+  const uniqueFallback = [...new Set(fallbackByVolume)];
+  if (uniqueFallback.length > 0) {
+    return uniqueFallback.slice(0, limit);
+  }
+
   return [...DEFAULT_AUTONOMOUS_SYMBOLS].slice(0, limit);
+}
+
+function isQuoteDenominatedCurrency(
+  rules: InstrumentRules,
+  currency: string | undefined,
+): boolean {
+  const normalized = currency?.trim().toUpperCase();
+  if (!normalized) {
+    return false;
+  }
+
+  return (
+    normalized === rules.quoteCurrency?.toUpperCase() ||
+    normalized === rules.settleCurrency?.toUpperCase() ||
+    normalized === "USD" ||
+    normalized === "USDT" ||
+    normalized === "USDC"
+  );
+}
+
+export function estimateInstrumentUnitNotionalUsd(
+  rules: InstrumentRules,
+  referencePrice: number,
+): number {
+  if (!isDerivativeMarketType(rules.marketType)) {
+    return Math.max(referencePrice, 0);
+  }
+
+  if (rules.contractValue <= 0) {
+    return Math.max(referencePrice, 0);
+  }
+
+  if (isQuoteDenominatedCurrency(rules, rules.contractValueCurrency)) {
+    return rules.contractValue;
+  }
+
+  if (
+    rules.contractValueCurrency?.toUpperCase() ===
+    rules.baseCurrency?.toUpperCase()
+  ) {
+    return rules.contractValue * Math.max(referencePrice, 0);
+  }
+
+  return rules.contractValue * Math.max(referencePrice, 0);
+}
+
+export function estimateInstrumentNotionalUsd(
+  rules: InstrumentRules,
+  referencePrice: number,
+  size: number,
+): number {
+  return Number(
+    (
+      estimateInstrumentUnitNotionalUsd(rules, referencePrice) *
+      Math.max(size, 0)
+    ).toFixed(8),
+  );
 }

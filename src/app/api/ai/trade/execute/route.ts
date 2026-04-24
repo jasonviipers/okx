@@ -73,6 +73,7 @@ export async function POST(req: NextRequest) {
         const {
           signal,
           symbol,
+          marketType,
           size,
           price,
           mode,
@@ -84,6 +85,7 @@ export async function POST(req: NextRequest) {
         span.addAttributes({
           signal,
           symbol,
+          marketType,
           size,
           mode,
           confirmed: confirmed ?? false,
@@ -127,10 +129,14 @@ export async function POST(req: NextRequest) {
 
         const order = await placeOrder({
           symbol,
+          marketType,
           side: signal === "BUY" ? "buy" : "sell",
           type: price ? "limit" : "market",
           size,
           price,
+          tdMode: executionContext?.tdMode,
+          posSide: executionContext?.posSide,
+          reduceOnly: executionContext?.reduceOnly,
         });
         await recordTradeExecution(order, {
           decisionSnapshot,

@@ -26,6 +26,7 @@ export const AI_MODELS = [
   "gemma4:31b-cloud",
   "qwen3.5:cloud",
   "kimi-k2.5:cloud",
+  "kimi-k2.6:cloud",
   "deepseek-v3.2:cloud",
   "ministral-3:cloud",
   "gpt-oss:cloud",
@@ -45,6 +46,7 @@ export const MODEL_ROLES: Record<AIModel, ModelRole> = {
   "qwen3.5:cloud": "execution", // Order routing ONLY — never participates in reasoning
   "gemma4:31b-cloud": "signal_worker",
   "kimi-k2.5:cloud": "signal_worker",
+  "kimi-k2.6:cloud": "signal_worker",
   "glm-5.1:cloud": "validator",
   "ministral-3:cloud": "risk",
 };
@@ -144,6 +146,7 @@ export const ACTIVE_SWARM_MODELS = [
   "deepseek-v3.2:cloud", // strategy
   "gemma4:31b-cloud", // signal_worker
   "kimi-k2.5:cloud", // signal_worker
+  "kimi-k2.6:cloud", // signal_worker
   "glm-5.1:cloud", // validator (veto)
   "ministral-3:cloud", // risk (veto)
 ] as const satisfies readonly AIModel[];

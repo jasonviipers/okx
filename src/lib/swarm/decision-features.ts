@@ -2,9 +2,11 @@ import { env } from "@/env";
 import { average, clamp, sum } from "@/lib/math-utils";
 import { parseNumber } from "@/lib/runtime-utils";
 import type { MarketContext, OrderBookEntry, Timeframe } from "@/types/market";
-import type { AccountOverview } from "@/types/trade";
+import type { AccountOverview, MarketType } from "@/types/trade";
 
 export interface DecisionFeatureVector {
+  marketType: MarketType;
+  shortingSupported: boolean;
   price: number;
   return1: number;
   return3: number;
@@ -348,13 +350,14 @@ export function buildDecisionFeatures(input: {
   const maxPositionUsd = parseNumber(env.MAX_POSITION_USD, 100);
   const minimumTradeNotionalUsd = parseNumber(env.MIN_TRADE_NOTIONAL, 5);
   const budgetCapUsd = getBudgetCapUsd(input.budgetRemainingUsd ?? 0);
+  const marketType = input.accountOverview.buyingPower.marketType ?? "spot";
   const availableQuoteUsd = Math.max(
     0,
-    input.accountOverview.buyingPower.buy * 0.9,
+    input.accountOverview.buyingPower.buyNotionalUsd * 0.9,
   );
   const availableBaseUsd = Math.max(
     0,
-    input.accountOverview.buyingPower.sell * input.ctx.ticker.bid * 0.9,
+    input.accountOverview.buyingPower.sellNotionalUsd * 0.9,
   );
   const maxExecutableBuyUsd = Math.max(
     0,
@@ -383,6 +386,9 @@ export function buildDecisionFeatures(input: {
   const price = input.ctx.ticker.last;
 
   return {
+    marketType,
+    shortingSupported:
+      input.accountOverview.buyingPower.shortingSupported === true,
     price,
     return1: getReturn(input.ctx, 2),
     return3: getReturn(input.ctx, 4),

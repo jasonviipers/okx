@@ -51,6 +51,7 @@ export async function createExecutionIntent(
       signal: consensus.signal,
       directionalSignal: consensus.directionalSignal,
       decision: consensus.decision ?? consensus.signal,
+      marketType: consensus.marketType,
       confidence: consensus.confidence,
       agreement: consensus.agreement,
       executionEligible: consensus.executionEligible,

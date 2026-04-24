@@ -16,6 +16,11 @@ import {
   getConfiguredAutonomousQuoteCurrencies,
   getQuoteCurrenciesFromBalances,
 } from "@/lib/okx/instruments";
+import { getPositions } from "@/lib/okx/orders";
+import {
+  getConfiguredAutonomousMarketTypes,
+  resolveMarketType,
+} from "@/lib/okx/market-types";
 import type {
   AutonomySelectionMode,
   StoredAutonomyState,
@@ -40,7 +45,7 @@ import {
   warn,
   withTelemetrySpan,
 } from "@/lib/observability/telemetry";
-import { approximateAvailableUsd, parseSpotSymbol } from "@/lib/trade-utils";
+import { approximateAvailableUsd } from "@/lib/trade-utils";
 import type {
   AutonomyCandidateScore,
   AutonomyStatus,
@@ -53,7 +58,12 @@ import type {
   RejectionReason,
   SwarmRunResult,
 } from "@/types/swarm";
-import type { AccountAssetBalance, AccountOverview } from "@/types/trade";
+import type {
+  AccountAssetBalance,
+  AccountOverview,
+  MarketType,
+  Position,
+} from "@/types/trade";
 
 const WORKER_LEASE_TIMEOUT_MS = 5 * 60_000;
 const AUTONOMY_SCHEDULER_TICK_MS = 5_000;
@@ -512,15 +522,18 @@ function findTradingBalance(
 }
 
 type SymbolExecutionContext = {
+  marketType: MarketType;
   baseCurrency?: string;
   quoteCurrency?: string;
-  positionState: "flat" | "long";
+  settleCurrency?: string;
+  positionState: "flat" | "long" | "short";
   totalTradingEquityUsd: number;
   currentBaseInventoryUsd: number;
   availableBaseInventoryUsd: number;
   baseInventoryUnits: number;
   quoteAvailableBalance: number;
   quoteBudgetAvailableUsd: number;
+  sellBudgetAvailableUsd: number;
   portfolioConcentrationPct: number;
   symbolBudgetCapUsd: number;
   symbolBudgetRemainingUsd: number;
@@ -546,24 +559,23 @@ function buildSymbolExecutionContext(
   accountOverview: AccountOverview,
   symbol: string,
   portfolioState: PortfolioState,
+  livePosition?: Position,
 ): SymbolExecutionContext {
-  const symbolParts = parseSpotSymbol(symbol);
+  const marketType =
+    accountOverview.buyingPower.marketType ?? resolveMarketType(symbol);
   const totalTradingEquityUsd = Math.max(
     accountOverview.tradingBalances.reduce(
       (sum, balance) =>
         sum + Math.max(balance.usdValue, approximateAvailableUsd(balance)),
       0,
     ),
+    accountOverview.availableEquity,
     accountOverview.totalEquity,
   );
-  const baseBalance = findTradingBalance(accountOverview, symbolParts?.base);
-  const quoteBalance = findTradingBalance(accountOverview, symbolParts?.quote);
   const minimumTradeNotionalUsd = parseNumber(
     env.MIN_TRADE_NOTIONAL,
     SWARM_THRESHOLDS.DEFAULT_MIN_TRADE_NOTIONAL,
   );
-  const currentBaseInventoryUsd = Math.max(baseBalance?.usdValue ?? 0, 0);
-  const availableBaseInventoryUsd = approximateAvailableUsd(baseBalance);
   const symbolAllocation = portfolioState.symbols.find(
     (allocation) => allocation.symbol === symbol,
   );
@@ -581,31 +593,113 @@ function buildSymbolExecutionContext(
           portfolioState.totalBudgetUsd - portfolioState.totalDeployedUsd,
         )
       : Number.POSITIVE_INFINITY;
+  const buyNotionalUsd = Math.max(
+    accountOverview.buyingPower.buyNotionalUsd,
+    0,
+  );
+  const sellNotionalUsd = Math.max(
+    accountOverview.buyingPower.sellNotionalUsd,
+    0,
+  );
+  const currentBaseInventoryUsd =
+    marketType === "spot"
+      ? Math.max(
+          findTradingBalance(
+            accountOverview,
+            accountOverview.buyingPower.baseCurrency,
+          )?.usdValue ?? 0,
+          0,
+        )
+      : Math.max(Math.abs(livePosition?.notionalUsd ?? 0), 0);
+  const availableBaseInventoryUsd =
+    marketType === "spot"
+      ? Math.max(
+          approximateAvailableUsd(
+            findTradingBalance(
+              accountOverview,
+              accountOverview.buyingPower.baseCurrency,
+            ),
+          ),
+          0,
+        )
+      : currentBaseInventoryUsd;
+  const baseInventoryUnits =
+    marketType === "spot"
+      ? Math.max(
+          findTradingBalance(
+            accountOverview,
+            accountOverview.buyingPower.baseCurrency,
+          )?.availableBalance ?? 0,
+          0,
+        )
+      : Math.max(livePosition?.size ?? 0, 0);
   const symbolBudgetRemainingUsd =
     symbolAllocation?.budgetRemainingUsd ??
     Math.max(
       0,
       Math.min(symbolBudgetCapUsd, budgetCapUsd) - currentBaseInventoryUsd,
     );
-  const quoteBudgetAvailableUsd = Math.max(
-    0,
-    Math.min(
-      approximateAvailableUsd(quoteBalance) * DEFAULT_PORTFOLIO_BUFFER_PCT,
-      symbolBudgetRemainingUsd,
-      budgetCapUsd,
-    ),
-  );
+  const quoteBudgetAvailableUsd =
+    marketType === "spot"
+      ? Math.max(
+          0,
+          Math.min(
+            buyNotionalUsd * DEFAULT_PORTFOLIO_BUFFER_PCT,
+            symbolBudgetRemainingUsd,
+            budgetCapUsd,
+          ),
+        )
+      : Math.max(
+          0,
+          Math.min(
+            Math.max(
+              buyNotionalUsd * DEFAULT_PORTFOLIO_BUFFER_PCT,
+              livePosition?.side === "sell"
+                ? Math.abs(livePosition.notionalUsd ?? 0)
+                : 0,
+            ),
+            Math.max(symbolBudgetCapUsd, budgetCapUsd),
+          ),
+        );
+  const sellBudgetAvailableUsd =
+    marketType === "spot"
+      ? availableBaseInventoryUsd
+      : Math.max(
+          0,
+          Math.min(
+            Math.max(
+              sellNotionalUsd * DEFAULT_PORTFOLIO_BUFFER_PCT,
+              livePosition?.side === "buy"
+                ? Math.abs(livePosition.notionalUsd ?? 0)
+                : 0,
+            ),
+            Math.max(symbolBudgetCapUsd, budgetCapUsd),
+          ),
+        );
+  const positionState =
+    marketType === "spot"
+      ? baseInventoryUnits > 0
+        ? "long"
+        : "flat"
+      : livePosition
+        ? livePosition.side === "sell"
+          ? "short"
+          : "long"
+        : "flat";
 
   return {
-    baseCurrency: symbolParts?.base,
-    quoteCurrency: symbolParts?.quote,
-    positionState: (baseBalance?.availableBalance ?? 0) > 0 ? "long" : "flat",
+    marketType,
+    baseCurrency: accountOverview.buyingPower.baseCurrency,
+    quoteCurrency: accountOverview.buyingPower.quoteCurrency,
+    settleCurrency: accountOverview.buyingPower.settleCurrency,
+    positionState,
     totalTradingEquityUsd,
     currentBaseInventoryUsd,
     availableBaseInventoryUsd,
-    baseInventoryUnits: Math.max(baseBalance?.availableBalance ?? 0, 0),
-    quoteAvailableBalance: Math.max(quoteBalance?.availableBalance ?? 0, 0),
+    baseInventoryUnits,
+    quoteAvailableBalance: Math.max(accountOverview.buyingPower.buy, 0),
     quoteBudgetAvailableUsd,
+    sellBudgetAvailableUsd,
     portfolioConcentrationPct:
       symbolAllocation?.allocationPct ??
       (totalTradingEquityUsd > 0
@@ -635,6 +729,13 @@ function computePortfolioFitScore(
             portfolioState.symbolBudgetCapUsd,
         )
       : 0;
+  const sellCoverage =
+    portfolioState.symbolBudgetCapUsd > 0
+      ? clamp01(
+          portfolioState.sellBudgetAvailableUsd /
+            portfolioState.symbolBudgetCapUsd,
+        )
+      : 0;
   const concentrationHeadroom = clamp01(
     1 - portfolioState.portfolioConcentrationPct,
   );
@@ -651,6 +752,16 @@ function computePortfolioFitScore(
   );
 
   if (decision === "BUY") {
+    if (portfolioState.positionState === "short") {
+      return Number(
+        (
+          availableInventoryShare * 0.45 +
+          Math.max(exposureNeed, 0.25) * 0.35 +
+          concentrationHeadroom * 0.2
+        ).toFixed(3),
+      );
+    }
+
     return Number(
       (
         symbolBudgetCapacity * 0.4 +
@@ -662,11 +773,25 @@ function computePortfolioFitScore(
   }
 
   if (decision === "SELL") {
+    if (
+      portfolioState.marketType === "spot" ||
+      portfolioState.positionState === "long"
+    ) {
+      return Number(
+        (
+          availableInventoryShare * 0.45 +
+          Math.max(exposureNeed, 0.25) * 0.35 +
+          concentrationHeadroom * 0.2
+        ).toFixed(3),
+      );
+    }
+
     return Number(
       (
-        availableInventoryShare * 0.45 +
-        Math.max(exposureNeed, 0.25) * 0.35 +
-        concentrationHeadroom * 0.2
+        symbolBudgetCapacity * 0.35 +
+        sellCoverage * 0.3 +
+        concentrationHeadroom * 0.2 +
+        (portfolioState.positionState === "flat" ? 1 : 0.6) * 0.15
       ).toFixed(3),
     );
   }
@@ -696,6 +821,7 @@ function toAutonomyCandidateScore(
 
   return {
     symbol,
+    marketType: consensus.marketType ?? symbolExecutionContext.marketType,
     score,
     tradeable: snapshot.status.tradeable,
     realtime: snapshot.status.realtime,
@@ -797,6 +923,7 @@ async function resolveAutonomySymbols(
   const symbols = await getAutonomousSymbolUniverse({
     quoteCurrencies,
     balances: accountOverview.tradingBalances,
+    marketTypes: getConfiguredAutonomousMarketTypes(),
   });
 
   return symbols.filter((symbol) => !isSymbolSuppressed(state, symbol));
@@ -911,8 +1038,8 @@ async function evaluateAutonomyCandidate(
   symbol: string,
   timeframe: Timeframe,
   budgetRemainingUsd: number,
-  accountOverview: AccountOverview,
   portfolioState: PortfolioState,
+  livePosition?: Position,
 ): Promise<AutonomySymbolEvaluation> {
   return withTelemetrySpan(
     {
@@ -925,10 +1052,12 @@ async function evaluateAutonomyCandidate(
     },
     async (span) => {
       const snapshot = await getMarketSnapshot(symbol, timeframe);
+      const accountOverview = await getAccountOverview(symbol);
       const symbolExecutionContext = buildSymbolExecutionContext(
         accountOverview,
         symbol,
         portfolioState,
+        livePosition,
       );
       const symbolAllocation = portfolioState.symbols.find(
         (allocation) => allocation.symbol === symbol,
@@ -1130,24 +1259,35 @@ function applyPortfolioConstraints(
     }
   }
 
-  if (
-    decision === "SELL" &&
-    symbolExecutionContext.availableBaseInventoryUsd <
-      symbolExecutionContext.minimumTradeNotionalUsd
-  ) {
-    nextEvaluation = appendAutonomyRejection(nextEvaluation, {
-      code: "base_inventory_too_small",
-      summary: "Available inventory is too small to execute a spot sell.",
-      detail:
-        "Autonomy rejected the sell because the available base inventory does not clear the minimum trade size after portfolio buffers.",
-      metrics: {
-        availableBaseInventoryUsd: Number(
-          symbolExecutionContext.availableBaseInventoryUsd.toFixed(4),
-        ),
-        baseCurrency: symbolExecutionContext.baseCurrency,
-        minimumTradeNotionalUsd: symbolExecutionContext.minimumTradeNotionalUsd,
-      },
-    });
+  if (decision === "SELL") {
+    const sellCapacityUsd =
+      symbolExecutionContext.marketType === "spot"
+        ? symbolExecutionContext.availableBaseInventoryUsd
+        : symbolExecutionContext.sellBudgetAvailableUsd;
+    if (sellCapacityUsd < symbolExecutionContext.minimumTradeNotionalUsd) {
+      nextEvaluation = appendAutonomyRejection(nextEvaluation, {
+        code:
+          symbolExecutionContext.marketType === "spot"
+            ? "base_inventory_too_small"
+            : "derivative_sell_capacity_too_small",
+        summary:
+          symbolExecutionContext.marketType === "spot"
+            ? "Available inventory is too small to execute a spot sell."
+            : "Available derivatives capacity is too small to execute a sell.",
+        detail:
+          symbolExecutionContext.marketType === "spot"
+            ? "Autonomy rejected the sell because the available base inventory does not clear the minimum trade size after portfolio buffers."
+            : "Autonomy rejected the sell because futures or swap capacity does not clear the minimum executable trade size.",
+        metrics: {
+          sellCapacityUsd: Number(sellCapacityUsd.toFixed(4)),
+          baseCurrency: symbolExecutionContext.baseCurrency,
+          settleCurrency: symbolExecutionContext.settleCurrency,
+          minimumTradeNotionalUsd:
+            symbolExecutionContext.minimumTradeNotionalUsd,
+          marketType: symbolExecutionContext.marketType,
+        },
+      });
+    }
   }
 
   if (
@@ -1346,6 +1486,10 @@ async function selectAutonomyRun(
         symbols,
         budgetRemainingUsd,
       );
+      const livePositions = await getPositions().catch(() => []);
+      const livePositionMap = new Map(
+        livePositions.map((position) => [position.symbol, position]),
+      );
       const evaluations: AutonomySymbolEvaluation[] = [];
       const errors: string[] = [];
       const settled = await Promise.allSettled(
@@ -1354,8 +1498,8 @@ async function selectAutonomyRun(
             symbol,
             state.timeframe,
             budgetRemainingUsd,
-            accountOverview,
             portfolioState,
+            livePositionMap.get(symbol),
           ),
         ),
       );
