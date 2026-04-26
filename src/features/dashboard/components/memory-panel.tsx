@@ -17,6 +17,20 @@ function signalColor(signal: TradeSignal): string {
   }
 }
 
+/**
+ * Strips the redundant "BUY 42% | agree 52% | blocked: " prefix that the
+ * memory engine prepends to the summary string, leaving only the reason text.
+ */
+function cleanSummary(raw: string): string {
+  // Remove leading "SIGNAL XX% | agree XX% | blocked: " or "SIGNAL XX% | agree XX% | "
+  return raw
+    .replace(
+      /^(BUY|SELL|HOLD)\s+\d+%\s*\|\s*agree\s+\d+%\s*\|\s*(blocked:\s*)?/i,
+      "",
+    )
+    .trim();
+}
+
 export function MemoryPanel() {
   const { selectedSymbol, selectedTimeframe } = useDashboard();
   const memoryRecent = useMemoryRecent(selectedSymbol, selectedTimeframe, 15);
@@ -37,6 +51,7 @@ export function MemoryPanel() {
           </span>
         </CardTitle>
       </CardHeader>
+
       <CardContent className="flex-1 overflow-auto p-0">
         {summary && (
           <div className="grid grid-cols-3 gap-px bg-border text-[0.5625rem] font-mono border-b border-border">
@@ -84,34 +99,53 @@ export function MemoryPanel() {
         <div className="text-[0.5rem] uppercase tracking-wider text-terminal-dim px-2 py-0.5 border-b border-border bg-secondary sticky top-0">
           Recent Decisions
         </div>
+
         {entries.length === 0 ? (
           <div className="px-2 py-3 text-[0.625rem] text-terminal-dim text-center">
             No memory entries
           </div>
         ) : (
-          entries.map((entry: MemoryRecord) => (
-            <div
-              key={entry.id}
-              className="flex items-center gap-2 px-2 py-0.5 text-[0.5625rem] font-mono border-b border-border/30 hover:bg-secondary/50"
-            >
-              <span className="text-terminal-dim w-14 shrink-0">
-                {new Date(entry.createdAt).toLocaleTimeString()}
-              </span>
-              <span className={signalColor(entry.signal)}>{entry.signal}</span>
-              <span className="text-terminal-dim w-10">
-                {(entry.confidence * 100).toFixed(0)}%conf
-              </span>
-              <span className="text-terminal-dim w-10">
-                {(entry.agreement * 100).toFixed(0)}%agr
-              </span>
-              {entry.blocked && (
-                <span className="text-terminal-red text-[0.5rem]">BLOCKED</span>
-              )}
-              <span className="text-terminal-dim truncate">
-                {entry.summary.slice(0, 60)}
-              </span>
-            </div>
-          ))
+          entries.map((entry: MemoryRecord) => {
+            const reason = cleanSummary(entry.summary);
+            return (
+              <div
+                key={entry.id}
+                className="grid grid-cols-[3.5rem_2rem_2.5rem_2.5rem_auto] items-center gap-x-1.5 px-2 py-0.5 text-[0.5625rem] font-mono border-b border-border/30 hover:bg-secondary/50"
+              >
+                {/* Time */}
+                <span className="text-terminal-dim tabular-nums">
+                  {new Date(entry.createdAt).toLocaleTimeString()}
+                </span>
+
+                {/* Signal badge */}
+                <span className={`font-semibold ${signalColor(entry.signal)}`}>
+                  {entry.signal}
+                </span>
+
+                {/* Confidence */}
+                <span className="text-terminal-dim tabular-nums">
+                  {(entry.confidence * 100).toFixed(0)}%
+                  <span className="text-terminal-dim/60"> cf</span>
+                </span>
+
+                {/* Agreement */}
+                <span className="text-terminal-dim tabular-nums">
+                  {(entry.agreement * 100).toFixed(0)}%
+                  <span className="text-terminal-dim/60"> ag</span>
+                </span>
+
+                {/* Reason — truncated, blocked label inline */}
+                <span className="truncate text-terminal-dim min-w-0">
+                  {entry.blocked && (
+                    <span className="text-terminal-red mr-1 text-[0.5rem] font-semibold">
+                      BLK
+                    </span>
+                  )}
+                  {reason || "—"}
+                </span>
+              </div>
+            );
+          })
         )}
       </CardContent>
     </Card>

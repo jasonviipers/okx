@@ -9,6 +9,7 @@ import {
 } from "@/lib/configs/okx";
 import { OkxRequestError, okxPrivateGet } from "@/lib/okx/client";
 import { getConfiguredAutonomousQuoteCurrencies } from "@/lib/okx/instruments";
+import { getManagedSpotPositionSummary } from "@/lib/okx/orders";
 import { parseNumber } from "@/lib/runtime-utils";
 import { approximateAvailableUsd, parseSpotSymbol } from "@/lib/trade-utils";
 import type {
@@ -329,6 +330,13 @@ async function getCachedAccountState(): Promise<CachedAccountState> {
 export async function getAccountOverview(
   symbol?: string,
 ): Promise<AccountOverview> {
+  const managedSpotSummary = await getManagedSpotPositionSummary().catch(
+    () => ({
+      positions: [],
+      unrealizedPnl: 0,
+      notionalUsd: 0,
+    }),
+  );
   const emptyOverview = buildEmptyOverview(
     symbol,
     !hasOkxTradingCredentials()
@@ -337,7 +345,11 @@ export async function getAccountOverview(
   );
 
   if (!hasOkxTradingCredentials()) {
-    return emptyOverview;
+    return {
+      ...emptyOverview,
+      unrealizedPnl: managedSpotSummary.unrealizedPnl,
+      notionalUsd: managedSpotSummary.notionalUsd,
+    };
   }
 
   try {
@@ -424,15 +436,22 @@ export async function getAccountOverview(
           );
     const cashAvailableUsd = buildCashAvailableUsd(tradingBalances, symbol);
 
+    const brokerUnrealizedPnl = parseNumber(balance?.upl, 0);
+    const brokerNotionalUsd = parseNumber(balance?.notionalUsd, 0);
+
     return {
       totalEquity: parseNumber(balance?.totalEq, 0),
       availableEquity: derivedAvailableEquity,
       cashAvailableUsd,
       adjustedEquity: parseNumber(balance?.adjEq, 0),
       isoEquity: parseNumber(balance?.isoEq, 0),
-      unrealizedPnl: parseNumber(balance?.upl, 0),
+      unrealizedPnl: Number(
+        (brokerUnrealizedPnl + managedSpotSummary.unrealizedPnl).toFixed(8),
+      ),
       marginRatio: toMarginRatio(balance?.imr, balance?.mmr),
-      notionalUsd: parseNumber(balance?.notionalUsd, 0),
+      notionalUsd: Number(
+        (brokerNotionalUsd + managedSpotSummary.notionalUsd).toFixed(8),
+      ),
       buyingPower: derivedSpotBuyingPower ?? finalBuyingPower,
       tradingBalances,
       fundingBalances,

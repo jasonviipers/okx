@@ -115,7 +115,7 @@ export function assertCanReason(modelId: AIModel): void {
   if (!caps.canReason) {
     throw new Error(
       `Model "${modelId}" has role "${role}" and is not permitted to reason. ` +
-      `It may only be used for order routing, never for analysis.`,
+        `It may only be used for order routing, never for analysis.`,
     );
   }
 }

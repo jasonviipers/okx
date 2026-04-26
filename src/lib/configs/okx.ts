@@ -39,10 +39,10 @@ function getRegionalRestBaseUrl(region: OkxApiRegion): string {
 function getRegionalWsBaseUrl(region: OkxApiRegion): string {
   switch (region) {
     case "eu":
-      return "wss://wseea.okx.com:8443/ws/v5/public";
+      return "wss://wspap.okx.com:8443/ws/v5/public";
     case "us":
     case "au":
-      return "wss://wsus.okx.com:8443/ws/v5/public";
+      return "wss://wspap.okx.com:8443/ws/v5/public";
     default:
       return "wss://ws.okx.com:8443/ws/v5/public";
   }

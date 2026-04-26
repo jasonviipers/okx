@@ -67,7 +67,7 @@ export function PositionsPanel() {
               </div>
             </div>
             <div className="bg-card px-2 py-1.5">
-              <div className="text-terminal-dim uppercase">Day P&L</div>
+              <div className="text-terminal-dim uppercase">Open P&L</div>
               <div
                 className={cn(
                   "font-mono tabular-nums",
@@ -129,7 +129,7 @@ export function PositionsPanel() {
           </div>
           {positions.length === 0 ? (
             <div className="px-2 py-3 text-[0.625rem] text-terminal-dim text-center">
-              No open derivative-style positions
+              No open managed positions
             </div>
           ) : (
             positions.map((pos: Position, index: number) => {
