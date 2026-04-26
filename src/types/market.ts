@@ -75,6 +75,9 @@ export interface MarketFeedStatus {
   symbol: string;
   timeframe: Timeframe;
   source: MarketDataSource;
+  tickerSource?: MarketDataSource;
+  orderbookSource?: MarketDataSource;
+  candlesSource?: MarketDataSource;
   synthetic: boolean;
   realtime: boolean;
   stale: boolean;

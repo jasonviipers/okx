@@ -8,11 +8,17 @@ import { nowIso, parseBoolean, parseNumber } from "@/lib/runtime-utils";
 import type {
   Candle,
   MarketContext,
+  MarketDataSource,
   OKXTicker,
   OrderBook,
   OrderBookEntry,
   Timeframe,
 } from "@/types/market";
+
+type SourcedMarketData<T> = {
+  data: T;
+  source: Extract<MarketDataSource, "rest" | "fallback">;
+};
 
 function allowSyntheticMarketFallback() {
   return parseBoolean(
@@ -223,9 +229,21 @@ function mapOrderBook(symbol: string, row: OkxBookRow): OrderBook {
 }
 
 export async function getTicker(symbol: string): Promise<OKXTicker> {
+  return (await getTickerWithSource(symbol)).data;
+}
+
+export async function getTickerWithSource(
+  symbol: string,
+): Promise<SourcedMarketData<OKXTicker>> {
   const cacheKey = `okx:ticker:${symbol}`;
-  const cached = await getCachedJson<OKXTicker>(cacheKey);
-  if (cached) return cached;
+  const cached = await getCachedJson<SourcedMarketData<OKXTicker> | OKXTicker>(
+    cacheKey,
+  );
+  if (cached) {
+    return isSourcedMarketData(cached)
+      ? cached
+      : { data: cached, source: "rest" };
+  }
 
   try {
     const rows = await okxPublicGet<OkxTickerRow>(
@@ -233,16 +251,23 @@ export async function getTicker(symbol: string): Promise<OKXTicker> {
       new URLSearchParams({ instId: symbol }),
     );
     const ticker = mapTicker(rows[0]);
-    await setCachedJson(cacheKey, ticker, 5);
-    return ticker;
+    const payload: SourcedMarketData<OKXTicker> = {
+      data: ticker,
+      source: "rest",
+    };
+    await setCachedJson(cacheKey, payload, 5);
+    return payload;
   } catch (caughtError) {
     if (!allowSyntheticMarketFallback()) {
       rethrowLiveMarketError("ticker", symbol, undefined, caughtError);
     }
 
-    const ticker = buildFallbackTicker(symbol);
-    await setCachedJson(cacheKey, ticker, 5);
-    return ticker;
+    const payload: SourcedMarketData<OKXTicker> = {
+      data: buildFallbackTicker(symbol),
+      source: "fallback",
+    };
+    await setCachedJson(cacheKey, payload, 5);
+    return payload;
   }
 }
 
@@ -251,9 +276,23 @@ export async function getCandles(
   timeframe: Timeframe,
   limit = 20,
 ): Promise<Candle[]> {
+  return (await getCandlesWithSource(symbol, timeframe, limit)).data;
+}
+
+export async function getCandlesWithSource(
+  symbol: string,
+  timeframe: Timeframe,
+  limit = 20,
+): Promise<SourcedMarketData<Candle[]>> {
   const cacheKey = `okx:candles:${symbol}:${timeframe}:${limit}`;
-  const cached = await getCachedJson<Candle[]>(cacheKey);
-  if (cached) return cached;
+  const cached = await getCachedJson<SourcedMarketData<Candle[]> | Candle[]>(
+    cacheKey,
+  );
+  if (cached) {
+    return isSourcedMarketData(cached)
+      ? cached
+      : { data: cached, source: "rest" };
+  }
 
   try {
     const rows = await okxPublicGet<OkxCandleRow>(
@@ -265,16 +304,23 @@ export async function getCandles(
       }),
     );
     const candles = rows.map(mapCandle).reverse();
-    await setCachedJson(cacheKey, candles, 60);
-    return candles;
+    const payload: SourcedMarketData<Candle[]> = {
+      data: candles,
+      source: "rest",
+    };
+    await setCachedJson(cacheKey, payload, 60);
+    return payload;
   } catch (caughtError) {
     if (!allowSyntheticMarketFallback()) {
       rethrowLiveMarketError("candles", symbol, timeframe, caughtError);
     }
 
-    const candles = buildFallbackCandles(symbol, timeframe, limit);
-    await setCachedJson(cacheKey, candles, 60);
-    return candles;
+    const payload: SourcedMarketData<Candle[]> = {
+      data: buildFallbackCandles(symbol, timeframe, limit),
+      source: "fallback",
+    };
+    await setCachedJson(cacheKey, payload, 60);
+    return payload;
   }
 }
 
@@ -282,9 +328,22 @@ export async function getOrderBook(
   symbol: string,
   size = 10,
 ): Promise<OrderBook> {
+  return (await getOrderBookWithSource(symbol, size)).data;
+}
+
+export async function getOrderBookWithSource(
+  symbol: string,
+  size = 10,
+): Promise<SourcedMarketData<OrderBook>> {
   const cacheKey = `okx:books:${symbol}:${size}`;
-  const cached = await getCachedJson<OrderBook>(cacheKey);
-  if (cached) return cached;
+  const cached = await getCachedJson<SourcedMarketData<OrderBook> | OrderBook>(
+    cacheKey,
+  );
+  if (cached) {
+    return isSourcedMarketData(cached)
+      ? cached
+      : { data: cached, source: "rest" };
+  }
 
   try {
     const rows = await okxPublicGet<OkxBookRow>(
@@ -292,16 +351,23 @@ export async function getOrderBook(
       new URLSearchParams({ instId: symbol, sz: String(size) }),
     );
     const book = mapOrderBook(symbol, rows[0]);
-    await setCachedJson(cacheKey, book, 5);
-    return book;
+    const payload: SourcedMarketData<OrderBook> = {
+      data: book,
+      source: "rest",
+    };
+    await setCachedJson(cacheKey, payload, 5);
+    return payload;
   } catch (caughtError) {
     if (!allowSyntheticMarketFallback()) {
       rethrowLiveMarketError("order book", symbol, size, caughtError);
     }
 
-    const book = buildFallbackOrderBook(symbol);
-    await setCachedJson(cacheKey, book, 5);
-    return book;
+    const payload: SourcedMarketData<OrderBook> = {
+      data: buildFallbackOrderBook(symbol),
+      source: "fallback",
+    };
+    await setCachedJson(cacheKey, payload, 5);
+    return payload;
   }
 }
 
@@ -322,4 +388,16 @@ export async function getMarketContext(
     candles,
     orderbook,
   };
+}
+
+function isSourcedMarketData<T>(
+  value: SourcedMarketData<T> | T,
+): value is SourcedMarketData<T> {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    "data" in value &&
+    "source" in value &&
+    (value.source === "rest" || value.source === "fallback")
+  );
 }

@@ -1,18 +1,21 @@
 # Autonomous Trading Audit And Rebuild
 
 ## Implementation Status Checklist
-Audit date: 2026-04-17
+Audit date: 2026-04-25
 
-Checked items are materially implemented in the current codebase. Unchecked items are missing or only partially implemented.
+Checked items are materially implemented in the current codebase. Unchecked items are missing, only partially implemented, or implemented in a way that still leaves a meaningful gap for live trading.
 
 Audit scope used for this checklist:
 - `src/lib/swarm/*`
-- `src/lib/autonomy/service.ts`
-- `src/lib/market-data/service.ts`
+- `src/lib/autonomy/*`
+- `src/lib/market-data/*`
+- `src/lib/okx/*`
 - `src/lib/persistence/*`
+- `src/lib/replay/*`
 - `src/app/api/ai/swarm/*`
 - `src/app/api/ai/system/*`
-- `src/components/terminal/*`
+- `src/app/api/ai/trade/*`
+- `src/types/*`
 
 ### Phase 1: Immediate stabilization
 - [x] Require realtime market data for live execution and block live execution on degraded snapshots.
@@ -32,7 +35,7 @@ Audit scope used for this checklist:
 
 ### Market data, strategy, risk, execution, and portfolio
 - [x] Require realtime-quality data in the live execution path.
-- [ ] Disable synthetic fallback as a production trading input across the full live decision path.
+- [x] Disable synthetic fallback as a production trading input across the full live decision path.
 - [x] Replace the multi-agent vote aggregation layer with a deterministic strategy engine that emits edge score, confidence, expected value, and rationale metadata.
 - [x] Expose clearer threshold-based rejection metadata in validator, expected-value, harness, autonomy, and execution layers.
 - [x] Convert veto-style blockers into scored constraints end to end instead of layered HOLD suppression.
@@ -40,7 +43,7 @@ Audit scope used for this checklist:
 - [x] Enforce execution-policy constraints for minimum confidence, market tradability, budget, max position sizing, min trade notional, and inventory-aware `SELL` sizing.
 - [x] Enforce cooldown only when justified by position state instead of blanket time-based suppression.
 - [x] Resolve the autonomous symbol universe dynamically from live exchange instruments and current account balances, including multi-quote spot support.
-- [x] Rank autonomy candidates using a richer score that includes confidence, agreement, expected net edge, and market quality.
+- [x] Rank autonomy candidates using a richer score that includes confidence, agreement, expected net edge, market quality, and portfolio fit.
 - [x] Add explicit portfolio allocation logic using inventory state, concentration, and symbol budget allocation.
 
 ### Persistence and learning
@@ -58,7 +61,7 @@ Audit scope used for this checklist:
 - [x] Expose expected net edge and market quality on runtime-facing payloads through consensus subreports and autonomy candidate scores.
 - [x] Expose `lastCandidateScores`, `lastSelectedCandidate`, and `lastRejectedReasons` in autonomy status.
 - [x] Surface structured threshold failures in stream and history responses.
-- [ ] Introduce a dedicated deterministic `DecisionResult` that supersedes the swarm-shaped `ConsensusResult`.
+- [x] Introduce a dedicated deterministic `DecisionResult` that supersedes the swarm-shaped `ConsensusResult`.
 - [x] Add first-class `riskFlags` to the execution-ready decision payload.
 - [x] Expose full outcome metrics through persistence and APIs.
 
@@ -81,50 +84,59 @@ Audit scope used for this checklist:
 - [x] `SELL` behavior is inventory-aware and does not assume shorting capability.
 - [x] Operators can inspect candidate rankings, rejection reasons, expected edge, and market quality in runtime UI and API surfaces.
 - [x] A no-trade outcome is always traceable to explicit mathematical thresholds only, without residual heuristic deadlock.
-- [x] Symbol selection is driven by expected opportunity plus portfolio state rather than confidence or agreement-weighted heuristics.
+- [x] Symbol selection is driven by expected opportunity plus portfolio state rather than confidence-only heuristics.
 - [ ] Every decision can be replayed from stored features, thresholds, and execution metadata.
 - [ ] Offline replay and rolling forward validation gate new live trading logic before rollout.
 
+## Audit Summary
+The codebase has moved materially closer to the target architecture than this document previously reflected. The deterministic engine is already the execution-critical path, `DecisionResult` exists as a first-class execution type, autonomy uses richer expected-opportunity plus portfolio-aware ranking, and persistence now lives in PostgreSQL rather than a file-backed `.data/` store.
+
+The remaining gaps are narrower and more concrete:
+- replay exists as a utility but not as a release gate
+- outcome storage exists, but learning and attribution are still only partial
+- automated coverage around the trading core remains very thin
+
 ## Current System
-The current system is a spot-only OKX trading workstation with a deterministic trading core, optional diagnostic swarm overlays, an autonomous selector, and a guarded execution path. Live market context is assembled by the market-data service, which combines websocket subscriptions, REST recovery, stale-data polling, and optional synthetic fallback before exposing `MarketSnapshot` and `MarketContext` to the rest of the app.
+The current system is a spot-first OKX trading workstation with a deterministic trading core, optional diagnostic swarm overlays, an autonomous selector, and a guarded execution path. Live market context is assembled by the market-data service, which combines websocket subscriptions, REST recovery, stale-data polling, and lower-level OKX fallback behavior before exposing `MarketSnapshot` and `MarketContext` to the rest of the app.
 
 The live decision path today is:
 
 1. Market context is loaded from `src/lib/market-data/service.ts`.
-2. `src/lib/swarm/pipeline.ts` fetches account state and builds a deterministic consensus through `src/lib/swarm/deterministic-engine.ts`.
+2. `src/lib/swarm/pipeline.ts` fetches account state and builds a deterministic decision through `src/lib/swarm/deterministic-engine.ts`.
 3. The deterministic engine computes features, directional edge, execution quality, risk penalty, expected net edge, risk flags, and structured rejection reasons.
 4. Optional LLM diagnostics can still be collected through `collectDiagnosticVotes` for stream visibility, but those votes are no longer in the execution-critical decision path.
-5. If autonomy is running, `src/lib/autonomy/service.ts` resolves the tradable symbol universe dynamically from live OKX instruments plus current account balances, including multi-quote spot markets such as `*-EUR` and `*-USDT`.
-6. Autonomy ranks candidates using expected opportunity, market quality, symbol throttling, and portfolio state such as current inventory, concentration, and remaining symbol budget.
-7. `src/lib/swarm/autoExecute.ts` applies execution policy constraints for market tradability, confidence, budget, minimum trade notional, and spot inventory-aware sizing before routing to `/api/ai/trade/execute`.
-8. Swarm runs, execution intents, and trade executions are persisted locally in `.data/` through file-backed storage.
+5. If autonomy is running, `src/lib/autonomy/service.ts` resolves the tradable symbol universe dynamically from live OKX instruments plus current account balances, including multi-quote spot markets such as `*-EUR`, `*-USDT`, and `*-USDC`.
+6. Autonomy ranks candidates using expected opportunity, market quality, confidence, agreement, symbol throttling, and portfolio state such as current inventory, concentration, and remaining symbol budget.
+7. `src/lib/swarm/autoExecute.ts` applies execution policy constraints for market tradability, realtime requirements, confidence, budget, minimum trade notional, daily trade limits, duplicate suppression, circuit breaker state, and spot inventory-aware sizing before routing to `/api/ai/trade/execute`.
+8. Swarm runs, execution intents, autonomy state, trade executions, and outcome windows are persisted through Drizzle/PostgreSQL, with Redis used for caches, duplicate suppression, and swarm result caching.
 
-Behaviorally, this means the system is autonomous in scheduling and order routing, the execution-critical trading decision is deterministic, and the biggest remaining gaps are now around full live-data hardening, outcome tracking, and replay-based validation rather than LLM vote deadlock.
+Behaviorally, this means the system is already autonomous in scheduling and order routing, the execution-critical trading decision is deterministic, and the biggest remaining gaps are now around outcome-based learning, replay-based release validation, and test depth rather than LLM vote deadlock.
 
 ## Critical Issues
-### 1. Synthetic fallback is not fully disabled across the live decision path
-Execution already blocks stale or non-realtime market data, but the market-data layer still permits degraded analysis inputs for autonomy and swarm evaluation. For live funds, the system should stop earlier and avoid producing live decision candidates from fallback-backed market context.
+### 1. Replay exists, but it is not yet a deployment gate
+The repo now has a deterministic replay engine in `src/lib/replay/engine.ts`, metrics in `src/lib/replay/metrics.ts`, and a CLI wrapper in `src/scripts/replay.ts`. That is real progress. The missing step is turning replay into a required validation system with canonical datasets, walk-forward evaluation, parameter sensitivity checks, and release gating.
 
-### 2. The public decision payload is still consensus-shaped
-The repo now behaves like a deterministic decision engine, but the shared execution-ready type is still `ConsensusResult`. That keeps some swarm-era naming and fields in the core contract instead of exposing a cleaner dedicated `DecisionResult`.
+### 2. Memory and reliability are only partially outcome-based
+`src/lib/swarm/reliability.ts` can already use realized outcome windows when enough resolved samples exist. That is materially better than pure blocked-history memory. But the aging-memory layer still stores and recalls prior signals, blocked states, and confidence summaries rather than learning directly from realized return, slippage, or attribution feedback.
 
-### 3. Reliability and memory are still not outcome-based
-The memory layer still summarizes blocked decisions and historical suppression rather than learning from realized returns, slippage, or PnL. That means the system can describe why it did not trade, but it still cannot calibrate itself against actual economic outcomes.
+### 3. Post-trade attribution is still incomplete
+Trade executions now store decision snapshots, execution context, realized slippage, rolling outcome windows, and current mark-to-market performance. The remaining gap is a fuller attribution layer that cleanly separates executed alpha, missed alpha, allocation drag, capital rotation quality, and realized versus unrealized performance across symbols and regimes.
 
-### 4. Portfolio allocation is only partially implemented
-Autonomy now uses inventory state, concentration, quote availability, and per-symbol allocation headroom. That is materially better than the previous score-only selector. The remaining gap is a fuller portfolio allocator with cross-symbol concentration control, budget governance, and capital rotation based on realized performance.
+### 4. Portfolio allocation is good, but not yet a full allocator
+The current portfolio logic accounts for deployed capital, per-symbol budget caps, concentration, and live inventory. What is still missing is a stronger allocator that adapts symbol budgets based on realized performance, portfolio correlation, and opportunity cost across the active universe.
 
-### 5. Post-trade attribution is only partially implemented
-The persistence layer now stores decision snapshots, execution intents, fills, realized slippage metrics, and forward outcome windows exposed through history APIs. The remaining gap is fuller realized and unrealized strategy performance decomposition across portfolio state, missed trades, and capital rotation.
+### 5. Automated coverage is still thin in the most important paths
+There are no meaningful unit or integration tests around the deterministic engine, execution sizing, replay utility, or autonomy loop. That keeps regression risk high in the exact modules that now matter most.
 
-### 6. Replay and validation infrastructure is missing
-There is still no offline replay engine, historical order-book playback, rolling forward validation, or release gate that prevents new live logic from shipping before it proves itself on prior data.
-
-### 7. Automated coverage is still thin
-The deterministic engine, portfolio selector, and autonomy loop have very little automated unit, integration, or safety coverage. That increases regression risk precisely in the parts of the system that now matter most.
+## Notable Corrections From The Previous Audit
+- `DecisionResult` is already implemented in [src/types/swarm.ts](</c:/Jason Platform/okx/src/types/swarm.ts:108>) and is used by the pipeline, orchestrator, replay engine, and execution path.
+- Persistence is no longer file-backed `.data/` storage; the active persistence path is Drizzle plus PostgreSQL in [src/lib/persistence/history.ts](</c:/Jason Platform/okx/src/lib/persistence/history.ts:1>) and related schema files.
+- Synthetic fallback provenance is now carried into market status through per-feed source tracking in [src/lib/market-data/service.ts](</c:/Jason Platform/okx/src/lib/market-data/service.ts:1>) and source-aware OKX market helpers in [src/lib/okx/market.ts](</c:/Jason Platform/okx/src/lib/okx/market.ts:1>).
+- Replay infrastructure now exists in [src/lib/replay/engine.ts](</c:/Jason Platform/okx/src/lib/replay/engine.ts:1>) and [src/scripts/replay.ts](</c:/Jason Platform/okx/src/scripts/replay.ts:1>), but it is still a utility rather than a formal safety gate.
+- Strategy performance summary and outcome refresh APIs already exist through [src/app/api/ai/system/performance/route.ts](</c:/Jason Platform/okx/src/app/api/ai/system/performance/route.ts:1>) and [src/app/api/ai/trade/history/route.ts](</c:/Jason Platform/okx/src/app/api/ai/trade/history/route.ts:1>).
 
 ## Target Trading Architecture
-The replacement design should use a deterministic quantitative core and move LLMs out of the hard execution path.
+The replacement design should continue to use a deterministic quantitative core and keep LLMs out of the hard execution path.
 
 ### Core principle
 The primary trading decision should come from a rules-plus-score engine, not from end-to-end LLM voting. LLMs remain optional support systems for commentary, anomaly explanation, and contextual enrichment.
@@ -132,150 +144,55 @@ The primary trading decision should come from a rules-plus-score engine, not fro
 ### Market data
 Live trading should require realtime-quality market data. In production:
 - disable synthetic fallback for execution
+- carry fallback provenance explicitly from the OKX access layer into `MarketFeedStatus`
 - require websocket freshness for ticker and order book
 - allow REST only as a bounded recovery mechanism, not as a normal live-trading source
 - make `executionEligible` false whenever market quality drops below threshold
 
 ### Deterministic strategy engine
-Replace multi-agent directional voting with a single decision engine that computes a feature vector and emits a structured `DecisionResult`.
-
-Minimum feature set:
-- short-horizon returns over multiple lookbacks
-- realized volatility and volatility regime
-- spread and slippage proxies
-- top-of-book and aggregated order book imbalance
-- candle body, wick, and compression features
-- volume expansion and contraction
-- distance from rolling mean or VWAP proxy
-- breakout and range-rotation signals
-- inventory, account, and budget state
-
-### Mathematical scoring model
-The engine should compute at least four scored components:
-- `directionalEdgeScore`
-- `executionQualityScore`
-- `riskPenaltyScore`
-- `expectedNetEdgeBps`
-
-Recommended decision flow:
-
-1. Compute normalized feature scores.
-2. Produce raw directional edge for `BUY` and `SELL`.
-3. Adjust raw edge by execution quality and risk penalties.
-4. Estimate net edge after fees and slippage.
-5. Convert the final score into:
-   - `signal`
-   - `confidence`
-   - `marketQualityScore`
-   - `riskFlags`
-   - `executionEligible`
-
-Default decision rule:
-- Trade only when expected net edge clears minimum threshold.
-- Trade only when confidence clears minimum threshold.
-- Trade only when market quality clears minimum threshold.
-- Trade only when symbol and portfolio risk budgets allow it.
-- Otherwise return `HOLD` with structured rejection reasons.
-
-### Spot-only execution semantics
-For this version:
-- `BUY` increases spot inventory.
-- `SELL` only reduces existing spot inventory.
-- no shorting
-- no synthetic inverse exposure
-
-Sizing should be inventory-aware and budget-aware:
-- max notional per trade
-- max balance usage
-- min trade notional
-- symbol-specific lot size and min size normalization
-
-### Risk engine redesign
-Current veto layers should become explicit, scored constraints instead of opaque consensus blockers. The risk engine should expose threshold failures directly:
-- stale market data
-- spread too wide
-- insufficient depth
-- expected edge too small
-- volatility regime too hostile
-- inventory unavailable for `SELL`
-- budget exhausted
-
-### Portfolio selector
-Autonomy should rank symbols by best expected opportunity, not by non-blocked consensus score. Ranking inputs should include:
-- expected net edge
-- market quality
-- confidence
-- current inventory state
-- portfolio concentration
-- remaining daily and symbol budget
+The deterministic engine is now in place, but its contracts should continue to converge on `DecisionResult` end to end, with replay and attribution built around the same execution-ready payload.
 
 ### Persistence and learning
-Replace blocked-history bias with outcome-based evaluation. The persistence model should capture:
-- pre-trade feature snapshot
-- decision snapshot
-- thresholds and rejection reasons
-- submitted and filled order details
-- realized slippage
-- forward returns at fixed post-trade windows
-- realized and unrealized PnL
+The persistence model should continue expanding beyond decision snapshots and outcome windows to include:
+- durable threshold snapshots used at decision time
+- richer realized and unrealized attribution
+- allocator feedback inputs
+- replay-ready datasets captured from live trading sessions
 
-### LLM role after redesign
-LLMs should be optional and secondary:
+### LLM role
+LLMs should remain optional and secondary:
 - regime commentary
-- news and sentiment enrichment
 - anomaly explanation
-- discretionary tie-breaking outside the execution-critical path
-
-The system should explicitly remove LLM votes from the primary real-time execution path.
+- discretionary research overlays
+- operator-facing narrative summaries
 
 ## Phased Roadmap
 ### Phase 1: Immediate stabilization
 Goal: make the current system safe and observable enough to prepare for deterministic trading.
 
-- Require realtime market data for live execution and disable synthetic fallback in production execution paths.
-- Surface structured rejection reasons instead of relying on free-text block messages.
-- Reduce residual HOLD deadlock by keeping directional scoring, risk gating, and execution gating separate.
-- Expose autonomy candidate ranking inputs and last rejection thresholds in runtime status or history APIs.
-- Tighten stream, history, and execution observability so operators can see why a trade was not placed.
+Status: materially complete.
 
 ### Phase 2: Deterministic decision engine
 Goal: replace heuristic swarm voting with a measurable trading strategy core.
 
-- Introduce a feature-calculation module that consumes `MarketContext` and account state.
-- Build a deterministic `DecisionResult` with:
-  - `signal`
-  - `confidence`
-  - `expectedNetEdgeBps`
-  - `marketQualityScore`
-  - `riskFlags`
-  - `executionEligible`
-- Replace autonomy symbol scoring with expected-opportunity ranking.
-- Keep the old swarm only as a diagnostic or advisory layer until the new engine proves itself.
+Status: implemented.
 
 ### Phase 3: Outcome-based performance layer
 Goal: measure whether the system is actually improving PnL.
 
-- Store decision-time features and post-trade outcomes.
-- Add historical replay for candles and order-book snapshots.
-- Add forward return labeling for multiple horizons.
-- Attribute missed trades, blocked trades, executed trades, slippage, and realized PnL.
-- Calibrate thresholds using replay and rolling forward validation rather than manual intuition.
+Status: partially implemented through outcome windows, trade performance refresh, and strategy summaries, but still missing full attribution and release-quality replay validation.
 
 ### Phase 4: Production hardening
 Goal: make the engine robust enough for unattended live operation.
 
-- Add strong duplicate-execution prevention and idempotent execution intent handling.
-- Add circuit breaker recovery policy and operator visibility.
-- Add stale-lease recovery and autonomy worker health reporting.
-- Add daily, symbol-level, and portfolio-level budget governance.
-- Add release gates so new scoring logic only reaches live execution after replay and simulation checks pass.
+Status: partially implemented through duplicate suppression, execution intents, worker lease handling, daily trade limits, live budget caps, and circuit breakers, but still missing formal test coverage and replay-based rollout gates.
 
 ## Acceptance Criteria
-The new architecture should be considered ready when all of the following are true:
+The architecture should be considered ready only when all of the following are true:
 
 - The system can autonomously place `BUY` and `SELL` spot orders without human confirmation when realtime-quality conditions are valid.
 - A no-trade outcome is always traceable to explicit mathematical thresholds, not to opaque consensus deadlock.
-- Symbol selection is driven by expected opportunity and portfolio state, not by confidence/agreement alone.
+- Symbol selection is driven by expected opportunity and portfolio state, not by shallow confidence heuristics.
 - Live trading is impossible when market data is stale or degraded below production thresholds.
 - `SELL` behavior is inventory-aware and never assumes shorting capability.
 - Every decision can be replayed from stored features, thresholds, and execution metadata.
@@ -285,39 +202,9 @@ The new architecture should be considered ready when all of the following are tr
   - the last rejection reason by threshold
   - the expected edge and market quality behind each decision
 
-## Public Interfaces And Type Changes
-The current `ConsensusResult` should evolve into a deterministic `DecisionResult` or a similarly named execution-ready type with at least:
-
-```ts
-type DecisionResult = {
-  symbol: string;
-  timeframe: string;
-  signal: "BUY" | "SELL" | "HOLD";
-  confidence: number;
-  expectedNetEdgeBps: number;
-  marketQualityScore: number;
-  riskFlags: string[];
-  executionEligible: boolean;
-  rejectionReasons?: string[];
-  featureSummary?: Record<string, number>;
-};
-```
-
-Autonomy status should expand to expose:
-- current candidate ranking inputs
-- last candidate scores
-- last rejected thresholds
-
-Persistence should expand beyond current history and execution intents to include:
-- signal snapshots
-- fills
-- forward outcome windows
-- realized PnL
-- slippage metrics
-
-Stream and history APIs should emit structured threshold failures instead of only prose block reasons.
-
 ## Test Plan
+The test plan from the previous version remains directionally correct and is still largely unimplemented:
+
 ### Unit tests
 - feature calculations
 - directional score composition
@@ -331,7 +218,7 @@ Stream and history APIs should emit structured threshold failures instead of onl
 - historical candle and order-book playback
 - fee and slippage sensitivity
 - suppression of false positives during low-volatility chop
-- comparison of deterministic engine vs current swarm on identical playback data
+- comparison of deterministic engine vs current live logic on identical playback data
 
 ### Integration tests
 - autonomy loop from market snapshot to execution intent
@@ -347,16 +234,9 @@ Stream and history APIs should emit structured threshold failures instead of onl
 - minimum trade size handling
 - no execution when account inventory is insufficient for `SELL`
 
-### Document review checklist
-- faithful to current repo behavior
-- maps current modules to replacement responsibilities
-- uses mathematically defined thresholds and scores
-- clearly separates immediate stabilization from later quant work
-- leaves no unresolved design choices for the core spot-only autonomous path
-
 ## Defaults And Assumptions
-- Scope remains OKX spot only.
-- Objective is balanced PnL, not maximum trade count.
+- Scope remains OKX spot-first, even though some derivatives-aware utilities exist.
+- Objective is balanced risk-adjusted PnL, not maximum trade count.
 - The long-term core is deterministic and quantitative.
 - LLMs remain optional support systems, not primary execution voters.
 - This document is an internal engineering audit and build spec, not a user-facing product brief.

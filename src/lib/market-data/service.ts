@@ -4,13 +4,6 @@ import { performance } from "node:perf_hooks";
 import { env } from "@/env";
 import { getOkxAccountModeLabel } from "@/lib/configs/okx";
 import {
-  getCandles as getRestCandles,
-  getOrderBook as getRestOrderBook,
-  getTicker as getRestTicker,
-} from "@/lib/okx/market";
-import { getOkxPublicWsClient, type OkxWsChannel } from "@/lib/okx/ws-client";
-import { nowIso, parseBoolean, parseNumber } from "@/lib/runtime-utils";
-import {
   error,
   incrementCounter,
   info,
@@ -19,6 +12,13 @@ import {
   warn,
   withTelemetrySpan,
 } from "@/lib/observability/telemetry";
+import {
+  getCandlesWithSource,
+  getOrderBookWithSource,
+  getTickerWithSource,
+} from "@/lib/okx/market";
+import { getOkxPublicWsClient, type OkxWsChannel } from "@/lib/okx/ws-client";
+import { nowIso, parseBoolean, parseNumber } from "@/lib/runtime-utils";
 import type { MarketDataStatus } from "@/types/api";
 import type {
   Candle,
@@ -35,6 +35,8 @@ type SymbolState = {
   symbol: string;
   connectionState: MarketFeedStatus["connectionState"];
   source: MarketDataSource;
+  tickerSource?: MarketDataSource;
+  orderbookSource?: MarketDataSource;
   activeChannels: Set<OkxWsChannel>;
   disabledChannels: Set<OkxWsChannel>;
   ticker?: OKXTicker;
@@ -50,6 +52,7 @@ type SymbolState = {
 type CandleState = {
   candles: Candle[];
   updatedAt?: string;
+  source?: MarketDataSource;
 };
 
 const DEFAULT_SYMBOL = env.AUTONOMOUS_SYMBOL || "BTC-USDT";
@@ -112,7 +115,12 @@ function hasRequiredWebsocketFeeds(state: SymbolState) {
 }
 
 function resolveStreamSource(state: SymbolState): MarketDataSource {
-  if (state.source === "fallback") {
+  const feedSources = [
+    state.tickerSource,
+    state.orderbookSource,
+    ...[...state.candlesByTimeframe.values()].map((candles) => candles.source),
+  ];
+  if (feedSources.includes("fallback")) {
     return "fallback";
   }
 
@@ -289,12 +297,14 @@ function ensureWsListenerAttached() {
     if (event.channel === "tickers") {
       const ticker = mapWsTicker(event.instId, event.data);
       state.ticker = ticker;
+      state.tickerSource = "websocket";
       state.lastTickerAt = ticker.timestamp;
     }
 
     if (event.channel === "books5") {
       const orderbook = mapWsOrderBook(event.instId, event.data);
       state.orderbook = orderbook;
+      state.orderbookSource = "websocket";
       state.lastOrderBookAt = orderbook.timestamp;
     }
 
@@ -304,36 +314,42 @@ function ensureWsListenerAttached() {
 
 async function refreshCandles(symbol: string, timeframe: Timeframe) {
   const state = getOrCreateState(symbol);
-  const candles = await getRestCandles(symbol, timeframe, 20);
+  const { data: candles, source } = await getCandlesWithSource(
+    symbol,
+    timeframe,
+    20,
+  );
   state.candlesByTimeframe.set(timeframe, {
     candles,
     updatedAt: nowIso(),
+    source,
   });
 
-  if (state.source === "unknown") {
-    state.source = "rest";
-  }
+  state.source = resolveStreamSource(state);
 }
 
 async function bootstrapState(symbol: string, timeframe: Timeframe) {
   const state = getOrCreateState(symbol);
   const bootstrappedAt = new Date().toISOString();
-  const [ticker, orderbook, candles] = await Promise.all([
-    getRestTicker(symbol),
-    getRestOrderBook(symbol, 10),
-    getRestCandles(symbol, timeframe, 20),
+  const [tickerResult, orderbookResult, candlesResult] = await Promise.all([
+    getTickerWithSource(symbol),
+    getOrderBookWithSource(symbol, 10),
+    getCandlesWithSource(symbol, timeframe, 20),
   ]);
 
-  state.ticker = ticker;
-  state.orderbook = orderbook;
-  state.lastTickerAt = ticker.timestamp;
-  state.lastOrderBookAt = orderbook.timestamp;
+  state.ticker = tickerResult.data;
+  state.orderbook = orderbookResult.data;
+  state.tickerSource = tickerResult.source;
+  state.orderbookSource = orderbookResult.source;
+  state.lastTickerAt = tickerResult.data.timestamp;
+  state.lastOrderBookAt = orderbookResult.data.timestamp;
   state.lastEventAt = bootstrappedAt;
   state.candlesByTimeframe.set(timeframe, {
-    candles,
+    candles: candlesResult.data,
     updatedAt: bootstrappedAt,
+    source: candlesResult.source,
   });
-  state.source = "rest";
+  state.source = resolveStreamSource(state);
 
   info("market.data", "Bootstrapped market state", {
     symbol,
@@ -358,16 +374,18 @@ function ensurePolling(symbol: string, timeframe: Timeframe) {
           !state.orderbook ||
           ageMs(state.lastOrderBookAt) > getOrderBookStaleMs()
         ) {
-          const [ticker, orderbook] = await Promise.all([
-            getRestTicker(symbol),
-            getRestOrderBook(symbol, 10),
+          const [tickerResult, orderbookResult] = await Promise.all([
+            getTickerWithSource(symbol),
+            getOrderBookWithSource(symbol, 10),
           ]);
-          state.ticker = ticker;
-          state.orderbook = orderbook;
-          state.lastTickerAt = ticker.timestamp;
-          state.lastOrderBookAt = orderbook.timestamp;
+          state.ticker = tickerResult.data;
+          state.orderbook = orderbookResult.data;
+          state.tickerSource = tickerResult.source;
+          state.orderbookSource = orderbookResult.source;
+          state.lastTickerAt = tickerResult.data.timestamp;
+          state.lastOrderBookAt = orderbookResult.data.timestamp;
           state.lastEventAt = nowIso();
-          state.source = state.activeChannels.size > 0 ? "mixed" : "rest";
+          state.source = resolveStreamSource(state);
           if (state.connectionState !== "connected") {
             state.connectionState = "degraded";
           }
@@ -445,6 +463,10 @@ function buildStatus(
   const orderbookStale = ageMs(state.lastOrderBookAt) > getOrderBookStaleMs();
   const candleState = state.candlesByTimeframe.get(timeframe);
   const candlesStale = ageMs(candleState?.updatedAt) > getCandleRefreshMs() * 2;
+  const synthetic =
+    state.tickerSource === "fallback" ||
+    state.orderbookSource === "fallback" ||
+    candleState?.source === "fallback";
 
   if (tickerStale) {
     warnings.add("Ticker feed is stale.");
@@ -455,7 +477,7 @@ function buildStatus(
   if (candlesStale) {
     warnings.add("Candle feed is stale.");
   }
-  if (state.source === "fallback") {
+  if (synthetic) {
     warnings.add("Synthetic fallback market data is active.");
   }
   if (state.disabledChannels.size > 0) {
@@ -474,9 +496,7 @@ function buildStatus(
     !tickerStale &&
     !orderbookStale;
   const tradeable =
-    !stale &&
-    state.source !== "fallback" &&
-    (!requireRealtimeMarketData() || realtime);
+    !stale && !synthetic && (!requireRealtimeMarketData() || realtime);
 
   if (
     !tradeable &&
@@ -492,7 +512,10 @@ function buildStatus(
     symbol,
     timeframe,
     source: state.source,
-    synthetic: state.source === "fallback",
+    tickerSource: state.tickerSource,
+    orderbookSource: state.orderbookSource,
+    candlesSource: candleState?.source,
+    synthetic,
     realtime,
     stale,
     tradeable,
