@@ -50,16 +50,18 @@ export interface AgentRoleConfig {
 
 const { positionSizing, exits, risk, memeAssets } = SWARM_POLICY;
 
-const maxSinglePct   = (positionSizing.maxSingleAssetExposurePct * 100).toFixed(0);
-const minCashPct     = (positionSizing.minCashReservePct * 100).toFixed(0);
-const stopLossPct    = (exits.hardStopLossPct * 100).toFixed(0);
-const tpPct          = (exits.defaultTakeProfitPct * 100).toFixed(0);
+const maxSinglePct = (positionSizing.maxSingleAssetExposurePct * 100).toFixed(
+  0,
+);
+const minCashPct = (positionSizing.minCashReservePct * 100).toFixed(0);
+const stopLossPct = (exits.hardStopLossPct * 100).toFixed(0);
+const tpPct = (exits.defaultTakeProfitPct * 100).toFixed(0);
 const trailActivePct = (exits.trailingActivationGainPct * 100).toFixed(0);
-const minVotes       = risk.minConsensusVotes;
-const minConfidence  = (risk.minAverageConfidence * 10).toFixed(0);
-const memeSymbols    = memeAssets.symbols.join(", ");
-const memeMaxPct     = (memeAssets.maxAllocationPct * 100).toFixed(0);
-const circuitPct     = (risk.portfolioDrawdownCircuitPct * 100).toFixed(0);
+const minVotes = risk.minConsensusVotes;
+const minConfidence = (risk.minAverageConfidence * 10).toFixed(0);
+const memeSymbols = memeAssets.symbols.join(", ");
+const memeMaxPct = (memeAssets.maxAllocationPct * 100).toFixed(0);
+const circuitPct = (risk.portfolioDrawdownCircuitPct * 100).toFixed(0);
 
 export const ROLE_CONFIGS: Record<SwarmRole, AgentRoleConfig> = {
   // -------------------------------------------------------------------------
@@ -336,11 +338,11 @@ Confidence calibration reflects execution quality, not directional conviction:
 // ---------------------------------------------------------------------------
 export const MODEL_SWARM_ROLE_MAP: Record<string, SwarmRole> = {
   "deepseek-v4-flash:cloud": "trend_follower",
-  "gemma4:31b-cloud":        "momentum_analyst",
-  "kimi-k2.6:cloud":         "cross_asset_analyst",
-  "minimax-m2.5:cloud":      "liquidity_specialist",
-  "ministral-3:cloud":       "macro_filter",
-  "glm-5.1:cloud":           "execution_tactician",
+  "gemma4:31b-cloud": "momentum_analyst",
+  "kimi-k2.6:cloud": "cross_asset_analyst",
+  "minimax-m2.5:cloud": "liquidity_specialist",
+  "ministral-3:cloud": "macro_filter",
+  "glm-5.1:cloud": "execution_tactician",
 };
 
 /**

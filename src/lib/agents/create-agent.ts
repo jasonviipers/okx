@@ -374,13 +374,11 @@ function runCrossAssetAnalyst(ctx: MarketContext): SignalScore {
   const dailyBias = ctx.ticker.change24h / 100;
   // Relative strength: both the recent candle move and the 24h bias must agree.
   const aligned = Math.sign(move) === Math.sign(dailyBias);
-  const composite = aligned ? (move * 0.6 + dailyBias * 0.4) : 0;
+  const composite = aligned ? move * 0.6 + dailyBias * 0.4 : 0;
   const signal = detectSignal(composite, 0.004);
   return {
     signal,
-    confidence: aligned
-      ? Math.abs(composite) * 10 + 0.35
-      : 0.3, // divergence → low confidence HOLD
+    confidence: aligned ? Math.abs(composite) * 10 + 0.35 : 0.3, // divergence → low confidence HOLD
     reasoning:
       signal === "HOLD"
         ? aligned
@@ -498,13 +496,10 @@ function runExecutionTactician(ctx: MarketContext): SignalScore {
 
   const recentSpreads = ctx.candles
     .slice(-10)
-    .map((c) =>
-      ctx.ticker.last > 0 ? (c.high - c.low) / ctx.ticker.last : 0,
-    );
+    .map((c) => (ctx.ticker.last > 0 ? (c.high - c.low) / ctx.ticker.last : 0));
   const medianSpread =
-    recentSpreads.sort((a, b) => a - b)[
-      Math.floor(recentSpreads.length / 2)
-    ] ?? 0;
+    recentSpreads.sort((a, b) => a - b)[Math.floor(recentSpreads.length / 2)] ??
+    0;
 
   if (medianSpread > 0 && spread > medianSpread * 1.5) {
     return {
@@ -593,7 +588,9 @@ function analyzeRole(
     // TypeScript exhaustiveness guard — should never be reached
     default: {
       const _exhaustive: never = roleConfig.role;
-      console.warn(`[analyzeRole] Unhandled role: ${String(_exhaustive)}; falling back to trend_follower.`);
+      console.warn(
+        `[analyzeRole] Unhandled role: ${String(_exhaustive)}; falling back to trend_follower.`,
+      );
       return runTrendFollower(ctx);
     }
   }

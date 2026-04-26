@@ -68,7 +68,13 @@ export const SWARM_POLICY = {
   // -------------------------------------------------------------------------
   memeAssets: {
     /** Assets subject to the reduced allocation cap and mandatory uptrend filter */
-    symbols: ["DOGE-USDT", "SHIB-USDT", "PEPE-USDT", "WIF-USDT", "BONK-USDT"] as const,
+    symbols: [
+      "DOGE-USDT",
+      "SHIB-USDT",
+      "PEPE-USDT",
+      "WIF-USDT",
+      "BONK-USDT",
+    ] as const,
     /** Hard ceiling: meme assets collectively must not exceed this % of NAV */
     maxAllocationPct: 0.15,
     /** Any BUY vote on a meme asset must include RISK_FLAG: HIGH or it is vetoed */
@@ -123,11 +129,11 @@ export const SWARM_POLICY = {
   // -------------------------------------------------------------------------
   sessionCadence: {
     morningStrategyHour: 6,
-    morningVoteHour: 6.25,       // 06:15
-    morningExecutionHour: 6.5,   // 06:30
+    morningVoteHour: 6.25, // 06:15
+    morningExecutionHour: 6.5, // 06:30
     midSessionReviewHour: 12,
     eveningVoteHour: 18,
-    eveningExecutionHour: 18.5,  // 18:30
+    eveningExecutionHour: 18.5, // 18:30
     dailyLogHour: 23,
   },
 
@@ -152,8 +158,7 @@ export const SWARM_POLICY = {
 
 export type SwarmRiskFlag = "NONE" | "LOW" | "MEDIUM" | "HIGH";
 
-export type MemeAssetSymbol =
-  (typeof SWARM_POLICY.memeAssets.symbols)[number];
+export type MemeAssetSymbol = (typeof SWARM_POLICY.memeAssets.symbols)[number];
 
 export type Phase2EligibleAsset =
   (typeof SWARM_POLICY.recoveryPlan.phase2.eligibleAssets)[number];
@@ -165,7 +170,9 @@ export type Phase2EligibleAsset =
 /** Returns true if the normalised symbol is subject to meme-asset rules. */
 export function isMemeAsset(symbol: string): boolean {
   const normalized = symbol.trim().toUpperCase() as MemeAssetSymbol;
-  return (SWARM_POLICY.memeAssets.symbols as readonly string[]).includes(normalized);
+  return (SWARM_POLICY.memeAssets.symbols as readonly string[]).includes(
+    normalized,
+  );
 }
 
 /**

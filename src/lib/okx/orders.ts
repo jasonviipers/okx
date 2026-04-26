@@ -11,6 +11,7 @@ import {
   okxPrivatePost,
 } from "@/lib/okx/client";
 import { getTicker } from "@/lib/okx/market";
+import { getOpenPositions } from "@/lib/store/open-positions";
 import type { Order, OrderSide, OrderType, Position } from "@/types/trade";
 
 interface PlaceOrderInput {
@@ -150,9 +151,93 @@ export async function placeOrder(input: PlaceOrderInput): Promise<Order> {
   };
 }
 
-export async function getPositions(): Promise<Position[]> {
-  if (!hasOkxTradingCredentials()) {
+function toManagedPosition(input: {
+  symbol: string;
+  direction: "BUY" | "SELL";
+  size: number;
+  entryPrice: number;
+  currentPrice: number;
+  openedAt: string;
+}): Position {
+  const signedPnl =
+    input.direction === "BUY"
+      ? (input.currentPrice - input.entryPrice) * input.size
+      : (input.entryPrice - input.currentPrice) * input.size;
+  const entryNotional = input.entryPrice * input.size;
+
+  return {
+    symbol: input.symbol,
+    side: input.direction === "BUY" ? "buy" : "sell",
+    size: input.size,
+    entryPrice: input.entryPrice,
+    currentPrice: input.currentPrice,
+    pnl: Number(signedPnl.toFixed(8)),
+    pnlPercent:
+      entryNotional > 0
+        ? Number(((signedPnl / entryNotional) * 100).toFixed(4))
+        : 0,
+    openedAt: input.openedAt,
+  };
+}
+
+export async function getManagedSpotPositions(): Promise<Position[]> {
+  const openPositions = await getOpenPositions();
+  const activePositions = openPositions.filter(
+    (position) => position.remainingSize > 0 && position.entryPrice > 0,
+  );
+
+  if (activePositions.length === 0) {
     return [];
+  }
+
+  const tickers = await Promise.all(
+    activePositions.map((position) => getTicker(position.instId)),
+  );
+  const tickerMap = new Map(tickers.map((ticker) => [ticker.symbol, ticker]));
+
+  return activePositions.map((position) =>
+    toManagedPosition({
+      symbol: position.instId,
+      direction: position.direction,
+      size: position.remainingSize,
+      entryPrice: position.entryPrice,
+      currentPrice:
+        tickerMap.get(position.instId)?.last ??
+        position.lastKnownPrice ??
+        position.entryPrice,
+      openedAt: new Date(position.timestamp).toISOString(),
+    }),
+  );
+}
+
+export async function getManagedSpotPositionSummary(): Promise<{
+  positions: Position[];
+  unrealizedPnl: number;
+  notionalUsd: number;
+}> {
+  const positions = await getManagedSpotPositions();
+
+  return {
+    positions,
+    unrealizedPnl: Number(
+      positions.reduce((sum, position) => sum + position.pnl, 0).toFixed(8),
+    ),
+    notionalUsd: Number(
+      positions
+        .reduce(
+          (sum, position) => sum + position.currentPrice * position.size,
+          0,
+        )
+        .toFixed(8),
+    ),
+  };
+}
+
+export async function getPositions(): Promise<Position[]> {
+  const managedSpotPositions = await getManagedSpotPositions();
+
+  if (!hasOkxTradingCredentials()) {
+    return managedSpotPositions;
   }
 
   let rows: OkxPositionRow[];
@@ -163,7 +248,7 @@ export async function getPositions(): Promise<Position[]> {
       error instanceof OkxRequestError &&
       (error.status === 401 || error.status === 403)
     ) {
-      return [];
+      return managedSpotPositions;
     }
 
     throw error;
@@ -172,7 +257,7 @@ export async function getPositions(): Promise<Position[]> {
   const tickers = await Promise.all(rows.map((row) => getTicker(row.instId)));
   const tickerMap = new Map(tickers.map((ticker) => [ticker.symbol, ticker]));
 
-  return rows
+  const derivativePositions = rows
     .filter((row) => Number(row.pos) !== 0)
     .map((row) => {
       const currentPrice = Number(
@@ -189,4 +274,8 @@ export async function getPositions(): Promise<Position[]> {
         openedAt: new Date(Number(row.cTime)).toISOString(),
       } satisfies Position;
     });
+
+  return derivativePositions.length > 0
+    ? derivativePositions
+    : managedSpotPositions;
 }
