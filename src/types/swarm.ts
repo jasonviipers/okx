@@ -1,4 +1,5 @@
 import type { SwarmRole } from "@/lib/configs/roles";
+import type { SwarmRiskFlag } from "@/lib/swarm/policy";
 import type { MarketContext, Timeframe } from "@/types/market";
 import type { DecisionHarnessReport, MemorySummary } from "@/types/memory";
 import type { Order } from "@/types/trade";
@@ -47,9 +48,14 @@ export interface AgentVote {
   model: string;
   role: SwarmRole;
   modelRole: string;
+  asset?: string;
+  timeframeLabel?: string;
   signal: TradeSignal;
   confidence: number;
   reasoning: string;
+  invalidation?: string;
+  riskFlag?: SwarmRiskFlag;
+  promptVersion?: string;
   elapsedMs: number;
   voteWeight: number;
   isVetoLayer: boolean;

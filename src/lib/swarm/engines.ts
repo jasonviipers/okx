@@ -18,6 +18,8 @@ const ROLE_ENGINE_MAP: Record<AgentVote["role"], StrategyEngine> = {
   trend_follower: "trend_continuation",
   momentum_analyst: "breakout",
   sentiment_reader: "microstructure",
+  cross_asset_analyst: "trend_continuation",
+  liquidity_specialist: "microstructure",
   macro_filter: "none",
   execution_tactician: "none",
 };

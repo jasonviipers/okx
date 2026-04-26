@@ -3,7 +3,9 @@ import "server-only";
 import { and, desc, eq } from "drizzle-orm";
 import db, { dbFilePath } from "@/db";
 import { swarmMemory } from "@/db/schema";
+import { generateEmbedding } from "@/lib/ai/embeddings";
 import { clamp } from "@/lib/math-utils";
+import { insertVector } from "@/lib/vector";
 import type { MarketContext, Timeframe } from "@/types/market";
 import type { MemoryRecall, MemoryRecord, MemorySummary } from "@/types/memory";
 import type { SwarmRunResult, TradeSignal } from "@/types/swarm";
@@ -101,23 +103,41 @@ function computeSimilarity(record: MemoryRecord, ctx: MarketContext): number {
 
 export async function storeSwarmMemory(result: SwarmRunResult): Promise<void> {
   const { marketContext, consensus } = result;
+  const summary = buildMemorySummaryLine(result);
 
-  await db.insert(swarmMemory).values({
-    createdAt: new Date().toISOString(),
-    symbol: marketContext.symbol,
-    timeframe: marketContext.timeframe,
-    signal: consensus.signal,
-    confidence: consensus.confidence,
-    agreement: consensus.agreement,
-    blocked: consensus.blocked,
-    blockReason: consensus.blockReason ?? null,
-    price: marketContext.ticker.last,
-    change24h: marketContext.ticker.change24h,
-    spreadBps: spreadBps(marketContext),
-    volatilityPct: volatilityPct(marketContext),
-    imbalance: orderbookImbalance(marketContext),
-    summary: buildMemorySummaryLine(result),
-  });
+  const inserted = db
+    .insert(swarmMemory)
+    .values({
+      createdAt: new Date().toISOString(),
+      symbol: marketContext.symbol,
+      timeframe: marketContext.timeframe,
+      signal: consensus.signal,
+      confidence: consensus.confidence,
+      agreement: consensus.agreement,
+      blocked: consensus.blocked,
+      blockReason: consensus.blockReason ?? null,
+      price: marketContext.ticker.last,
+      change24h: marketContext.ticker.change24h,
+      spreadBps: spreadBps(marketContext),
+      volatilityPct: volatilityPct(marketContext),
+      imbalance: orderbookImbalance(marketContext),
+      summary,
+    })
+    .run();
+
+  const rowId = Number(inserted.lastInsertRowid ?? 0);
+  if (rowId <= 0) {
+    return;
+  }
+
+  try {
+    const embedding = await generateEmbedding(summary);
+    if (embedding) {
+      await insertVector(rowId, embedding);
+    }
+  } catch (error) {
+    console.warn("[Memory] Failed to persist vector embedding.", error);
+  }
 }
 
 export async function getRecentMemories(

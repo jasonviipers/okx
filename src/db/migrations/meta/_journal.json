@@ -8,6 +8,13 @@
       "when": 1776404001365,
       "tag": "0000_youthful_madame_web",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1776643200000,
+      "tag": "0002_add_vector_search",
+      "breakpoints": true
     }
   ]
 }

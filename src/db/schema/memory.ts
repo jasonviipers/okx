@@ -19,3 +19,8 @@ export const swarmMemory = sqliteTable("swarm_memory", {
   imbalance: real("imbalance").notNull(),
   summary: text("summary").notNull(),
 });
+
+export const swarmMemoryVectors = sqliteTable("swarm_memory_vss", {
+  rowid: integer("rowid").primaryKey(),
+  embedding: text("embedding").notNull(),
+});

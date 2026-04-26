@@ -39,6 +39,16 @@ const AGENT_DISPLAY: Record<
     role: "Sentiment Reader",
     color: "#00b8d4",
   },
+  "kimi-k2.6:cloud": {
+    name: "Kimi 2.6",
+    role: "Cross-Asset Analyst",
+    color: "#26c6da",
+  },
+  "minimax-m2.5:cloud": {
+    name: "MiniMax M2.5",
+    role: "Liquidity Specialist",
+    color: "#4dd0e1",
+  },
   "ministral-3:cloud": {
     name: "Ministral",
     role: "Macro Filter",
@@ -61,6 +71,8 @@ const SWARM_ROLE_MAP: Record<string, SwarmRole> = {
   "deepseek-v3.2:cloud": "trend_follower",
   "gemma4:31b-cloud": "momentum_analyst",
   "kimi-k2.5:cloud": "sentiment_reader",
+  "kimi-k2.6:cloud": "cross_asset_analyst",
+  "minimax-m2.5:cloud": "liquidity_specialist",
   "ministral-3:cloud": "macro_filter",
   "glm-5.1:cloud": "execution_tactician",
 };

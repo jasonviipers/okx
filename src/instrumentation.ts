@@ -5,9 +5,13 @@ export async function register() {
     return;
   }
 
-  const { registerNodeInstrumentation } = await import(
-    "./instrumentation.node"
-  );
+  const [{ startOpenTelemetry }, { registerNodeInstrumentation }] =
+    await Promise.all([
+      import("./lib/telemetry"),
+      import("./instrumentation.node"),
+    ]);
+
+  await startOpenTelemetry();
   await registerNodeInstrumentation();
 }
 
