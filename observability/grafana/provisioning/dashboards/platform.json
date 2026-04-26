@@ -154,9 +154,7 @@
         "justifyMode": "center",
         "orientation": "auto",
         "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
+          "calcs": ["lastNotNull"],
           "fields": "",
           "values": false
         },
@@ -223,10 +221,7 @@
   "refresh": "15s",
   "schemaVersion": 39,
   "style": "dark",
-  "tags": [
-    "platform",
-    "observability"
-  ],
+  "tags": ["platform", "observability"],
   "templating": {
     "list": []
   },

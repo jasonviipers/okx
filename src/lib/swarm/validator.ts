@@ -1,10 +1,11 @@
-import { SWARM_THRESHOLDS } from "@/lib/swarm/thresholds";
-import type { MarketContext } from "@/types/market";
-import type { ConsensusResult } from "@/types/swarm";
+import { SWARM_POLICY } from "@/lib/swarm/policy";
 import {
   appendRejectionReason,
   markConsensusBlocked,
 } from "@/lib/swarm/rejection-utils";
+import { SWARM_THRESHOLDS } from "@/lib/swarm/thresholds";
+import type { MarketContext } from "@/types/market";
+import type { ConsensusResult } from "@/types/swarm";
 
 export function validateConsensus(
   consensus: ConsensusResult,
@@ -53,6 +54,60 @@ export function validateConsensus(
       : 0;
 
   let nextConsensus = consensus;
+
+  const directionalVotes = consensus.votes.filter((vote) => !vote.isVetoLayer);
+  const alignedDirectionalVotes = directionalVotes.filter(
+    (vote) => vote.signal === consensus.signal,
+  );
+  const missingInvalidationVote = consensus.votes.find(
+    (vote) =>
+      vote.signal !== "HOLD" &&
+      (!vote.invalidation || vote.invalidation.trim().length === 0),
+  );
+
+  if (missingInvalidationVote) {
+    nextConsensus = appendRejectionReason(nextConsensus, {
+      layer: "validator",
+      code: "missing_invalidation",
+      summary: "A directional vote was missing its invalidation rule.",
+      detail: `Model ${missingInvalidationVote.model} submitted ${missingInvalidationVote.signal} without a valid invalidation.`,
+    });
+  }
+
+  if (alignedDirectionalVotes.length < SWARM_POLICY.risk.minConsensusVotes) {
+    nextConsensus = appendRejectionReason(nextConsensus, {
+      layer: "validator",
+      code: "insufficient_aligned_votes",
+      summary:
+        "Directional consensus did not reach the minimum aligned vote count.",
+      detail: `Received ${alignedDirectionalVotes.length} aligned votes; need at least ${SWARM_POLICY.risk.minConsensusVotes}.`,
+      metrics: {
+        alignedVotes: alignedDirectionalVotes.length,
+        requiredVotes: SWARM_POLICY.risk.minConsensusVotes,
+      },
+    });
+  }
+
+  if (alignedDirectionalVotes.length > 0) {
+    const avgAlignedConfidence =
+      alignedDirectionalVotes.reduce((sum, vote) => sum + vote.confidence, 0) /
+      alignedDirectionalVotes.length;
+    if (avgAlignedConfidence < SWARM_POLICY.risk.minAverageConfidence) {
+      nextConsensus = appendRejectionReason(nextConsensus, {
+        layer: "validator",
+        code: "aligned_confidence_below_min",
+        summary:
+          "Aligned directional votes did not meet the required average confidence.",
+        detail: `Average aligned confidence ${(avgAlignedConfidence * 100).toFixed(2)}% is below ${(SWARM_POLICY.risk.minAverageConfidence * 100).toFixed(2)}%.`,
+        metrics: {
+          avgAlignedConfidence: Number((avgAlignedConfidence * 100).toFixed(4)),
+          minAverageConfidence: Number(
+            (SWARM_POLICY.risk.minAverageConfidence * 100).toFixed(4),
+          ),
+        },
+      });
+    }
+  }
 
   if (spreadPercent > SWARM_THRESHOLDS.MAX_SPREAD_PERCENT) {
     nextConsensus = appendRejectionReason(nextConsensus, {

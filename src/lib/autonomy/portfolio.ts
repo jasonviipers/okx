@@ -4,6 +4,7 @@ import { env } from "@/env";
 import { getAccountOverview } from "@/lib/okx/account";
 import { parseNumber } from "@/lib/runtime-utils";
 import { getOpenPositions } from "@/lib/store/open-positions";
+import { isMemeAsset, SWARM_POLICY } from "@/lib/swarm/policy";
 import { SWARM_THRESHOLDS } from "@/lib/swarm/thresholds";
 import type { PortfolioState, SymbolAllocation } from "@/types/portfolio";
 
@@ -74,7 +75,10 @@ export async function buildPortfolioState(
       }, 0);
     const allocationPct =
       totalDeployedUsd > 0 ? currentNotionalUsd / totalDeployedUsd : 0;
-    const configuredMaxAllocationUsd = totalBudgetUsd * maxAllocationPct;
+    const symbolMaxAllocationPct = isMemeAsset(symbol)
+      ? Math.min(maxAllocationPct, SWARM_POLICY.memeAssets.maxAllocationPct)
+      : maxAllocationPct;
+    const configuredMaxAllocationUsd = totalBudgetUsd * symbolMaxAllocationPct;
     // Prevent a configuration deadlock where the symbol cap falls below the
     // minimum trade size even though the overall live budget can fund a trade.
     const maxAllocationUsd =

@@ -3,6 +3,7 @@ import "server-only";
 import { env } from "@/env";
 import { parseBoolean, parseNumber } from "@/lib/runtime-utils";
 import type { OpenPositionRecord } from "@/lib/store/open-positions";
+import { SWARM_POLICY } from "@/lib/swarm/policy";
 import { SWARM_THRESHOLDS } from "@/lib/swarm/thresholds";
 
 export function isTrailingStopEnabled(): boolean {
@@ -10,11 +11,18 @@ export function isTrailingStopEnabled(): boolean {
 }
 
 export function getTrailingStopDistancePct(): number {
+  const policyDefault =
+    SWARM_POLICY.exits.trailingActivationGainPct *
+    SWARM_POLICY.exits.trailingGainLockRatio *
+    100;
   return Math.max(
     0.1,
     parseNumber(
       env.TRAILING_STOP_DISTANCE_PCT,
-      SWARM_THRESHOLDS.DEFAULT_TRAILING_STOP_DISTANCE_PCT,
+      Math.max(
+        policyDefault,
+        SWARM_THRESHOLDS.DEFAULT_TRAILING_STOP_DISTANCE_PCT,
+      ),
     ),
   );
 }

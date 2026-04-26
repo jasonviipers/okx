@@ -21,6 +21,11 @@ import type { AgentRoleConfig } from "@/lib/configs/roles";
 import { average } from "@/lib/math-utils";
 import { buildMemoryPrompt, getMemorySummary } from "@/lib/memory/aging-memory";
 import { checkRateLimit } from "@/lib/redis/rate-limiter";
+import {
+  buildSwarmMasterPromptExcerpt,
+  isMemeAsset,
+  type SwarmRiskFlag,
+} from "@/lib/swarm/policy";
 import type { Candle, MarketContext } from "@/types/market";
 import type { MemorySummary } from "@/types/memory";
 import type { AgentResearchTrace, AgentVote, TradeSignal } from "@/types/swarm";
@@ -29,6 +34,14 @@ type SignalScore = {
   signal: TradeSignal;
   confidence: number;
   reasoning: string;
+  invalidation: string;
+  riskFlag: SwarmRiskFlag;
+};
+
+type ParsedModelVote = Partial<SignalScore> & {
+  vote?: TradeSignal;
+  thesis?: string;
+  risk_flag?: SwarmRiskFlag;
 };
 
 type ResearchDecision = {
@@ -107,25 +120,107 @@ function parseModelVote(text: string, fallback: SignalScore): SignalScore {
   }
 
   try {
-    const parsed = JSON.parse(jsonCandidate) as Partial<SignalScore>;
-    const signal =
+    const parsed = JSON.parse(jsonCandidate) as ParsedModelVote;
+    const voteCandidate =
       parsed.signal === "BUY" ||
       parsed.signal === "SELL" ||
       parsed.signal === "HOLD"
         ? parsed.signal
-        : fallback.signal;
-    const confidence =
+        : parsed.vote === "BUY" ||
+            parsed.vote === "SELL" ||
+            parsed.vote === "HOLD"
+          ? parsed.vote
+          : fallback.signal;
+    const confidenceCandidate =
       typeof parsed.confidence === "number"
-        ? clampConfidence(parsed.confidence)
+        ? parsed.confidence > 1
+          ? parsed.confidence / 10
+          : parsed.confidence
         : fallback.confidence;
     const reasoning =
-      typeof parsed.reasoning === "string" && parsed.reasoning.trim().length > 0
-        ? parsed.reasoning.trim()
-        : fallback.reasoning;
-    return { signal, confidence, reasoning };
+      typeof parsed.thesis === "string" && parsed.thesis.trim().length > 0
+        ? parsed.thesis.trim()
+        : typeof parsed.reasoning === "string" &&
+            parsed.reasoning.trim().length > 0
+          ? parsed.reasoning.trim()
+          : fallback.reasoning;
+    const invalidation =
+      typeof parsed.invalidation === "string" &&
+      parsed.invalidation.trim().length > 0
+        ? parsed.invalidation.trim()
+        : fallback.invalidation;
+    const riskFlag =
+      parsed.riskFlag === "NONE" ||
+      parsed.riskFlag === "LOW" ||
+      parsed.riskFlag === "MEDIUM" ||
+      parsed.riskFlag === "HIGH"
+        ? parsed.riskFlag
+        : parsed.risk_flag === "NONE" ||
+            parsed.risk_flag === "LOW" ||
+            parsed.risk_flag === "MEDIUM" ||
+            parsed.risk_flag === "HIGH"
+          ? parsed.risk_flag
+          : fallback.riskFlag;
+    return {
+      signal: voteCandidate,
+      confidence: clampConfidence(confidenceCandidate),
+      reasoning,
+      invalidation,
+      riskFlag,
+    };
   } catch {
     return fallback;
   }
+}
+
+function buildInvalidation(
+  ctx: MarketContext,
+  signal: TradeSignal,
+  fallbackDetail: string,
+): string {
+  const lastCandle = ctx.candles.at(-1);
+  const support = lastCandle ? lastCandle.low : ctx.ticker.bid;
+  const resistance = lastCandle ? lastCandle.high : ctx.ticker.ask;
+
+  if (signal === "BUY") {
+    return `Invalid if price loses ${support.toFixed(6)} or spread/liquidity deteriorates enough to break the long thesis.`;
+  }
+  if (signal === "SELL") {
+    return `Invalid if price reclaims ${resistance.toFixed(6)} or sell-side pressure fails to follow through.`;
+  }
+
+  return fallbackDetail;
+}
+
+function deriveRiskFlag(
+  ctx: MarketContext,
+  signal: TradeSignal,
+): SwarmRiskFlag {
+  if (isMemeAsset(ctx.symbol)) {
+    return "HIGH";
+  }
+
+  const spread =
+    ctx.ticker.last > 0
+      ? (ctx.ticker.ask - ctx.ticker.bid) / ctx.ticker.last
+      : 0;
+  const lastCandle = ctx.candles.at(-1);
+  const range =
+    lastCandle && ctx.ticker.last > 0
+      ? (lastCandle.high - lastCandle.low) / ctx.ticker.last
+      : 0;
+
+  if (spread > 0.005 || range > 0.03) {
+    return "HIGH";
+  }
+  if (
+    signal === "HOLD" ||
+    spread > 0.0025 ||
+    Math.abs(ctx.ticker.change24h) > 8
+  ) {
+    return "MEDIUM";
+  }
+  return "LOW";
 }
 
 function candleBody(candle: Candle): number {
@@ -221,6 +316,12 @@ function runTrendFollower(ctx: MarketContext): SignalScore {
       signal === "HOLD"
         ? "Trend structure is mixed across the recent candle sequence."
         : `${signal === "BUY" ? "Uptrend" : "Downtrend"} confirmed across latest bars with closing prices supporting direction.`,
+    invalidation: buildInvalidation(
+      ctx,
+      signal,
+      "Invalid if the current mixed trend structure resolves without directional confirmation.",
+    ),
+    riskFlag: deriveRiskFlag(ctx, signal),
   };
 }
 
@@ -239,6 +340,12 @@ function runMomentumAnalyst(ctx: MarketContext): SignalScore {
       signal === "HOLD"
         ? "Momentum is fading or under-confirmed by recent volume."
         : `${signal === "BUY" ? "Upside" : "Downside"} velocity is supported by the latest volume profile.`,
+    invalidation: buildInvalidation(
+      ctx,
+      signal,
+      "Invalid if momentum stays unconfirmed by volume and price remains noisy.",
+    ),
+    riskFlag: deriveRiskFlag(ctx, signal),
   };
 }
 
@@ -254,6 +361,12 @@ function runSentimentReader(ctx: MarketContext): SignalScore {
       signal === "HOLD"
         ? "Order book pressure is balanced; no clear directional edge."
         : `${signal === "BUY" ? "Bid" : "Ask"} depth dominates and aligns with the session bias.`,
+    invalidation: buildInvalidation(
+      ctx,
+      signal,
+      "Invalid if the order book rebalances and the microstructure edge disappears.",
+    ),
+    riskFlag: deriveRiskFlag(ctx, signal),
   };
 }
 
@@ -267,6 +380,9 @@ function runMacroFilter(ctx: MarketContext): SignalScore {
       signal: "HOLD",
       confidence: 0.9,
       reasoning: `Spread of ${(spread * 100).toFixed(3)}% exceeds 0.5%; execution quality is too poor to trade.`,
+      invalidation:
+        "Invalid only if spread compresses back into normal tradeable conditions.",
+      riskFlag: "HIGH",
     };
   }
   if (range > 0.03) {
@@ -274,6 +390,9 @@ function runMacroFilter(ctx: MarketContext): SignalScore {
       signal: "HOLD",
       confidence: 0.9,
       reasoning: `Intrabar range of ${(range * 100).toFixed(2)}% exceeds 3%; volatility regime is elevated.`,
+      invalidation:
+        "Invalid only if volatility cools and the market returns to a normal regime.",
+      riskFlag: "HIGH",
     };
   }
 
@@ -286,6 +405,12 @@ function runMacroFilter(ctx: MarketContext): SignalScore {
       signal === "HOLD"
         ? "Market conditions are acceptable but no clear regime signal."
         : `Regime appears ${signal === "BUY" ? "bullish" : "bearish"} with acceptable market quality.`,
+    invalidation: buildInvalidation(
+      ctx,
+      signal,
+      "Invalid if the market regime stays ambiguous or loses liquidity support.",
+    ),
+    riskFlag: deriveRiskFlag(ctx, signal),
   };
 }
 
@@ -308,6 +433,9 @@ function runExecutionTactician(ctx: MarketContext): SignalScore {
       signal: "HOLD",
       confidence: 0.88,
       reasoning: `Spread is ${(spread / medianSpread).toFixed(1)}x median; fill quality is unacceptable.`,
+      invalidation:
+        "Invalid only if spread normalizes back toward recent median conditions.",
+      riskFlag: "HIGH",
     };
   }
 
@@ -325,6 +453,9 @@ function runExecutionTactician(ctx: MarketContext): SignalScore {
         confidence: 0.82,
         reasoning:
           "Prominent upper wick rejection on last candle; do not buy into rejection.",
+        invalidation:
+          "Invalid only if buyers reclaim the rejected area with a cleaner close.",
+        riskFlag: "HIGH",
       };
     }
     if (lowerWick > wickThreshold && lowerWick > upperWick) {
@@ -333,6 +464,9 @@ function runExecutionTactician(ctx: MarketContext): SignalScore {
         confidence: 0.82,
         reasoning:
           "Prominent lower wick rejection on last candle; do not sell into support absorption.",
+        invalidation:
+          "Invalid only if sellers break through the absorbed support cleanly.",
+        riskFlag: "HIGH",
       };
     }
   }
@@ -346,6 +480,12 @@ function runExecutionTactician(ctx: MarketContext): SignalScore {
       signal === "HOLD"
         ? "Execution conditions are adequate but no confirmed entry signal."
         : `Execution conditions are clean; ${signal.toLowerCase()} signal is executable.`,
+    invalidation: buildInvalidation(
+      ctx,
+      signal,
+      "Invalid if execution quality degrades before entry confirmation.",
+    ),
+    riskFlag: deriveRiskFlag(ctx, signal),
   };
 }
 
@@ -365,6 +505,8 @@ function analyzeRole(
     case "execution_tactician":
       return runExecutionTactician(ctx);
   }
+
+  return runTrendFollower(ctx);
 }
 
 function buildSystemPrompt(roleConfig: AgentRoleConfig): string {
@@ -375,9 +517,12 @@ function buildSystemPrompt(roleConfig: AgentRoleConfig): string {
   return [
     "You are one specialist agent in a crypto trading swarm.",
     `Role: ${roleConfig.label} (${roleConfig.modelRole})`,
+    buildSwarmMasterPromptExcerpt(),
     "Return strict JSON only.",
-    '{"signal":"BUY"|"SELL"|"HOLD","confidence":0.0-1.0,"reasoning":"short rationale"}',
-    "Keep reasoning under 220 characters.",
+    '{"vote":"BUY"|"SELL"|"HOLD","asset":"ticker","confidence":1-10,"timeframe":"label","thesis":"max 2 short sentences","invalidation":"exact price or condition","riskFlag":"NONE|LOW|MEDIUM|HIGH"}',
+    "Use HOLD when mandatory filters or risk rules are not satisfied.",
+    "Every BUY or SELL must include a concrete invalidation.",
+    "Keep thesis concise and falsifiable.",
     "Use web research as supporting context only and weigh it against live market data.",
     vetoNote,
   ]
@@ -504,9 +649,13 @@ export function createAgent(modelId: string, roleConfig: AgentRoleConfig) {
       return finalizeVote({
         model: modelId,
         roleConfig,
+        asset: ctx.symbol,
+        timeframeLabel: ctx.timeframe,
         signal: heuristicVote.signal,
         confidence: heuristicVote.confidence,
         reasoning: `${heuristicVote.reasoning} [Rate-limited: heuristic used]${memoryLabel ? ` ${memoryLabel}` : ""}`,
+        invalidation: heuristicVote.invalidation,
+        riskFlag: heuristicVote.riskFlag,
         startedAt,
         researchTrace: {
           status: "skipped",
@@ -625,6 +774,8 @@ export function createAgent(modelId: string, roleConfig: AgentRoleConfig) {
             signal: "HOLD",
             confidence: heuristicVote.confidence,
             reasoning: `${heuristicVote.reasoning} [Veto layer: LLM directional override rejected; heuristic HOLD enforced]`,
+            invalidation: heuristicVote.invalidation,
+            riskFlag: heuristicVote.riskFlag,
           };
         }
       } catch (error) {
@@ -653,11 +804,15 @@ export function createAgent(modelId: string, roleConfig: AgentRoleConfig) {
     return finalizeVote({
       model: modelId,
       roleConfig,
+      asset: ctx.symbol,
+      timeframeLabel: ctx.timeframe,
       signal: resolvedVote.signal,
       confidence: clampConfidence(
         resolvedVote.confidence + Math.min(prompt.length / 4000, 0.05),
       ),
       reasoning: resolvedVote.reasoning,
+      invalidation: resolvedVote.invalidation,
+      riskFlag: resolvedVote.riskFlag,
       startedAt,
       researchTrace,
     });

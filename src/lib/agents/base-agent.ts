@@ -1,6 +1,7 @@
 import type { AgentRoleConfig } from "@/lib/configs/roles";
 import { buildBaseSystemPrompt } from "@/lib/prompts/base-system";
 import { summarizeMarketContext } from "@/lib/prompts/market-context";
+import { SWARM_PROMPT_VERSION, type SwarmRiskFlag } from "@/lib/swarm/policy";
 import type { MarketContext } from "@/types/market";
 import type { MemorySummary } from "@/types/memory";
 import type { AgentResearchTrace, AgentVote, TradeSignal } from "@/types/swarm";
@@ -8,9 +9,13 @@ import type { AgentResearchTrace, AgentVote, TradeSignal } from "@/types/swarm";
 interface FinalizeVoteInput {
   model: string;
   roleConfig: AgentRoleConfig;
+  asset?: string;
+  timeframeLabel?: string;
   signal: TradeSignal;
   confidence: number;
   reasoning: string;
+  invalidation?: string;
+  riskFlag?: SwarmRiskFlag;
   startedAt: number;
   researchTrace?: AgentResearchTrace;
 }
@@ -51,9 +56,14 @@ export function finalizeVote(input: FinalizeVoteInput): AgentVote {
     model: input.model,
     role: input.roleConfig.role,
     modelRole: input.roleConfig.modelRole,
+    asset: input.asset,
+    timeframeLabel: input.timeframeLabel,
     signal: input.signal,
     confidence: clampConfidence(input.confidence),
     reasoning: input.reasoning,
+    invalidation: input.invalidation,
+    riskFlag: input.riskFlag,
+    promptVersion: SWARM_PROMPT_VERSION,
     elapsedMs: Math.max(1, Date.now() - input.startedAt),
     voteWeight: input.roleConfig.voteWeight,
     isVetoLayer: input.roleConfig.isVetoLayer,

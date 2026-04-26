@@ -21,6 +21,8 @@ export const SWARM_ROLES = [
   "trend_follower",
   "momentum_analyst",
   "sentiment_reader",
+  "cross_asset_analyst",
+  "liquidity_specialist",
   "macro_filter",
   "execution_tactician",
 ] as const;
@@ -138,6 +140,60 @@ Confidence calibration:
 - 0.0–0.4: balanced book or missing data — output HOLD`,
   },
 
+  cross_asset_analyst: {
+    role: "cross_asset_analyst",
+    modelRole: "signal_worker",
+    label: "Cross-Asset Analyst",
+    voteWeight: 0.85,
+    isVetoLayer: false,
+    systemPromptSuffix: `
+ANALYTICAL MANDATE: Relative Strength, BTC Context, and Session Setup
+
+Primary focus areas:
+- Relative strength versus BTC and ETH over the recent 24h to 7d window
+- Whether the asset is outperforming or lagging the current market regime
+- BTC directional bias: altcoin BUY votes require a non-bearish BTC backdrop
+- Distance to obvious resistance: avoid entries already stretched into supply
+
+Decision rules:
+- BUY only when the asset is showing relative strength and BTC context is supportive
+- SELL when relative weakness aligns with a soft or bearish BTC backdrop
+- HOLD when the asset is extended, crowded, or too near resistance to justify fresh risk
+- If the broader market thesis is unclear, prefer HOLD over forcing a cross-asset read
+
+Confidence calibration:
+- 0.8–1.0: clear relative-strength leadership with supportive market backdrop
+- 0.5–0.7: mixed but acceptable context
+- 0.0–0.4: crowded, extended, or regime-conflicted setup — default HOLD`,
+  },
+
+  liquidity_specialist: {
+    role: "liquidity_specialist",
+    modelRole: "signal_worker",
+    label: "Liquidity Specialist",
+    voteWeight: 0.85,
+    isVetoLayer: false,
+    systemPromptSuffix: `
+ANALYTICAL MANDATE: Liquidity, Slippage, and Tradeability
+
+Primary focus areas:
+- Spot market depth relative to expected order size
+- Spread quality and evidence of slippage risk
+- Whether the move is tradeable without paying excessive friction
+- Volume quality: healthy participation, not a thin spike or vacuum move
+
+Decision rules:
+- BUY only when liquidity is healthy, spread is contained, and the move remains tradeable
+- SELL when downside pressure is liquid and exits are likely to fill cleanly
+- HOLD when the setup may be directionally right but is too expensive to execute well
+- If the trade quality depends on thin-book continuation, reject it with HOLD
+
+Confidence calibration:
+- 0.8–1.0: deep book, tight spread, liquid trend
+- 0.5–0.7: acceptable but not ideal liquidity
+- 0.0–0.4: friction too high or book too thin — HOLD`,
+  },
+
   // -------------------------------------------------------------------------
   // Risk veto layer — ministral-3
   // Regime detection; kills signals in stressed or illiquid environments.
@@ -227,9 +283,10 @@ Confidence calibration:
 // qwen3.5 (execution) and gpt-oss (orchestrator) are intentionally absent.
 // ---------------------------------------------------------------------------
 export const MODEL_SWARM_ROLE_MAP: Record<string, SwarmRole> = {
-  "deepseek-v3.2:cloud": "trend_follower",
+  "deepseek-v4-flash:cloud": "trend_follower",
   "gemma4:31b-cloud": "momentum_analyst",
-  "kimi-k2.5:cloud": "sentiment_reader",
+  "kimi-k2.6:cloud": "cross_asset_analyst",
+  "minimax-m2.5:cloud": "liquidity_specialist",
   "ministral-3:cloud": "macro_filter",
   "glm-5.1:cloud": "execution_tactician",
 };

@@ -20,6 +20,7 @@ import {
   removeOpenPosition,
   upsertOpenPosition,
 } from "@/lib/store/open-positions";
+import { SWARM_POLICY } from "@/lib/swarm/policy";
 import {
   activateTrailingStop,
   hasTrailingStopBeenHit,
@@ -104,6 +105,22 @@ function computeRealizedPnl(
   return Number(
     ((exitPrice - position.entryPrice) * exitSize * direction).toFixed(8),
   );
+}
+
+function hasReachedTrailingActivationThreshold(
+  position: OpenPositionRecord,
+  currentPrice: number,
+): boolean {
+  if (position.entryPrice <= 0 || !Number.isFinite(currentPrice)) {
+    return false;
+  }
+
+  const gainRatio =
+    position.direction === "BUY"
+      ? currentPrice / position.entryPrice - 1
+      : position.entryPrice / currentPrice - 1;
+
+  return gainRatio >= SWARM_POLICY.exits.trailingActivationGainPct;
 }
 
 async function resolveExitSize(
@@ -485,6 +502,13 @@ async function processManagedPosition(
         orderId: position.orderId,
       },
     );
+  }
+
+  if (
+    !nextPosition.trailingStopActive &&
+    hasReachedTrailingActivationThreshold(nextPosition, ticker.last)
+  ) {
+    nextPosition = activateTrailingStop(nextPosition, ticker.last);
   }
 
   nextPosition = updateTrailingStop(nextPosition, ticker.last);

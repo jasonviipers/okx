@@ -22,11 +22,12 @@ export type ModelRole =
 // Supported AI models
 // ---------------------------------------------------------------------------
 export const AI_MODELS = [
+  "deepseek-v4-flash:cloud",
   "glm-5.1:cloud",
   "gemma4:31b-cloud",
+  "kimi-k2.6:cloud",
+  "minimax-m2.5:cloud",
   "qwen3.5:cloud",
-  "kimi-k2.5:cloud",
-  "deepseek-v3.2:cloud",
   "ministral-3:cloud",
   "gpt-oss:cloud",
 ] as const;
@@ -40,11 +41,12 @@ export const aiModelSchema = z.enum(AI_MODELS);
 // permission checks throughout the swarm.
 // ---------------------------------------------------------------------------
 export const MODEL_ROLES: Record<AIModel, ModelRole> = {
-  "deepseek-v3.2:cloud": "strategy",
+  "deepseek-v4-flash:cloud": "strategy",
   "gpt-oss:cloud": "orchestrator",
   "qwen3.5:cloud": "execution", // Order routing ONLY — never participates in reasoning
   "gemma4:31b-cloud": "signal_worker",
-  "kimi-k2.5:cloud": "signal_worker",
+  "kimi-k2.6:cloud": "signal_worker",
+  "minimax-m2.5:cloud": "signal_worker",
   "glm-5.1:cloud": "validator",
   "ministral-3:cloud": "risk",
 };
@@ -113,7 +115,7 @@ export function assertCanReason(modelId: AIModel): void {
   if (!caps.canReason) {
     throw new Error(
       `Model "${modelId}" has role "${role}" and is not permitted to reason. ` +
-        `It may only be used for order routing, never for analysis.`,
+      `It may only be used for order routing, never for analysis.`,
     );
   }
 }
@@ -141,9 +143,10 @@ export function modelIsVetoLayer(modelId: AIModel): boolean {
 // Execution (qwen3.5) and orchestrator (gpt-oss) are excluded from voting.
 // ---------------------------------------------------------------------------
 export const ACTIVE_SWARM_MODELS = [
-  "deepseek-v3.2:cloud", // strategy
+  "deepseek-v4-flash:cloud", // strategy
   "gemma4:31b-cloud", // signal_worker
-  "kimi-k2.5:cloud", // signal_worker
+  "kimi-k2.6:cloud", // signal_worker
+  "minimax-m2.5:cloud", // signal_worker
   "glm-5.1:cloud", // validator (veto)
   "ministral-3:cloud", // risk (veto)
 ] as const satisfies readonly AIModel[];

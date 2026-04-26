@@ -4,7 +4,6 @@ import { performance } from "node:perf_hooks";
 import { env } from "@/env";
 import { getOkxAccountModeLabel } from "@/lib/configs/okx";
 import { getMarketSnapshot } from "@/lib/market-data/service";
-import { clamp } from "@/lib/math-utils";
 import {
   getAccountOverview,
   hasBrokerAccountSnapshot,
@@ -25,6 +24,7 @@ import {
 import { cacheGet, cacheIncrement, cacheSet } from "@/lib/redis/client";
 import { nowIso, parseBoolean, parseNumber } from "@/lib/runtime-utils";
 import { upsertOpenPosition } from "@/lib/store/open-positions";
+import { SWARM_POLICY } from "@/lib/swarm/policy";
 import { SWARM_THRESHOLDS } from "@/lib/swarm/thresholds";
 import { getTrailingStopDistancePct } from "@/lib/swarm/trailing-stop";
 import {
@@ -149,29 +149,20 @@ function sanitizeTakeProfitLevels(
 }
 
 function deriveFallbackExitPlan(
-  consensus: DecisionResult,
+  _consensus: DecisionResult,
   decision: TradeSignal,
   referencePrice: number,
 ): ExitPlan {
   const direction = decision === "SELL" ? "SELL" : "BUY";
-  const volatilityLongBps =
-    consensus.featureSummary?.volatilityLongBps ??
-    consensus.featureSummary?.volatilityShortBps ??
-    80;
-  const marketQualityScore = consensus.marketQualityScore ?? 0.6;
-  const volatilityPct = Math.max(0.4, volatilityLongBps / 100);
-  const stopDistancePct = clamp(
-    volatilityPct * (marketQualityScore >= 0.7 ? 1.4 : 1.8),
-    0.75,
-    3,
-  );
-  const rewardMultipliers = [1, 1.8, 2.6];
+  const stopDistancePct = SWARM_POLICY.exits.hardStopLossPct * 100;
+  const rewardMultipliers = [1, 1.5, 2];
   const stopLoss =
     direction === "BUY"
       ? Number((referencePrice * (1 - stopDistancePct / 100)).toFixed(8))
       : Number((referencePrice * (1 + stopDistancePct / 100)).toFixed(8));
   const takeProfitLevels = rewardMultipliers.map((multiplier) => {
-    const movePct = (stopDistancePct * multiplier) / 100;
+    const movePct =
+      (SWARM_POLICY.exits.defaultTakeProfitPct * 100 * multiplier) / 100;
     return direction === "BUY"
       ? Number((referencePrice * (1 + movePct)).toFixed(8))
       : Number((referencePrice * (1 - movePct)).toFixed(8));
@@ -416,8 +407,18 @@ async function deriveExecutableSize(
   );
 
   if (decision === "BUY") {
-    const availableQuote =
-      resolvedOverview.buyingPower.buy * maxBalanceUsagePct;
+    const reservedCashFloor =
+      resolvedOverview.totalEquity > 0
+        ? resolvedOverview.totalEquity *
+          SWARM_POLICY.positionSizing.minCashReservePct
+        : 0;
+    const availableQuote = Math.max(
+      0,
+      Math.min(
+        resolvedOverview.buyingPower.buy * maxBalanceUsagePct,
+        resolvedOverview.cashAvailableUsd - reservedCashFloor,
+      ),
+    );
     const notional = Math.min(targetNotionalUsd, availableQuote);
     if (notional < minTradeNotional || ticker.ask <= 0) {
       return {
@@ -871,7 +872,12 @@ export async function autoExecuteConsensus(
       const accountMode = getOkxAccountModeLabel();
       const cappedMaxPositionUsd =
         accountMode === "live" && effectiveLiveTradingBudgetUsd > 0
-          ? Math.min(maxPositionUsd, effectiveLiveTradingBudgetUsd)
+          ? Math.min(
+              maxPositionUsd,
+              effectiveLiveTradingBudgetUsd,
+              effectiveLiveTradingBudgetUsd *
+                SWARM_POLICY.positionSizing.maxSingleTradePct,
+            )
           : maxPositionUsd;
       const targetNotionalUsd = deriveSize(confidence, cappedMaxPositionUsd);
       telemetryInfo(
