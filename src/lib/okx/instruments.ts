@@ -197,7 +197,7 @@ async function listSpotInstrumentRows(): Promise<OkxInstrumentRow[]> {
   return rows;
 }
 
-async function listSpotTickerRows(): Promise<OkxTickerRow[]> {
+export async function listSpotTickerRows(): Promise<OkxTickerRow[]> {
   const cached = await getCachedJson<OkxTickerRow[]>(TICKERS_CACHE_KEY);
   if (cached) {
     return cached;
@@ -211,6 +211,17 @@ async function listSpotTickerRows(): Promise<OkxTickerRow[]> {
   );
   await setCachedJson(TICKERS_CACHE_KEY, rows, TICKERS_CACHE_TTL_SECONDS);
   return rows;
+}
+
+export async function isSpotInstrumentTradeable(
+  symbol: string,
+): Promise<boolean> {
+  try {
+    const instrument = await getInstrumentRules(symbol);
+    return instrument.state === "live";
+  } catch {
+    return false;
+  }
 }
 
 function estimateQuoteVolume(row: OkxTickerRow): number {

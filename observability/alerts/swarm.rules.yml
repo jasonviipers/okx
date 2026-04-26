@@ -1,0 +1,16 @@
+groups:
+  - name: swarm-diagnostics
+    rules:
+      - alert: SwarmVoterHighErrorRate
+        expr: |
+          (
+            rate(swarm_diagnostic_vote_duration_ms_count{status="error"}[30m])
+            /
+            clamp_min(rate(swarm_diagnostic_vote_duration_ms_count[30m]), 0.0001)
+          ) > 0.5
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Swarm voter {{ $labels.model }} error rate > 50%"
+          description: "Diagnostic voter {{ $labels.model }} has exceeded a 50% error rate over the last 30 minutes."

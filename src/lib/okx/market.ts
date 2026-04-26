@@ -3,6 +3,7 @@ import "server-only";
 import { env } from "@/env";
 import { OKX_ENDPOINTS, OKX_TIMEFRAME_MAP } from "@/lib/configs/okx";
 import { OkxRequestError, okxPublicGet } from "@/lib/okx/client";
+import { listSpotTickerRows } from "@/lib/okx/instruments";
 import { getCachedJson, setCachedJson } from "@/lib/redis/swarm-cache";
 import { nowIso, parseBoolean, parseNumber } from "@/lib/runtime-utils";
 import type {
@@ -24,15 +25,15 @@ function allowSyntheticMarketFallback() {
 interface OkxTickerRow {
   instId: string;
   last: string;
-  bidPx: string;
-  askPx: string;
-  bidSz: string;
-  askSz: string;
-  high24h: string;
-  low24h: string;
-  vol24h: string;
-  sodUtc0: string;
-  ts: string;
+  bidPx?: string;
+  askPx?: string;
+  bidSz?: string;
+  askSz?: string;
+  high24h?: string;
+  low24h?: string;
+  vol24h?: string;
+  sodUtc0?: string;
+  ts?: string;
 }
 
 type OkxCandleRow = [string, string, string, string, string, string, string?];
@@ -43,7 +44,11 @@ interface OkxBookRow {
   ts: string;
 }
 
-function toIso(ts: string): string {
+function toIso(ts?: string): string {
+  if (!ts) {
+    return nowIso();
+  }
+
   return new Date(Number(ts)).toISOString();
 }
 
@@ -231,6 +236,73 @@ export async function getTicker(symbol: string): Promise<OKXTicker> {
     await setCachedJson(cacheKey, ticker, 5);
     return ticker;
   }
+}
+
+export async function getTickers(symbols: string[]): Promise<OKXTicker[]> {
+  const uniqueSymbols = [
+    ...new Set(symbols.map((symbol) => symbol.trim())),
+  ].filter(Boolean);
+  if (uniqueSymbols.length === 0) {
+    return [];
+  }
+
+  const cachedTickers = await Promise.all(
+    uniqueSymbols.map(async (symbol) => {
+      const cached = await getCachedJson<OKXTicker>(`okx:ticker:${symbol}`);
+      return cached ? ([symbol, cached] as const) : null;
+    }),
+  );
+  const tickerMap = new Map<string, OKXTicker>(
+    cachedTickers.flatMap((entry) => (entry ? [entry] : [])),
+  );
+  const missingSymbols = uniqueSymbols.filter(
+    (symbol) => !tickerMap.has(symbol),
+  );
+
+  if (missingSymbols.length > 0) {
+    try {
+      const rows = await listSpotTickerRows();
+      const rowsBySymbol = new Map(rows.map((row) => [row.instId, row]));
+
+      for (const symbol of missingSymbols) {
+        const row = rowsBySymbol.get(symbol);
+        if (!row) {
+          continue;
+        }
+
+        const ticker = mapTicker(row);
+        tickerMap.set(symbol, ticker);
+        await setCachedJson(`okx:ticker:${symbol}`, ticker, 5);
+      }
+    } catch (caughtError) {
+      if (!allowSyntheticMarketFallback()) {
+        throw new Error(
+          "Bulk ticker lookup failed and synthetic fallback is disabled.",
+          {
+            cause: caughtError instanceof Error ? caughtError : undefined,
+          },
+        );
+      }
+    }
+  }
+
+  const unresolvedSymbols = uniqueSymbols.filter(
+    (symbol) => !tickerMap.has(symbol),
+  );
+  if (unresolvedSymbols.length > 0) {
+    const fallbacks = await Promise.all(
+      unresolvedSymbols.map(
+        async (symbol) => [symbol, await getTicker(symbol)] as const,
+      ),
+    );
+    for (const [symbol, ticker] of fallbacks) {
+      tickerMap.set(symbol, ticker);
+    }
+  }
+
+  return uniqueSymbols
+    .map((symbol) => tickerMap.get(symbol))
+    .filter((ticker): ticker is OKXTicker => Boolean(ticker));
 }
 
 export async function getCandles(
