@@ -32,7 +32,7 @@ docker compose -f docker-compose.full.yml up -d
 | Service | URL |
 | --- | --- |
 | App | http://localhost |
-| Grafana | http://localhost:3001 (admin / see .env) |
+| Grafana | http://localhost:3001 (`admin` / see `GF_SECURITY_ADMIN_PASSWORD` in `.env`) |
 | MinIO Console | http://localhost:9001 |
 | Jaeger UI | http://localhost:16686 |
 | Prometheus | http://localhost:9090 |
@@ -41,9 +41,9 @@ For a deployed Docker host behind the bundled Nginx reverse proxy, you can
 route observability services with dedicated subdomains such as:
 
 - `grafana.yourdomain.com`
-- `minio.convex.yourdomain.com`
-- `jaeger.convex.yourdomain.com`
-- `prometheus.convex.yourdomain.com`
+- `minio.yourdomain.com`
+- `jaeger.yourdomain.com`
+- `prometheus.yourdomain.com`
 
 These hostnames must resolve to the same server as the app so Nginx can route
 them to the internal containers.
