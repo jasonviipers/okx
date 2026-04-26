@@ -37,6 +37,17 @@ docker compose -f docker-compose.full.yml up -d
 | Jaeger UI | http://localhost:16686 |
 | Prometheus | http://localhost:9090 |
 
+For a deployed Docker host behind the bundled Nginx reverse proxy, you can
+route observability services with dedicated subdomains such as:
+
+- `grafana.yourdomain.com`
+- `minio.convex.yourdomain.com`
+- `jaeger.convex.yourdomain.com`
+- `prometheus.convex.yourdomain.com`
+
+These hostnames must resolve to the same server as the app so Nginx can route
+them to the internal containers.
+
 ### First-Time Migration
 
 ```bash
