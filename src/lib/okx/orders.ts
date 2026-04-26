@@ -10,7 +10,7 @@ import {
   okxPrivateGet,
   okxPrivatePost,
 } from "@/lib/okx/client";
-import { getTicker } from "@/lib/okx/market";
+import { getTicker, getTickers } from "@/lib/okx/market";
 import { getOpenPositions } from "@/lib/store/open-positions";
 import type { Order, OrderSide, OrderType, Position } from "@/types/trade";
 
@@ -190,8 +190,8 @@ export async function getManagedSpotPositions(): Promise<Position[]> {
     return [];
   }
 
-  const tickers = await Promise.all(
-    activePositions.map((position) => getTicker(position.instId)),
+  const tickers = await getTickers(
+    activePositions.map((position) => position.instId),
   );
   const tickerMap = new Map(tickers.map((ticker) => [ticker.symbol, ticker]));
 
@@ -254,7 +254,7 @@ export async function getPositions(): Promise<Position[]> {
     throw error;
   }
 
-  const tickers = await Promise.all(rows.map((row) => getTicker(row.instId)));
+  const tickers = await getTickers(rows.map((row) => row.instId));
   const tickerMap = new Map(tickers.map((ticker) => [ticker.symbol, ticker]));
 
   const derivativePositions = rows

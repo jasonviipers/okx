@@ -3,7 +3,7 @@ import "server-only";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { average } from "@/lib/math-utils";
-import { getTicker } from "@/lib/okx/market";
+import { getTickers } from "@/lib/okx/market";
 import { getTradeUpdates, type OkxTradeUpdateRow } from "@/lib/okx/orders";
 import { normalizeConsensusResult } from "@/lib/swarm/normalize-consensus";
 import type {
@@ -758,15 +758,14 @@ export async function refreshOutcomeWindows(
   }
 
   const symbols = [...new Set(windows.map((window) => window.symbol))];
-  const tickerResults = await Promise.allSettled(
-    symbols.map(async (symbol) => [symbol, await getTicker(symbol)] as const),
-  );
   const tickerMap = new Map<string, number>();
-
-  for (const result of tickerResults) {
-    if (result.status === "fulfilled") {
-      tickerMap.set(result.value[0], result.value[1].last);
+  try {
+    const tickers = await getTickers(symbols);
+    for (const ticker of tickers) {
+      tickerMap.set(ticker.symbol, ticker.last);
     }
+  } catch {
+    return windows;
   }
 
   const now = Date.now();
@@ -894,17 +893,14 @@ export async function refreshTradeExecutionOutcomes(
         .map((entry) => entry.symbol),
     ),
   ];
-  const tickerResults = await Promise.allSettled(
-    candidateSymbols.map(
-      async (symbol) => [symbol, await getTicker(symbol)] as const,
-    ),
-  );
   const tickerMap = new Map<string, number>();
-
-  for (const result of tickerResults) {
-    if (result.status === "fulfilled") {
-      tickerMap.set(result.value[0], result.value[1].last);
+  try {
+    const tickers = await getTickers(candidateSymbols);
+    for (const ticker of tickers) {
+      tickerMap.set(ticker.symbol, ticker.last);
     }
+  } catch {
+    tickerMap.clear();
   }
 
   const observedAt = new Date().toISOString();

@@ -4,6 +4,7 @@ import { performance } from "node:perf_hooks";
 import { env } from "@/env";
 import { getOkxAccountModeLabel } from "@/lib/configs/okx";
 import { MARKET_DATA_QUALITY_THRESHOLDS } from "@/lib/market-data/thresholds";
+import { getInstrumentRules } from "@/lib/okx/instruments";
 import {
   getCandles as getRestCandles,
   getOrderBook as getRestOrderBook,
@@ -44,6 +45,9 @@ type SymbolState = {
   lastOrderBookAt?: string;
   lastEventAt?: string;
   lastError?: string;
+  instrumentState?: string;
+  instrumentValidatedAt?: string;
+  lastResubscribeAt?: string;
   candlesByTimeframe: Map<Timeframe, CandleState>;
   pollTimer: NodeJS.Timeout | null;
 };
@@ -60,6 +64,7 @@ const DEFAULT_ORDERBOOK_STALE_MS = 15_000;
 const DEFAULT_REST_REFRESH_MS = 10_000;
 const DEFAULT_CANDLE_REFRESH_MS = 30_000;
 const DEFAULT_MARKET_WARMUP_TIMEOUT_MS = 5_000;
+const DEFAULT_MARKET_RESUBSCRIBE_BACKOFF_MS = 60_000;
 const REQUIRED_WEBSOCKET_CHANNELS: OkxWsChannel[] = ["tickers", "books5"];
 
 const states = new Map<string, SymbolState>();
@@ -83,6 +88,10 @@ function getRestRefreshMs() {
 
 function getCandleRefreshMs() {
   return parseNumber(env.MARKET_CANDLE_REFRESH_MS, DEFAULT_CANDLE_REFRESH_MS);
+}
+
+function getResubscribeBackoffMs() {
+  return Math.max(getRestRefreshMs(), DEFAULT_MARKET_RESUBSCRIBE_BACKOFF_MS);
 }
 
 function toIso(ts: string | number | undefined) {
@@ -310,6 +319,58 @@ async function refreshCandles(symbol: string, timeframe: Timeframe) {
   }
 }
 
+async function ensureTradeableInstrument(state: SymbolState) {
+  try {
+    const instrument = await getInstrumentRules(state.symbol);
+    state.instrumentValidatedAt = nowIso();
+    state.instrumentState = instrument.state;
+
+    if (instrument.state === "live") {
+      return true;
+    }
+  } catch {
+    state.instrumentValidatedAt = nowIso();
+    state.instrumentState = "unavailable";
+  }
+
+  state.connectionState = "degraded";
+  state.lastError = `Instrument ${state.symbol} is not live on OKX spot.`;
+  state.activeChannels.clear();
+  state.disabledChannels.clear();
+  state.source = resolveStreamSource(state);
+  return false;
+}
+
+function shouldAttemptResubscribe(state: SymbolState) {
+  if (state.disabledChannels.size === 0) {
+    return false;
+  }
+
+  return ageMs(state.lastResubscribeAt) >= getResubscribeBackoffMs();
+}
+
+function attemptChannelRecovery(
+  state: SymbolState,
+  client = getOkxPublicWsClient(),
+) {
+  if (!shouldAttemptResubscribe(state) || client.getState() !== "connected") {
+    return;
+  }
+
+  state.lastResubscribeAt = nowIso();
+  const channels = [...state.disabledChannels];
+  state.disabledChannels.clear();
+
+  for (const channel of channels) {
+    client.subscribe(channel, state.symbol);
+  }
+
+  warn("market.data", "Retrying stale websocket subscriptions", {
+    symbol: state.symbol,
+    channels,
+  });
+}
+
 async function bootstrapState(symbol: string, timeframe: Timeframe) {
   const state = getOrCreateState(symbol);
   const bootstrappedAt = new Date().toISOString();
@@ -347,6 +408,7 @@ function ensurePolling(symbol: string, timeframe: Timeframe) {
   state.pollTimer = setInterval(() => {
     void (async () => {
       try {
+        attemptChannelRecovery(state);
         if (
           !state.ticker ||
           ageMs(state.lastTickerAt) > getTickerStaleMs() ||
@@ -404,6 +466,12 @@ async function ensureSymbolState(symbol: string, timeframe: Timeframe) {
   ensureWsListenerAttached();
   const state = getOrCreateState(symbol);
   const client = getOkxPublicWsClient();
+  const instrumentTradeable = await ensureTradeableInstrument(state);
+
+  if (!instrumentTradeable) {
+    ensurePolling(symbol, timeframe);
+    return;
+  }
 
   if (state.connectionState === "idle") {
     state.connectionState = "connecting";
@@ -419,6 +487,7 @@ async function ensureSymbolState(symbol: string, timeframe: Timeframe) {
   if (!state.disabledChannels.has("books5")) {
     client.subscribe("books5", symbol);
   }
+  attemptChannelRecovery(state, client);
 
   const candleState = state.candlesByTimeframe.get(timeframe);
   if (!state.ticker || !state.orderbook) {
@@ -458,6 +527,9 @@ function buildStatus(
       `Websocket subscription rejected for ${[...state.disabledChannels].join(", ")}; using REST for those feeds.`,
     );
   }
+  if (state.instrumentState && state.instrumentState !== "live") {
+    warnings.add(`Instrument state is ${state.instrumentState}.`);
+  }
   if (state.lastError) {
     warnings.add(state.lastError);
   }
@@ -470,6 +542,7 @@ function buildStatus(
     !orderbookStale;
   const tradeable =
     !stale &&
+    (state.instrumentState === undefined || state.instrumentState === "live") &&
     state.source !== "fallback" &&
     (!requireRealtimeMarketData() || realtime);
 
