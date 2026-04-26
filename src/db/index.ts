@@ -6,13 +6,13 @@ import {
   rmSync,
   writeFileSync,
 } from "node:fs";
-import { createRequire } from "node:module";
 import path from "node:path";
 import { arch, platform } from "node:process";
 import { fileURLToPath } from "node:url";
 import BetterSqlite3 from "better-sqlite3";
 import { drizzle } from "drizzle-orm/better-sqlite3";
 import { migrate } from "drizzle-orm/better-sqlite3/migrator";
+import { loadVector, loadVss } from "sqlite-vss";
 import { env } from "@/env";
 import * as schema from "./schema";
 
@@ -67,56 +67,13 @@ function resolveDatabasePath(): string {
   return resolveLocalDatabaseFilePath();
 }
 
-function getSqliteVssExtensionSuffix() {
-  if (platform === "darwin") {
-    return "dylib";
-  }
-
-  if (platform === "win32") {
-    return "dll";
-  }
-
-  return "so";
-}
-
-function getSqliteVssPlatformPackageName() {
-  const operatingSystem = platform === "win32" ? "windows" : platform;
-  return `sqlite-vss-${operatingSystem}-${arch}`;
-}
-
-function getNodeRequire() {
-  if (typeof require === "function") {
-    return require;
-  }
-
-  return createRequire(
-    path.join(/* turbopackIgnore: true */ process.cwd(), "package.json"),
-  );
-}
-
-function resolveNodeSpecifier(specifier: string, paths?: string[]) {
-  const runtimeRequire = getNodeRequire();
-  return paths?.length
-    ? runtimeRequire.resolve(specifier, { paths })
-    : runtimeRequire.resolve(specifier);
-}
-
-function getSqliteVssLoadablePath(name: "vector0" | "vss0") {
+function assertSqliteVssPlatformSupported() {
   const platformKey = `${platform}:${arch}`;
   if (!SUPPORTED_SQLITE_VSS_PLATFORMS.has(platformKey)) {
     throw new Error(
       `sqlite-vss is unsupported on ${platformKey}; use a linux-x64 or darwin host/container for vector search.`,
     );
   }
-
-  const sqliteVssPackageJsonPath = resolveNodeSpecifier(
-    "sqlite-vss/package.json",
-  );
-
-  return resolveNodeSpecifier(
-    `${getSqliteVssPlatformPackageName()}/lib/${name}.${getSqliteVssExtensionSuffix()}`,
-    [path.dirname(sqliteVssPackageJsonPath)],
-  );
 }
 
 function loadSqliteVssExtensions(
@@ -127,8 +84,9 @@ function loadSqliteVssExtensions(
   }
 
   try {
-    sqlite.loadExtension(getSqliteVssLoadablePath("vector0"));
-    sqlite.loadExtension(getSqliteVssLoadablePath("vss0"));
+    assertSqliteVssPlatformSupported();
+    loadVector(sqlite);
+    loadVss(sqlite);
     return true;
   } catch (error) {
     console.warn(
