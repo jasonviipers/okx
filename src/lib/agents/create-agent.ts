@@ -58,7 +58,6 @@ function toAbortError(reason: unknown, fallbackMessage: string): Error {
   if (reason instanceof Error) {
     return reason;
   }
-
   return new Error(fallbackMessage);
 }
 
@@ -69,7 +68,6 @@ function throwIfAborted(
   if (!abortSignal?.aborted) {
     return;
   }
-
   throw toAbortError(abortSignal.reason, fallbackMessage);
 }
 
@@ -78,13 +76,11 @@ function extractJsonObject(text: string): string | null {
   if (fencedMatch?.[1]) {
     return fencedMatch[1].trim();
   }
-
   const firstBrace = text.indexOf("{");
   const lastBrace = text.lastIndexOf("}");
   if (firstBrace >= 0 && lastBrace > firstBrace) {
     return text.slice(firstBrace, lastBrace + 1);
   }
-
   return null;
 }
 
@@ -93,7 +89,6 @@ function parseResearchDecision(text: string): ResearchDecision | null {
   if (!jsonCandidate) {
     return null;
   }
-
   try {
     const parsed = JSON.parse(jsonCandidate) as Partial<ResearchDecision>;
     return {
@@ -118,7 +113,6 @@ function parseModelVote(text: string, fallback: SignalScore): SignalScore {
   if (!jsonCandidate) {
     return fallback;
   }
-
   try {
     const parsed = JSON.parse(jsonCandidate) as ParsedModelVote;
     const voteCandidate =
@@ -188,7 +182,6 @@ function buildInvalidation(
   if (signal === "SELL") {
     return `Invalid if price reclaims ${resistance.toFixed(6)} or sell-side pressure fails to follow through.`;
   }
-
   return fallbackDetail;
 }
 
@@ -199,7 +192,6 @@ function deriveRiskFlag(
   if (isMemeAsset(ctx.symbol)) {
     return "HIGH";
   }
-
   const spread =
     ctx.ticker.last > 0
       ? (ctx.ticker.ask - ctx.ticker.bid) / ctx.ticker.last
@@ -261,12 +253,8 @@ function orderbookImbalance(ctx: MarketContext): number {
 }
 
 function detectSignal(score: number, threshold = 0.0025): TradeSignal {
-  if (score > threshold) {
-    return "BUY";
-  }
-  if (score < -threshold) {
-    return "SELL";
-  }
+  if (score > threshold) return "BUY";
+  if (score < -threshold) return "SELL";
   return "HOLD";
 }
 
@@ -301,9 +289,13 @@ function shouldUseWebResearchHeuristic(
   };
 }
 
+// ---------------------------------------------------------------------------
+// Role heuristics
+// ---------------------------------------------------------------------------
+
 function runTrendFollower(ctx: MarketContext): SignalScore {
   const move = priceMove(ctx, 8);
-  const recentCloses = ctx.candles.slice(-5).map((candle) => candle.close);
+  const recentCloses = ctx.candles.slice(-5).map((c) => c.close);
   const latestClose = recentCloses.at(-1) ?? 0;
   const avg = average(recentCloses);
   const trendStrength = avg > 0 ? (latestClose - avg) / avg : 0;
@@ -327,7 +319,7 @@ function runTrendFollower(ctx: MarketContext): SignalScore {
 
 function runMomentumAnalyst(ctx: MarketContext): SignalScore {
   const move = priceMove(ctx, 5);
-  const volumes = ctx.candles.slice(-8).map((candle) => candle.volume);
+  const volumes = ctx.candles.slice(-8).map((c) => c.volume);
   const recentVol = average(volumes.slice(-3));
   const baseVol = average(volumes.slice(0, Math.max(1, volumes.length - 3)));
   const volBoost = baseVol > 0 ? recentVol / baseVol - 1 : 0;
@@ -365,6 +357,92 @@ function runSentimentReader(ctx: MarketContext): SignalScore {
       ctx,
       signal,
       "Invalid if the order book rebalances and the microstructure edge disappears.",
+    ),
+    riskFlag: deriveRiskFlag(ctx, signal),
+  };
+}
+
+/**
+ * cross_asset_analyst (kimi-k2.6)
+ *
+ * Heuristic: relative strength proxy using 24h change vs recent candle
+ * momentum. A positive 24h change paired with an upward recent move signals
+ * outperformance; divergence between the two signals caution (HOLD).
+ */
+function runCrossAssetAnalyst(ctx: MarketContext): SignalScore {
+  const move = priceMove(ctx, 6);
+  const dailyBias = ctx.ticker.change24h / 100;
+  // Relative strength: both the recent candle move and the 24h bias must agree.
+  const aligned = Math.sign(move) === Math.sign(dailyBias);
+  const composite = aligned ? (move * 0.6 + dailyBias * 0.4) : 0;
+  const signal = detectSignal(composite, 0.004);
+  return {
+    signal,
+    confidence: aligned
+      ? Math.abs(composite) * 10 + 0.35
+      : 0.3, // divergence → low confidence HOLD
+    reasoning:
+      signal === "HOLD"
+        ? aligned
+          ? "Relative strength is neutral; no clear BTC-context edge."
+          : "Recent candle direction and 24h bias are diverging; cross-asset read is unreliable."
+        : `${signal === "BUY" ? "Outperformance" : "Underperformance"} signal: 24h bias and short-term momentum are aligned.`,
+    invalidation: buildInvalidation(
+      ctx,
+      signal,
+      "Invalid if the 24h directional bias and recent price action diverge further.",
+    ),
+    riskFlag: deriveRiskFlag(ctx, signal),
+  };
+}
+
+/**
+ * liquidity_specialist (minimax-m2.5)
+ *
+ * Heuristic: combines spread quality and orderbook imbalance.
+ * Elevated spread → automatic HOLD regardless of direction.
+ * Sufficient liquidity → passes imbalance to directional signal.
+ */
+function runLiquiditySpecialist(ctx: MarketContext): SignalScore {
+  const spread = spreadPercent(ctx);
+
+  if (spread > 0.005) {
+    return {
+      signal: "HOLD",
+      confidence: 0.9,
+      reasoning: `Spread of ${(spread * 100).toFixed(3)}% exceeds 0.5% liquidity threshold; trade is unexecutable at acceptable cost.`,
+      invalidation:
+        "Invalid only if spread compresses back below 0.5% with book depth restored.",
+      riskFlag: "HIGH",
+    };
+  }
+
+  const lastCandle = ctx.candles.at(-1);
+  const range = lastCandle ? highLowRange(lastCandle) : 0;
+  if (range > 0.03) {
+    return {
+      signal: "HOLD",
+      confidence: 0.88,
+      reasoning: `Intrabar range of ${(range * 100).toFixed(2)}% signals a thin or volatile book; slippage risk is too high.`,
+      invalidation:
+        "Invalid only if the next candle's range compresses and spread normalises.",
+      riskFlag: "HIGH",
+    };
+  }
+
+  const imbalance = orderbookImbalance(ctx);
+  const signal = detectSignal(imbalance, 0.05);
+  return {
+    signal,
+    confidence: Math.abs(imbalance) * 4 + 0.3,
+    reasoning:
+      signal === "HOLD"
+        ? "Orderbook is balanced; no liquidity-driven directional edge."
+        : `${signal === "BUY" ? "Bid" : "Ask"} depth dominates with acceptable spread; execution quality supports the signal.`,
+    invalidation: buildInvalidation(
+      ctx,
+      signal,
+      "Invalid if the orderbook rebalances or spread widens before fill.",
     ),
     riskFlag: deriveRiskFlag(ctx, signal),
   };
@@ -420,11 +498,11 @@ function runExecutionTactician(ctx: MarketContext): SignalScore {
 
   const recentSpreads = ctx.candles
     .slice(-10)
-    .map((candle) =>
-      ctx.ticker.last > 0 ? (candle.high - candle.low) / ctx.ticker.last : 0,
+    .map((c) =>
+      ctx.ticker.last > 0 ? (c.high - c.low) / ctx.ticker.last : 0,
     );
   const medianSpread =
-    recentSpreads.sort((left, right) => left - right)[
+    recentSpreads.sort((a, b) => a - b)[
       Math.floor(recentSpreads.length / 2)
     ] ?? 0;
 
@@ -489,6 +567,10 @@ function runExecutionTactician(ctx: MarketContext): SignalScore {
   };
 }
 
+// ---------------------------------------------------------------------------
+// Role dispatcher — exhaustive over SwarmRole union
+// ---------------------------------------------------------------------------
+
 function analyzeRole(
   roleConfig: AgentRoleConfig,
   ctx: MarketContext,
@@ -500,14 +582,26 @@ function analyzeRole(
       return runMomentumAnalyst(ctx);
     case "sentiment_reader":
       return runSentimentReader(ctx);
+    case "cross_asset_analyst":
+      return runCrossAssetAnalyst(ctx);
+    case "liquidity_specialist":
+      return runLiquiditySpecialist(ctx);
     case "macro_filter":
       return runMacroFilter(ctx);
     case "execution_tactician":
       return runExecutionTactician(ctx);
+    // TypeScript exhaustiveness guard — should never be reached
+    default: {
+      const _exhaustive: never = roleConfig.role;
+      console.warn(`[analyzeRole] Unhandled role: ${String(_exhaustive)}; falling back to trend_follower.`);
+      return runTrendFollower(ctx);
+    }
   }
-
-  return runTrendFollower(ctx);
 }
+
+// ---------------------------------------------------------------------------
+// Prompt builders
+// ---------------------------------------------------------------------------
 
 function buildSystemPrompt(roleConfig: AgentRoleConfig): string {
   const vetoNote = roleConfig.isVetoLayer
@@ -554,11 +648,15 @@ function buildResearchDecisionPrompt(
     lastCandle
       ? `Last candle range vs price: ${(((lastCandle.high - lastCandle.low) / ctx.ticker.last) * 100).toFixed(3)}%`
       : null,
-    memoryLabel ? memoryLabel : null,
+    memoryLabel ?? null,
   ]
     .filter(Boolean)
     .join("\n");
 }
+
+// ---------------------------------------------------------------------------
+// Web research decision
+// ---------------------------------------------------------------------------
 
 async function decideWebResearchNeed(
   modelId: string,
@@ -616,10 +714,13 @@ async function decideWebResearchNeed(
         `Research decision aborted for ${modelId}.`,
       );
     }
-
     return heuristicDecision;
   }
 }
+
+// ---------------------------------------------------------------------------
+// Public factory
+// ---------------------------------------------------------------------------
 
 export function createAgent(modelId: string, roleConfig: AgentRoleConfig) {
   assertCanReason(modelId as AIModel);
@@ -638,13 +739,16 @@ export function createAgent(modelId: string, roleConfig: AgentRoleConfig) {
     const startedAt = Date.now();
     const heuristicVote = analyzeRole(roleConfig, ctx);
     throwIfAborted(options?.abortSignal, `Agent vote aborted for ${modelId}.`);
+
     const resolvedMemorySummary =
       memorySummary ?? (await getMemorySummary(ctx));
     throwIfAborted(options?.abortSignal, `Agent vote aborted for ${modelId}.`);
+
     const memoryLabel = summarizeMemoryForDisplay(resolvedMemorySummary);
 
     const rateLimit = await checkRateLimit(`agent:call:${modelId}`, 1, 1);
     throwIfAborted(options?.abortSignal, `Agent vote aborted for ${modelId}.`);
+
     if (!rateLimit.allowed) {
       return finalizeVote({
         model: modelId,
@@ -675,6 +779,7 @@ export function createAgent(modelId: string, roleConfig: AgentRoleConfig) {
           rationale:
             "This agent role is restricted to local market data and cannot perform external web research.",
         };
+
     const researchDecision = webSearchAllowed
       ? await decideWebResearchNeed(
           modelId,
@@ -686,6 +791,7 @@ export function createAgent(modelId: string, roleConfig: AgentRoleConfig) {
         )
       : null;
     throwIfAborted(options?.abortSignal, `Agent vote aborted for ${modelId}.`);
+
     if (
       webSearchAllowed &&
       researchDecision &&
@@ -742,6 +848,7 @@ export function createAgent(modelId: string, roleConfig: AgentRoleConfig) {
               "External research was requested but no digest was available.",
           };
     }
+
     const memoryContext = buildMemoryPrompt(resolvedMemorySummary);
     const prompt = buildAgentPrompt(
       ctx,
@@ -764,6 +871,8 @@ export function createAgent(modelId: string, roleConfig: AgentRoleConfig) {
 
         resolvedVote = parseModelVote(text, heuristicVote);
 
+        // Veto-layer guard: if the heuristic fired a high-confidence HOLD,
+        // the LLM cannot override it — enforce the structural veto.
         if (
           roleConfig.isVetoLayer &&
           heuristicVote.signal === "HOLD" &&
@@ -785,7 +894,6 @@ export function createAgent(modelId: string, roleConfig: AgentRoleConfig) {
             `Agent vote aborted for ${modelId}.`,
           );
         }
-
         resolvedVote = {
           ...heuristicVote,
           reasoning: `${heuristicVote.reasoning} [Model call failed; heuristic used]${memoryLabel ? ` ${memoryLabel}` : ""}`,
