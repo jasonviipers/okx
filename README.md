@@ -19,6 +19,10 @@ This repo supports two Docker deployment shapes:
   Use this on Dokploy or any VPS that already has Traefik/Nginx on `80/443`.
   It starts the full app and observability stack without binding a competing edge proxy.
 
+- `docker-compose.dokploy.yml`
+  Optional override for Dokploy when you want Traefik-routed subdomains for the app,
+  Grafana, Prometheus, Jaeger, and the MinIO console.
+
 - `docker-compose.standalone.yml`
   Adds the bundled `nginx` service that binds `80/443`.
   Use this only when this repo should own ingress itself.
@@ -34,6 +38,12 @@ For Dokploy or a VPS with an existing reverse proxy:
 
 ```bash
 ./scripts/install-stack.sh
+```
+
+For Dokploy with Traefik labels and an external `dokploy-network`:
+
+```bash
+./scripts/install-stack.sh dokploy-traefik
 ```
 
 For a standalone host where this project should also provide Nginx on `80/443`:
@@ -60,6 +70,10 @@ Review `.env` before exposing the stack publicly. Rotate every placeholder secre
 | Jaeger UI | `http://localhost:16686` |
 | Prometheus | `http://localhost:9090` |
 
+When using `docker-compose.dokploy.yml`, route these through Traefik instead of host ports
+by setting compose env vars such as `TRAEFIK_APP_RULE`, `TRAEFIK_GRAFANA_RULE`,
+`TRAEFIK_MINIO_CONSOLE_RULE`, `TRAEFIK_JAEGER_RULE`, and `TRAEFIK_PROMETHEUS_RULE`.
+
 ## Important Dokploy Note
 
 If your VPS already runs Dokploy, Docker is not the issue when `docker ps` shows only the web container. The issue is usually deployment shape:
@@ -68,7 +82,9 @@ If your VPS already runs Dokploy, Docker is not the issue when `docker ps` shows
 - this repo's old bundled `nginx` service also tried to own `80/443`
 - Grafana, Prometheus, Loki, Jaeger, MinIO, and cron do not appear unless Dokploy deploys the full compose stack rather than only the app image
 
-Use `docker-compose.yml` for Dokploy deployments, not the standalone Nginx override.
+Use `docker-compose.yml` for Dokploy deployments, optionally with
+`docker-compose.dokploy.yml` when you want Traefik-managed hostnames. Do not use the
+standalone Nginx override on a Dokploy host.
 
 ## Environment
 

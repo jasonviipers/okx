@@ -1,0 +1,65 @@
+services:
+  app:
+    networks:
+      - app-network
+      - dokploy-network
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=${DOKPLOY_NETWORK_NAME:-dokploy-network}"
+      - "traefik.http.routers.okx-app.rule=${TRAEFIK_APP_RULE}"
+      - "traefik.http.routers.okx-app.entrypoints=${TRAEFIK_ENTRYPOINTS:-websecure}"
+      - "traefik.http.routers.okx-app.tls.certresolver=${TRAEFIK_CERTRESOLVER:-letsencrypt}"
+      - "traefik.http.services.okx-app.loadbalancer.server.port=3000"
+
+  grafana:
+    networks:
+      - app-network
+      - dokploy-network
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=${DOKPLOY_NETWORK_NAME:-dokploy-network}"
+      - "traefik.http.routers.okx-grafana.rule=${TRAEFIK_GRAFANA_RULE}"
+      - "traefik.http.routers.okx-grafana.entrypoints=${TRAEFIK_ENTRYPOINTS:-websecure}"
+      - "traefik.http.routers.okx-grafana.tls.certresolver=${TRAEFIK_CERTRESOLVER:-letsencrypt}"
+      - "traefik.http.services.okx-grafana.loadbalancer.server.port=3001"
+
+  minio:
+    networks:
+      - app-network
+      - dokploy-network
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=${DOKPLOY_NETWORK_NAME:-dokploy-network}"
+      - "traefik.http.routers.okx-minio-console.rule=${TRAEFIK_MINIO_CONSOLE_RULE}"
+      - "traefik.http.routers.okx-minio-console.entrypoints=${TRAEFIK_ENTRYPOINTS:-websecure}"
+      - "traefik.http.routers.okx-minio-console.tls.certresolver=${TRAEFIK_CERTRESOLVER:-letsencrypt}"
+      - "traefik.http.services.okx-minio-console.loadbalancer.server.port=9001"
+
+  jaeger:
+    networks:
+      - app-network
+      - dokploy-network
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=${DOKPLOY_NETWORK_NAME:-dokploy-network}"
+      - "traefik.http.routers.okx-jaeger.rule=${TRAEFIK_JAEGER_RULE}"
+      - "traefik.http.routers.okx-jaeger.entrypoints=${TRAEFIK_ENTRYPOINTS:-websecure}"
+      - "traefik.http.routers.okx-jaeger.tls.certresolver=${TRAEFIK_CERTRESOLVER:-letsencrypt}"
+      - "traefik.http.services.okx-jaeger.loadbalancer.server.port=16686"
+
+  prometheus:
+    networks:
+      - app-network
+      - dokploy-network
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=${DOKPLOY_NETWORK_NAME:-dokploy-network}"
+      - "traefik.http.routers.okx-prometheus.rule=${TRAEFIK_PROMETHEUS_RULE}"
+      - "traefik.http.routers.okx-prometheus.entrypoints=${TRAEFIK_ENTRYPOINTS:-websecure}"
+      - "traefik.http.routers.okx-prometheus.tls.certresolver=${TRAEFIK_CERTRESOLVER:-letsencrypt}"
+      - "traefik.http.services.okx-prometheus.loadbalancer.server.port=9090"
+
+networks:
+  dokploy-network:
+    external: true
+    name: ${DOKPLOY_NETWORK_NAME:-dokploy-network}

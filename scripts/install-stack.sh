@@ -10,11 +10,14 @@ COMPOSE_FILES="-f docker-compose.yml"
 case "$MODE" in
   dokploy|vps)
     ;;
+  dokploy-traefik)
+    COMPOSE_FILES="$COMPOSE_FILES -f docker-compose.dokploy.yml"
+    ;;
   standalone|local)
     COMPOSE_FILES="$COMPOSE_FILES -f docker-compose.standalone.yml"
     ;;
   *)
-    echo "Usage: $0 [dokploy|standalone]" >&2
+    echo "Usage: $0 [dokploy|dokploy-traefik|standalone]" >&2
     exit 1
     ;;
 esac
