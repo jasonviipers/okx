@@ -9,6 +9,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { PerformanceAuditPanel } from "@/features/dashboard/components/performance-audit";
 import {
   useAutonomyStatus,
   useSwarmHistory,
@@ -154,13 +155,13 @@ export function AgentDashboard() {
   const swarmTimeframe = autonomyStatus.data?.timeframe ?? "1H";
   const swarmStream = useSwarmStream(swarmSymbol, swarmTimeframe);
   const swarmHistory = useSwarmHistory(25);
-  const [activeTab, setActiveTab] = useState<"feed" | "status" | "decisions">(
-    "feed",
-  );
+  const [activeTab, setActiveTab] = useState<
+    "feed" | "status" | "decisions" | "audit"
+  >("feed");
 
   const events = swarmStream.events ?? [];
   const historyEntries = swarmHistory.data?.entries ?? [];
-  const isAutonomyRunning = autonomyStatus.data?.running ?? true;
+  const isAutonomyRunning = autonomyStatus.data?.running ?? false;
 
   const agentStatuses = useMemo(() => {
     const latestEvents = new Map<
@@ -252,7 +253,7 @@ export function AgentDashboard() {
         </CardTitle>
         <CardAction>
           <div className="flex gap-1">
-            {(["feed", "status", "decisions"] as const).map((tab) => (
+            {(["feed", "status", "decisions", "audit"] as const).map((tab) => (
               <Button
                 key={tab}
                 variant={activeTab === tab ? "default" : "ghost"}
@@ -264,7 +265,9 @@ export function AgentDashboard() {
                   ? "Live"
                   : tab === "status"
                     ? "Agents"
-                    : "Decisions"}
+                    : tab === "decisions"
+                      ? "Decisions"
+                      : "Audit"}
               </Button>
             ))}
           </div>
@@ -449,6 +452,8 @@ export function AgentDashboard() {
             )}
           </div>
         )}
+
+        {activeTab === "audit" && <PerformanceAuditPanel />}
 
         {autonomyStatus.data?.lastError && (
           <div className="px-2 py-1 text-[0.5625rem] text-terminal-red border-t border-border bg-terminal-red/5">

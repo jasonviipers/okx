@@ -3,6 +3,7 @@ import type {
   StoredExecutionIntent,
   StoredSwarmRun,
   StoredTradeExecution,
+  StrategyPerformanceSummary,
 } from "@/types/history";
 import type {
   Candle,
@@ -11,6 +12,7 @@ import type {
   OrderBook,
 } from "@/types/market";
 import type { MemoryRecord, MemorySummary } from "@/types/memory";
+import type { TradingPerformancePayload } from "@/types/performance";
 import type { ConsensusResult, ExecutionResult } from "@/types/swarm";
 import type { AccountOverview, Position } from "@/types/trade";
 
@@ -162,6 +164,20 @@ export function getExecutionIntents(limit = 25) {
   return fetchJson<
     ApiEnvelope<{ entries: StoredExecutionIntent[]; count: number }>
   >(`/api/ai/trade/intents?limit=${limit}`);
+}
+
+export function getTradingPerformance(regime?: string) {
+  const params = new URLSearchParams();
+  if (regime) {
+    params.set("regime", regime);
+  }
+
+  const suffix = params.size > 0 ? `?${params.toString()}` : "";
+  return fetchJson<
+    ApiEnvelope<
+      TradingPerformancePayload & { summary: StrategyPerformanceSummary[] }
+    >
+  >(`/api/ai/system/performance${suffix}`);
 }
 
 export function getMemoryRecent(

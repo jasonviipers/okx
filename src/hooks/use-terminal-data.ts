@@ -22,6 +22,7 @@ import {
   getRuntimeSystemStatus,
   getSwarmHistory,
   getTradeHistory,
+  getTradingPerformance,
   getWatchlist,
 } from "@/lib/api/client";
 import type { AutonomyStatus, RuntimeStatus } from "@/types/api";
@@ -29,9 +30,11 @@ import type {
   StoredExecutionIntent,
   StoredSwarmRun,
   StoredTradeExecution,
+  StrategyPerformanceSummary,
 } from "@/types/history";
 import type { MarketFeedStatus, OKXTicker } from "@/types/market";
 import type { MemoryRecord, MemorySummary } from "@/types/memory";
+import type { TradingPerformancePayload } from "@/types/performance";
 import type {
   ConsensusResult,
   ExecutionResult,
@@ -600,6 +603,13 @@ export function useExecutionIntents(limit = 25) {
     fetcher,
     15_000,
   );
+}
+
+export function useTradingPerformanceAudit(regime?: string) {
+  const fetcher = useCallback(() => getTradingPerformance(regime), [regime]);
+  return useSwr<
+    TradingPerformancePayload & { summary: StrategyPerformanceSummary[] }
+  >(`trading-performance:${regime ?? "all"}`, fetcher, 15_000);
 }
 
 export function useMemoryRecent(

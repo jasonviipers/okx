@@ -52,6 +52,7 @@ export function validateConsensus(
     lastCandle && ctx.ticker.last > 0
       ? (lastCandle.high - lastCandle.low) / ctx.ticker.last
       : 0;
+  const usesLegacyVoteValidation = consensus.decisionSource !== "deterministic";
 
   let nextConsensus = consensus;
 
@@ -65,7 +66,7 @@ export function validateConsensus(
       (!vote.invalidation || vote.invalidation.trim().length === 0),
   );
 
-  if (missingInvalidationVote) {
+  if (usesLegacyVoteValidation && missingInvalidationVote) {
     nextConsensus = appendRejectionReason(nextConsensus, {
       layer: "validator",
       code: "missing_invalidation",
@@ -74,7 +75,10 @@ export function validateConsensus(
     });
   }
 
-  if (alignedDirectionalVotes.length < SWARM_POLICY.risk.minConsensusVotes) {
+  if (
+    usesLegacyVoteValidation &&
+    alignedDirectionalVotes.length < SWARM_POLICY.risk.minConsensusVotes
+  ) {
     nextConsensus = appendRejectionReason(nextConsensus, {
       layer: "validator",
       code: "insufficient_aligned_votes",
@@ -88,7 +92,7 @@ export function validateConsensus(
     });
   }
 
-  if (alignedDirectionalVotes.length > 0) {
+  if (usesLegacyVoteValidation && alignedDirectionalVotes.length > 0) {
     const avgAlignedConfidence =
       alignedDirectionalVotes.reduce((sum, vote) => sum + vote.confidence, 0) /
       alignedDirectionalVotes.length;
@@ -139,7 +143,10 @@ export function validateConsensus(
     });
   }
 
-  if (consensus.confidence < SWARM_THRESHOLDS.MIN_CONFIDENCE) {
+  if (
+    usesLegacyVoteValidation &&
+    consensus.confidence < SWARM_THRESHOLDS.MIN_CONFIDENCE
+  ) {
     nextConsensus = appendRejectionReason(nextConsensus, {
       layer: "validator",
       code: "confidence_below_min",
@@ -154,7 +161,10 @@ export function validateConsensus(
     });
   }
 
-  if (consensus.agreement < SWARM_THRESHOLDS.MIN_AGREEMENT) {
+  if (
+    usesLegacyVoteValidation &&
+    consensus.agreement < SWARM_THRESHOLDS.MIN_AGREEMENT
+  ) {
     nextConsensus = appendRejectionReason(nextConsensus, {
       layer: "validator",
       code: "agreement_below_min",
