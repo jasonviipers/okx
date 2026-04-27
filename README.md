@@ -96,7 +96,7 @@ A Next.js platform for autonomous AI-driven market analysis and OKX trade execut
    docker compose up --build -d
    ```
 
-4. Open the dashboard at `http://localhost:8080` (nginx defaults to host port 8080).
+4. Open the dashboard through your configured Dokploy domain, or use `http://localhost:8080` only when you intentionally publish nginx to a host port outside Dokploy.
 
 See [Running with Docker Compose](#running-with-docker-compose) for details on each container.
 
@@ -288,14 +288,14 @@ The `docker-compose.yml` defines a single-node production stack:
 |---|---|---|---|
 | **postgres** | `pgvector/pgvector:pg16` | 5432 (internal) | PostgreSQL 16 with `pgvector` enabled for transactional data and swarm memory embeddings. |
 | **redis** | `redis:8.6-alpine` | 6379 (internal) | Cache, coordination, and queue storage. |
-| **minio** | `minio/minio:latest` | 9000 (internal), 9001 (host) | S3-compatible object storage for archival telemetry and backups. |
+| **minio** | `minio/minio:latest` | 9000, 9001 (internal) | S3-compatible object storage for archival telemetry and backups. |
 | **otel-collector** | `otel/opentelemetry-collector-contrib:latest` | 4317, 4318 (internal) | OTLP ingestion and fan-out to Prometheus, Loki, and Jaeger. |
 | **prometheus** | `prom/prometheus:latest` | 9090 (internal) | Metrics storage with remote-write receiver enabled. |
 | **loki** | `grafana/loki:latest` | 3100 (internal) | Centralized log storage. |
-| **jaeger** | `jaegertracing/all-in-one:latest` | 16686 (host) | Trace storage and inspection UI. |
-| **grafana** | `grafana/grafana-oss:latest` | 3001 (host) | Pre-provisioned dashboards for metrics, logs, and traces. |
+| **jaeger** | `jaegertracing/all-in-one:latest` | 4317, 16686 (internal) | Trace storage and inspection UI, proxied through nginx at `/jaeger/`. |
+| **grafana** | `grafana/grafana-oss:latest` | 3000 (internal) | Pre-provisioned dashboards for metrics, logs, and traces, proxied through nginx at `/grafana/`. |
 | **app** | Custom Dockerfile | 3000 (internal) | Next.js production server with Drizzle migrations on startup. |
-| **nginx** | `nginx:alpine` | 8080, 8443 (host defaults) -> 80, 443 (container) | Reverse proxy for the app plus observability UIs. |
+| **nginx** | `nginx:alpine` | 80, 443 (internal container ports) | Reverse proxy for the app plus observability UIs. In Dokploy, attach the domain to the `nginx` service on container port `80`. |
 | **cron** | Custom Alpine | — | Lightweight cron container that triggers the autonomy worker every minute. |
 
 ### Startup
@@ -304,7 +304,7 @@ The `docker-compose.yml` defines a single-node production stack:
 docker compose up --build -d
 ```
 
-For managed platforms such as Dokploy, point the public domain at the `nginx` service's container port `80` instead of publishing host port `80` from this stack.
+For Dokploy deployments, let Dokploy/Traefik own the public edge and route the domain to the `nginx` service on container port `80`.
 
 ### Viewing Logs
 
