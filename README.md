@@ -96,7 +96,7 @@ A Next.js platform for autonomous AI-driven market analysis and OKX trade execut
    docker compose up --build -d
    ```
 
-4. Open the dashboard at `http://localhost` (port 80 via nginx).
+4. Open the dashboard at `http://localhost:8080` (nginx defaults to host port 8080).
 
 See [Running with Docker Compose](#running-with-docker-compose) for details on each container.
 
@@ -295,7 +295,7 @@ The `docker-compose.yml` defines a single-node production stack:
 | **jaeger** | `jaegertracing/all-in-one:latest` | 16686 (host) | Trace storage and inspection UI. |
 | **grafana** | `grafana/grafana-oss:latest` | 3001 (host) | Pre-provisioned dashboards for metrics, logs, and traces. |
 | **app** | Custom Dockerfile | 3000 (internal) | Next.js production server with Drizzle migrations on startup. |
-| **nginx** | `nginx:alpine` | 80, 443 | Reverse proxy for the app plus observability UIs. |
+| **nginx** | `nginx:alpine` | 8080, 8443 (host defaults) -> 80, 443 (container) | Reverse proxy for the app plus observability UIs. |
 | **cron** | Custom Alpine | — | Lightweight cron container that triggers the autonomy worker every minute. |
 
 ### Startup
@@ -303,6 +303,8 @@ The `docker-compose.yml` defines a single-node production stack:
 ```bash
 docker compose up --build -d
 ```
+
+For managed platforms such as Dokploy, point the public domain at the `nginx` service's container port `80` instead of publishing host port `80` from this stack.
 
 ### Viewing Logs
 
