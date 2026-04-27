@@ -9,14 +9,11 @@ import {
   modelCanVote,
 } from "@/lib/configs/models";
 import { getRoleForModel } from "@/lib/configs/roles";
-import { getMemorySummary, storeSwarmMemory } from "@/lib/memory/aging-memory";
-import { recordSwarmRun } from "@/lib/persistence/history";
 import {
-  getCachedSwarmResult,
-  setCachedSwarmResult,
-} from "@/lib/redis/swarm-cache";
-import { parseNumber } from "@/lib/runtime-utils";
-import { buildSwarmDecision } from "@/lib/swarm/pipeline";
+  resolveTradingMode,
+  type TradingMode,
+} from "@/lib/configs/trading-modes";
+import { getMemorySummary, storeSwarmMemory } from "@/lib/memory/aging-memory";
 import {
   incrementCounter,
   info,
@@ -24,6 +21,13 @@ import {
   warn,
   withTelemetrySpan,
 } from "@/lib/observability/telemetry";
+import { recordSwarmRun } from "@/lib/persistence/history";
+import {
+  getCachedSwarmResult,
+  setCachedSwarmResult,
+} from "@/lib/redis/swarm-cache";
+import { parseNumber } from "@/lib/runtime-utils";
+import { buildSwarmDecision } from "@/lib/swarm/pipeline";
 import type { MarketContext } from "@/types/market";
 import type { AgentVote, SwarmRunResult } from "@/types/swarm";
 
@@ -89,6 +93,7 @@ export async function runSwarm(
   options?: {
     forceFresh?: boolean;
     budgetRemainingUsd?: number;
+    tradingMode?: TradingMode;
   },
 ): Promise<SwarmRunResult> {
   return withTelemetrySpan(
@@ -103,9 +108,12 @@ export async function runSwarm(
     },
     async (span) => {
       const startedAt = Date.now();
+      const tradingMode = resolveTradingMode(
+        options?.tradingMode ?? env.TRADING_MODE,
+      );
       const cached = options?.forceFresh
         ? null
-        : await getCachedSwarmResult(ctx.symbol, ctx.timeframe);
+        : await getCachedSwarmResult(ctx.symbol, ctx.timeframe, tradingMode);
       if (cached) {
         incrementCounter("swarm_runs_total", "Total swarm run attempts.", 1, {
           symbol: ctx.symbol,
@@ -127,8 +135,14 @@ export async function runSwarm(
         [],
         memorySummary,
         options?.budgetRemainingUsd,
+        tradingMode,
       );
-      await setCachedSwarmResult(ctx.symbol, ctx.timeframe, consensus);
+      await setCachedSwarmResult(
+        ctx.symbol,
+        ctx.timeframe,
+        consensus,
+        tradingMode,
+      );
 
       const result = {
         consensus,
@@ -184,6 +198,7 @@ export async function collectDiagnosticVotes(
   ctx: MarketContext,
   options?: {
     memorySummary?: Awaited<ReturnType<typeof getMemorySummary>>;
+    tradingMode?: TradingMode;
   },
 ): Promise<{ votes: AgentVote[]; errors: string[] }> {
   return withTelemetrySpan(
@@ -199,6 +214,9 @@ export async function collectDiagnosticVotes(
     async () => {
       const resolvedMemorySummary =
         options?.memorySummary ?? (await getMemorySummary(ctx));
+      const tradingMode = resolveTradingMode(
+        options?.tradingMode ?? env.TRADING_MODE,
+      );
       const timeoutMs = getDiagnosticVoteTimeoutMs();
       const settled = await Promise.allSettled(
         ACTIVE_SWARM_MODELS.map((modelId) => {
@@ -209,6 +227,7 @@ export async function collectDiagnosticVotes(
             (abortSignal) =>
               createAgent(modelId, roleConfig)(ctx, resolvedMemorySummary, {
                 abortSignal,
+                tradingMode,
               }),
             timeoutMs,
           )

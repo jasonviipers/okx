@@ -24,17 +24,22 @@ const AGENT_DISPLAY: Record<
   string,
   { name: string; role: string; color: string }
 > = {
-  "deepseek-v3.2:cloud": {
+  "deepseek-v4-flash:cloud": {
     name: "DeepSeek",
     role: "Trend Follower",
     color: "#00d4aa",
+  },
+  "deepseek-v4-pro:cloud": {
+    name: "DeepSeek Pro",
+    role: "Trend Follower",
+    color: "#00b8a9",
   },
   "gemma4:31b-cloud": {
     name: "Gemma4",
     role: "Momentum Analyst",
     color: "#ff8c00",
   },
-  "kimi-k2.5:cloud": {
+  "kimi-k2.6:cloud": {
     name: "Kimi",
     role: "Sentiment Reader",
     color: "#00b8d4",
@@ -54,13 +59,18 @@ const AGENT_DISPLAY: Record<
     role: "Execution Router",
     color: "#7c4dff",
   },
-  "gpt-oss:cloud": { name: "GPT-OSS", role: "Orchestrator", color: "#e040fb" },
+  "gpt-oss:120b-cloud": {
+    name: "GPT-OSS",
+    role: "Orchestrator",
+    color: "#e040fb",
+  },
 };
 
 const SWARM_ROLE_MAP: Record<string, SwarmRole> = {
-  "deepseek-v3.2:cloud": "trend_follower",
+  "deepseek-v4-flash:cloud": "trend_follower",
+  "deepseek-v4-pro:cloud": "trend_follower",
   "gemma4:31b-cloud": "momentum_analyst",
-  "kimi-k2.5:cloud": "sentiment_reader",
+  "kimi-k2.6:cloud": "sentiment_reader",
   "ministral-3:cloud": "macro_filter",
   "glm-5.1:cloud": "execution_tactician",
 };

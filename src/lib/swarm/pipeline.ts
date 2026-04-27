@@ -1,7 +1,11 @@
+import {
+  DEFAULT_TRADING_MODE,
+  type TradingMode,
+} from "@/lib/configs/trading-modes";
 import { getMemorySummary } from "@/lib/memory/aging-memory";
+import { withTelemetrySpan } from "@/lib/observability/telemetry";
 import { getAccountOverview } from "@/lib/okx/account";
 import { buildDeterministicConsensus } from "@/lib/swarm/deterministic-engine";
-import { withTelemetrySpan } from "@/lib/observability/telemetry";
 import type { MarketContext } from "@/types/market";
 import type { MemorySummary } from "@/types/memory";
 import type { AgentVote, DecisionResult } from "@/types/swarm";
@@ -11,6 +15,7 @@ export async function buildSwarmDecision(
   votes: AgentVote[],
   memorySummary?: MemorySummary,
   budgetRemainingUsd?: number,
+  tradingMode: TradingMode = DEFAULT_TRADING_MODE,
 ): Promise<{ consensus: DecisionResult; memorySummary: MemorySummary }> {
   return withTelemetrySpan(
     {
@@ -20,6 +25,7 @@ export async function buildSwarmDecision(
         symbol: ctx.symbol,
         timeframe: ctx.timeframe,
         voteCount: votes.length,
+        tradingMode,
       },
     },
     async (span) => {
@@ -32,6 +38,7 @@ export async function buildSwarmDecision(
         votes,
         memorySummary: resolvedMemorySummary,
         budgetRemainingUsd,
+        tradingMode,
       });
       span.addAttributes({
         decision: consensus.decision ?? consensus.signal,

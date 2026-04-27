@@ -228,9 +228,9 @@ Confidence calibration:
 // qwen3.5 (execution) and gpt-oss (orchestrator) are intentionally absent.
 // ---------------------------------------------------------------------------
 export const MODEL_SWARM_ROLE_MAP: Record<string, SwarmRole> = {
-  "deepseek-v3.2:cloud": "trend_follower",
+  "deepseek-v4-flash:cloud": "trend_follower",
+  "deepseek-v4-pro:cloud": "trend_follower",
   "gemma4:31b-cloud": "momentum_analyst",
-  "kimi-k2.5:cloud": "sentiment_reader",
   "kimi-k2.6:cloud": "sentiment_reader",
   "ministral-3:cloud": "macro_filter",
   "glm-5.1:cloud": "execution_tactician",

@@ -1,7 +1,7 @@
 import "server-only";
 
 import { env } from "@/env";
-import { isOllamaConfigured } from "@/lib/ai/ollama";
+import { getOllamaBaseUrl, isOllamaConfigured } from "@/lib/ai/ollama";
 import { isOllamaWebSearchConfigured } from "@/lib/ai/ollama-web";
 import {
   ensureAutonomyBootState,
@@ -47,7 +47,7 @@ export async function getRuntimeStatus(): Promise<RuntimeStatus> {
       detail: ollamaConfigured
         ? "Ollama provider configured"
         : "Ollama provider not configured",
-      baseUrl: env.OLLAMA_BASE_URL,
+      baseUrl: ollamaConfigured ? getOllamaBaseUrl() : env.OLLAMA_BASE_URL,
     },
     webResearch: {
       configured: webResearchConfigured,

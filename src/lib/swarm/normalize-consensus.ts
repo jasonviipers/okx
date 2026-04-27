@@ -23,6 +23,7 @@ export function toDecisionResult(
 
   return {
     symbol: requireValue(consensus.symbol, "symbol"),
+    tradingMode: consensus.tradingMode,
     timeframe: requireValue(consensus.timeframe, "timeframe"),
     signal: requireValue(consensus.signal, "signal"),
     directionalSignal: consensus.directionalSignal ?? consensus.signal,

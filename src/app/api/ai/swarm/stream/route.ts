@@ -1,4 +1,6 @@
 import type { NextRequest } from "next/server";
+import { env } from "@/env";
+import { resolveTradingMode } from "@/lib/configs/trading-modes";
 import { getRealtimeMarketContext } from "@/lib/market-data/service";
 import { getMemorySummary } from "@/lib/memory/aging-memory";
 import { collectDiagnosticVotes } from "@/lib/swarm/orchestrator";
@@ -11,6 +13,9 @@ export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const symbol = searchParams.get("symbol") || "BTC-USDT";
   const timeframe = (searchParams.get("timeframe") as Timeframe) || "1H";
+  const tradingMode = resolveTradingMode(
+    searchParams.get("tradingMode") ?? env.TRADING_MODE,
+  );
 
   const readable = new ReadableStream({
     async start(controller) {
@@ -68,6 +73,7 @@ export async function GET(req: NextRequest) {
         });
         const { votes, errors } = await collectDiagnosticVotes(ctx, {
           memorySummary,
+          tradingMode,
         });
         for (const vote of votes) {
           sendEvent({
@@ -105,6 +111,8 @@ export async function GET(req: NextRequest) {
           ctx,
           votes,
           memorySummary,
+          undefined,
+          tradingMode,
         );
         const pipelineStages: Array<[string, string | undefined]> = [
           ["consensus", "Deterministic decision computed from feature scores"],

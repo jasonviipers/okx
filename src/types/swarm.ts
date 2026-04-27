@@ -1,4 +1,6 @@
+import type { ModelRole } from "@/lib/configs/models";
 import type { SwarmRole } from "@/lib/configs/roles";
+import type { TradingMode } from "@/lib/configs/trading-modes";
 import type { MarketContext, Timeframe } from "@/types/market";
 import type { DecisionHarnessReport, MemorySummary } from "@/types/memory";
 import type { MarketType, Order } from "@/types/trade";
@@ -46,13 +48,14 @@ export interface StrategyEngineReport {
 export interface AgentVote {
   model: string;
   role: SwarmRole;
-  modelRole: string;
+  modelRole: ModelRole;
   signal: TradeSignal;
   confidence: number;
   reasoning: string;
   elapsedMs: number;
   voteWeight: number;
   isVetoLayer: boolean;
+  tradingMode?: TradingMode;
   researchTrace?: AgentResearchTrace;
 }
 
@@ -136,6 +139,7 @@ export interface RejectionReason {
 export type DecisionResult = {
   symbol: string;
   marketType?: MarketType;
+  tradingMode?: TradingMode;
   timeframe: Timeframe;
   signal: TradeSignal;
   directionalSignal: TradeSignal;
@@ -177,6 +181,7 @@ export type DecisionResult = {
 export interface ConsensusResult {
   symbol: string;
   marketType?: MarketType;
+  tradingMode?: TradingMode;
   timeframe: Timeframe;
   signal: TradeSignal;
   directionalSignal: TradeSignal;

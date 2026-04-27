@@ -1,4 +1,13 @@
 import { env } from "@/env";
+import {
+  clampConfidenceForTradingMode,
+  DEFAULT_TRADING_MODE,
+  getModeAdjustedAgreementThreshold,
+  getModeAdjustedConfidenceThreshold,
+  getTradingModeConfig,
+  resolveTradingMode,
+  type TradingMode,
+} from "@/lib/configs/trading-modes";
 import { clamp, clamp01 } from "@/lib/math-utils";
 import { parseNumber } from "@/lib/runtime-utils";
 import {
@@ -28,6 +37,12 @@ type EngineScoreCard = {
   breakout: number;
   meanReversion: number;
   microstructure: number;
+};
+
+type DiagnosticOverlay = {
+  agreementBlend: number;
+  confidenceAdjustment: number;
+  vetoBlockReason?: RejectionReason;
 };
 
 function clampSigned(value: number): number {
@@ -367,6 +382,97 @@ function buildRiskFlags(
   return flags;
 }
 
+function buildDiagnosticOverlay(
+  votes: AgentVote[],
+  directionalSignal: TradeSignal,
+  tradingMode: TradingMode,
+): DiagnosticOverlay {
+  if (votes.length === 0 || directionalSignal === "HOLD") {
+    return {
+      agreementBlend: 0,
+      confidenceAdjustment: 0,
+    };
+  }
+
+  const config = getTradingModeConfig(tradingMode);
+  const weightedVotes = votes.map((vote) => {
+    return {
+      ...vote,
+      weightedConfidence: vote.confidence * vote.voteWeight,
+    };
+  });
+  const scoringVotes = weightedVotes.filter((vote) => !vote.isVetoLayer);
+  const directionalVotes =
+    scoringVotes.length > 0 ? scoringVotes : weightedVotes;
+  const totalWeightedConfidence = directionalVotes.reduce(
+    (sum, vote) => sum + vote.weightedConfidence,
+    0,
+  );
+  const alignedWeightedConfidence = directionalVotes
+    .filter((vote) => vote.signal === directionalSignal)
+    .reduce((sum, vote) => sum + vote.weightedConfidence, 0);
+  const opposingWeightedConfidence = directionalVotes
+    .filter(
+      (vote) => vote.signal !== directionalSignal && vote.signal !== "HOLD",
+    )
+    .reduce((sum, vote) => sum + vote.weightedConfidence, 0);
+  const holdWeightedConfidence = directionalVotes
+    .filter((vote) => vote.signal === "HOLD")
+    .reduce((sum, vote) => sum + vote.weightedConfidence, 0);
+  const supportiveShare =
+    totalWeightedConfidence > 0
+      ? alignedWeightedConfidence / totalWeightedConfidence
+      : 0.5;
+  const dragShare =
+    totalWeightedConfidence > 0
+      ? (opposingWeightedConfidence + holdWeightedConfidence * 0.6) /
+        totalWeightedConfidence
+      : 0.5;
+  const confidenceAdjustment = Number(
+    (
+      (supportiveShare - dragShare) *
+      config.diagnosticConfidenceInfluence
+    ).toFixed(3),
+  );
+  const voteAgreement =
+    directionalVotes.length > 0
+      ? directionalVotes.filter((vote) => vote.signal === directionalSignal)
+          .length / directionalVotes.length
+      : 0.5;
+  const vetoHoldVote = weightedVotes
+    .filter((vote) => vote.isVetoLayer && vote.signal === "HOLD")
+    .sort((left, right) => right.confidence - left.confidence)[0];
+
+  const vetoBlockReason =
+    vetoHoldVote && vetoHoldVote.confidence >= config.vetoHoldThreshold
+      ? {
+          layer: "validator" as const,
+          code: "mode_aware_veto_hold",
+          summary: `Trading mode "${tradingMode}" honored a veto HOLD from ${vetoHoldVote.role}.`,
+          detail: `Model ${vetoHoldVote.model} issued HOLD at ${(vetoHoldVote.confidence * 100).toFixed(2)}%, exceeding the ${(
+            config.vetoHoldThreshold * 100
+          ).toFixed(2)}% ${tradingMode} veto threshold.`,
+          metrics: {
+            tradingMode,
+            vetoRole: vetoHoldVote.role,
+            vetoConfidence: Number((vetoHoldVote.confidence * 100).toFixed(4)),
+            vetoThreshold: Number((config.vetoHoldThreshold * 100).toFixed(4)),
+          },
+        }
+      : undefined;
+
+  return {
+    agreementBlend: Number(
+      (voteAgreement * config.diagnosticAgreementBlend).toFixed(3),
+    ),
+    confidenceAdjustment:
+      vetoHoldVote && !vetoBlockReason
+        ? Number((confidenceAdjustment - config.softVetoPenalty).toFixed(3))
+        : confidenceAdjustment,
+    vetoBlockReason,
+  };
+}
+
 function buildRejectionReasons(input: {
   features: DecisionFeatureVector;
   directionalSignal: TradeSignal;
@@ -375,16 +481,19 @@ function buildRejectionReasons(input: {
   marketQualityScore: number;
   expectedNetEdgeBps: number;
   riskFlags: string[];
+  tradingMode: TradingMode;
 }): RejectionReason[] {
   const minDirectionalEdge = parseNumber(
     env.MIN_DIRECTIONAL_EDGE_SCORE,
     SWARM_THRESHOLDS.DEFAULT_MIN_DIRECTIONAL_EDGE,
   );
-  const minConfidence =
+  const minConfidence = getModeAdjustedConfidenceThreshold(
     parseNumber(
       env.MIN_CONFIDENCE_THRESHOLD,
       SWARM_THRESHOLDS.DEFAULT_MIN_CONFIDENCE * 100,
-    ) / 100;
+    ),
+    input.tradingMode,
+  );
   const minMarketQuality = parseNumber(
     env.MIN_MARKET_QUALITY_SCORE,
     SWARM_THRESHOLDS.DEFAULT_MIN_MARKET_QUALITY,
@@ -561,7 +670,11 @@ export function buildDeterministicConsensus(input: {
   votes?: AgentVote[];
   memorySummary?: MemorySummary;
   budgetRemainingUsd?: number;
+  tradingMode?: TradingMode;
 }): DecisionResult {
+  const tradingMode = resolveTradingMode(
+    input.tradingMode ?? env.TRADING_MODE ?? DEFAULT_TRADING_MODE,
+  );
   const expectedFeeBps = parseNumber(
     env.EXPECTED_FEE_BPS,
     SWARM_THRESHOLDS.DEFAULT_EXPECTED_FEE_BPS,
@@ -630,17 +743,31 @@ export function buildDeterministicConsensus(input: {
   const expectedNetEdgeBps = Number(
     (expectedGrossEdgeBps - expectedFeeBps - slippageBps).toFixed(2),
   );
+  const diagnosticOverlay = buildDiagnosticOverlay(
+    input.votes ?? [],
+    directionalSignal,
+    tradingMode,
+  );
   const directionalConfidence = Number(
-    clamp01(
+    clampConfidenceForTradingMode(
       0.28 +
         directionalEdgeAbs * 0.42 +
         executionQualityScore * 0.18 +
-        regime.confidence * 0.12,
+        regime.confidence * 0.12 +
+        diagnosticOverlay.confidenceAdjustment,
+      tradingMode,
     ).toFixed(3),
   );
-  const directionalAgreement = computeAgreement(
+  const baseDirectionalAgreement = computeAgreement(
     directionalSignal,
     engineReports,
+  );
+  const directionalAgreement = Number(
+    clamp01(
+      baseDirectionalAgreement *
+        (1 - getTradingModeConfig(tradingMode).diagnosticAgreementBlend) +
+        diagnosticOverlay.agreementBlend,
+    ).toFixed(3),
   );
   const riskFlags = buildRiskFlags(
     features,
@@ -656,16 +783,30 @@ export function buildDeterministicConsensus(input: {
     marketQualityScore,
     expectedNetEdgeBps,
     riskFlags,
+    tradingMode,
   });
+  if (diagnosticOverlay.vetoBlockReason) {
+    rejectionReasons.push(diagnosticOverlay.vetoBlockReason);
+  }
   const decision = rejectionReasons.length === 0 ? directionalSignal : "HOLD";
   const confidence =
     decision === directionalSignal
       ? directionalConfidence
-      : Number(Math.min(directionalConfidence, 0.49).toFixed(3));
+      : Number(
+          Math.min(
+            directionalConfidence,
+            clampConfidenceForTradingMode(0.49, tradingMode),
+          ).toFixed(3),
+        );
   const agreement =
     decision === directionalSignal
       ? directionalAgreement
-      : Number(Math.min(directionalAgreement, 0.52).toFixed(3));
+      : Number(
+          Math.min(
+            directionalAgreement,
+            getModeAdjustedAgreementThreshold(0.52, tradingMode),
+          ).toFixed(3),
+        );
   const weightedScores = buildWeightedScores(
     adjustedDirectionalEdge,
     marketQualityScore,
@@ -730,6 +871,7 @@ export function buildDeterministicConsensus(input: {
   return {
     symbol: input.ctx.symbol,
     marketType: features.marketType,
+    tradingMode,
     timeframe: input.ctx.timeframe,
     signal: directionalSignal,
     directionalSignal,

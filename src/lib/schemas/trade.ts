@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { aiModeSchema } from "@/lib/configs/models";
+import { tradingModeSchema } from "@/lib/configs/trading-modes";
 
 const tradeSignalSchema = z.enum(["BUY", "SELL", "HOLD"]);
 const marketTypeSchema = z.enum(["spot", "futures", "swap"]);
@@ -31,6 +32,7 @@ const tradeDecisionSnapshotSchema = z.object({
   signal: tradeSignalSchema,
   directionalSignal: tradeSignalSchema,
   decision: tradeSignalSchema,
+  tradingMode: tradingModeSchema.optional(),
   marketType: marketTypeSchema.optional(),
   confidence: z.number().finite(),
   agreement: z.number().finite(),

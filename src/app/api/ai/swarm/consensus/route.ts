@@ -1,9 +1,11 @@
 import { type NextRequest, NextResponse } from "next/server";
+import { env } from "@/env";
 import {
   AI_MODE_CONFIGS,
   type AIMode,
   DEFAULT_AI_MODE,
 } from "@/lib/configs/models";
+import { resolveTradingMode } from "@/lib/configs/trading-modes";
 import { getRealtimeMarketContext } from "@/lib/market-data/service";
 import { makeSourceHealth } from "@/lib/observability/source-health";
 import { getCachedSwarmResult } from "@/lib/redis/swarm-cache";
@@ -20,9 +22,16 @@ export async function GET(req: NextRequest) {
     const timeframe = (searchParams.get("timeframe") as Timeframe) || "1H";
     const requestedMode =
       (searchParams.get("mode") as AIMode) || DEFAULT_AI_MODE;
+    const tradingMode = resolveTradingMode(
+      searchParams.get("tradingMode") ?? env.TRADING_MODE,
+    );
     const modeConfig =
       AI_MODE_CONFIGS[requestedMode] ?? AI_MODE_CONFIGS[DEFAULT_AI_MODE];
-    const consensus = await getCachedSwarmResult(symbol, timeframe);
+    const consensus = await getCachedSwarmResult(
+      symbol,
+      timeframe,
+      tradingMode,
+    );
 
     if (consensus) {
       const execution =
@@ -43,7 +52,7 @@ export async function GET(req: NextRequest) {
     }
 
     const ctx = await getRealtimeMarketContext(symbol, timeframe);
-    const result = await runSwarm(ctx);
+    const result = await runSwarm(ctx, { tradingMode });
     const execution =
       modeConfig.autoExecute && result.consensus.executionEligible
         ? await autoExecuteConsensus(result.consensus, origin)

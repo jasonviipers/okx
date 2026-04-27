@@ -1,4 +1,5 @@
 import type { AIMode } from "@/lib/configs/models";
+import type { TradingMode } from "@/lib/configs/trading-modes";
 import type { DecisionSource, RejectionReason, TradeSignal } from "./swarm";
 
 export type MarketType = "spot" | "futures" | "swap";
@@ -94,6 +95,7 @@ export interface TradeDecisionSnapshot {
   signal: TradeSignal;
   directionalSignal: TradeSignal;
   decision: TradeSignal;
+  tradingMode?: TradingMode;
   marketType?: MarketType;
   confidence: number;
   agreement: number;

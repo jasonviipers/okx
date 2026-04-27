@@ -634,17 +634,22 @@ export function useConsensus(
   symbol = "BTC-USDT",
   timeframe = "1H",
   mode?: string,
+  tradingMode?: string,
 ) {
   const fetcher = useCallback(
-    () => getConsensus(symbol, timeframe, mode),
-    [symbol, timeframe, mode],
+    () => getConsensus(symbol, timeframe, mode, tradingMode),
+    [symbol, timeframe, mode, tradingMode],
   );
   return useSwr<{
     consensus: ConsensusResult;
     execution?: ExecutionResult;
     cached?: boolean;
     totalElapsedMs?: number;
-  }>(`consensus:${symbol}:${timeframe}:${mode ?? ""}`, fetcher, 10_000);
+  }>(
+    `consensus:${symbol}:${timeframe}:${mode ?? ""}:${tradingMode ?? ""}`,
+    fetcher,
+    10_000,
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -686,8 +691,12 @@ function emitSwarmStreamChange(key: string) {
   }
 }
 
-export function useSwarmStream(symbol = "BTC-USDT", timeframe = "1H") {
-  const key = `swarm-stream:${symbol}:${timeframe}`;
+export function useSwarmStream(
+  symbol = "BTC-USDT",
+  timeframe = "1H",
+  tradingMode?: string,
+) {
+  const key = `swarm-stream:${symbol}:${timeframe}:${tradingMode ?? ""}`;
 
   const onMessage = useEffectEvent((event: SwarmStreamEvent) => {
     const store = getSwarmStreamStore(key);
@@ -726,6 +735,9 @@ export function useSwarmStream(symbol = "BTC-USDT", timeframe = "1H") {
       if (!active) return;
 
       const params = new URLSearchParams({ symbol, timeframe });
+      if (tradingMode) {
+        params.set("tradingMode", tradingMode);
+      }
       const url = `/api/ai/swarm/stream?${params.toString()}`;
       es = new EventSource(url);
 
@@ -770,7 +782,7 @@ export function useSwarmStream(symbol = "BTC-USDT", timeframe = "1H") {
     // need to appear in the dependency array. This is the purpose of
     // useEffectEvent.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [symbol, timeframe, key]);
+  }, [symbol, timeframe, tradingMode, key]);
 
   const subscribe = useCallback(
     (onStoreChange: () => void) => {

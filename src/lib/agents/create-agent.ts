@@ -1,11 +1,10 @@
-import { generateText } from "ai";
 import {
   buildAgentPrompt,
   clampConfidence,
   finalizeVote,
   summarizeMemoryForDisplay,
 } from "@/lib/agents/base-agent";
-import { getOllamaModel, isOllamaConfigured } from "@/lib/ai/ollama";
+import { chatWithOllama, isOllamaConfigured } from "@/lib/ai/ollama";
 import { getMarketResearchDigest } from "@/lib/ai/ollama-web";
 import type { AIModel } from "@/lib/configs/models";
 import {
@@ -15,6 +14,12 @@ import {
   modelCanVote,
 } from "@/lib/configs/models";
 import type { AgentRoleConfig } from "@/lib/configs/roles";
+import {
+  DEFAULT_TRADING_MODE,
+  getTradingModeConfig,
+  resolveTradingMode,
+  type TradingMode,
+} from "@/lib/configs/trading-modes";
 import { average } from "@/lib/math-utils";
 import { buildMemoryPrompt, getMemorySummary } from "@/lib/memory/aging-memory";
 import { checkRateLimit } from "@/lib/redis/rate-limiter";
@@ -36,6 +41,7 @@ type ResearchDecision = {
 
 type AgentRunOptions = {
   abortSignal?: AbortSignal;
+  tradingMode?: TradingMode;
 };
 
 function toAbortError(reason: unknown, fallbackMessage: string): Error {
@@ -97,7 +103,11 @@ function parseResearchDecision(text: string): ResearchDecision | null {
   }
 }
 
-function parseModelVote(text: string, fallback: SignalScore): SignalScore {
+function parseModelVote(
+  text: string,
+  fallback: SignalScore,
+  tradingMode: TradingMode,
+): SignalScore {
   const jsonCandidate = extractJsonObject(text);
   if (!jsonCandidate) {
     return fallback;
@@ -113,7 +123,7 @@ function parseModelVote(text: string, fallback: SignalScore): SignalScore {
         : fallback.signal;
     const confidence =
       typeof parsed.confidence === "number"
-        ? clampConfidence(parsed.confidence)
+        ? clampConfidence(parsed.confidence, tradingMode)
         : fallback.confidence;
     const reasoning =
       typeof parsed.reasoning === "string" && parsed.reasoning.trim().length > 0
@@ -364,14 +374,19 @@ function analyzeRole(
   }
 }
 
-function buildSystemPrompt(roleConfig: AgentRoleConfig): string {
+function buildSystemPrompt(
+  roleConfig: AgentRoleConfig,
+  tradingMode: TradingMode,
+): string {
   const vetoNote = roleConfig.isVetoLayer
     ? "\nIMPORTANT: You are a VETO LAYER. A HOLD from you with confidence > 0.75 overrides the full consensus. Use this power deliberately."
     : "";
+  const tradingModeConfig = getTradingModeConfig(tradingMode);
 
   return [
     "You are one specialist agent in a crypto trading swarm.",
     `Role: ${roleConfig.label} (${roleConfig.modelRole})`,
+    `Trading mode: ${tradingModeConfig.label}`,
     "Return strict JSON only.",
     '{"signal":"BUY"|"SELL"|"HOLD","confidence":0.0-1.0,"reasoning":"short rationale"}',
     "Keep reasoning under 220 characters.",
@@ -387,8 +402,10 @@ function buildResearchDecisionPrompt(
   roleConfig: AgentRoleConfig,
   heuristicVote: SignalScore,
   memoryLabel: string | null,
+  tradingMode: TradingMode,
 ): string {
   const lastCandle = ctx.candles.at(-1);
+  const tradingModeConfig = getTradingModeConfig(tradingMode);
 
   return [
     "Decide whether external web research is needed before finalizing this trade vote.",
@@ -397,6 +414,7 @@ function buildResearchDecisionPrompt(
     "Set useWebResearch=true only if recent news, sentiment, macro, regulatory, ETF, exchange, or market-structure developments could materially change the decision or confidence.",
     "Prefer false when the supplied live market data is already sufficient.",
     `Role: ${roleConfig.label} (${roleConfig.role})`,
+    `Trading mode: ${tradingModeConfig.label}`,
     `Symbol: ${ctx.symbol}`,
     `Timeframe: ${ctx.timeframe}`,
     `Heuristic signal: ${heuristicVote.signal}`,
@@ -418,6 +436,7 @@ async function decideWebResearchNeed(
   ctx: MarketContext,
   heuristicVote: SignalScore,
   memoryLabel: string | null,
+  tradingMode: TradingMode,
   options?: AgentRunOptions,
 ): Promise<ResearchDecision> {
   const heuristicDecision = shouldUseWebResearchHeuristic(ctx, heuristicVote);
@@ -432,8 +451,8 @@ async function decideWebResearchNeed(
   );
 
   try {
-    const { text } = await generateText({
-      model: getOllamaModel(modelId),
+    const { text } = await chatWithOllama({
+      model: modelId,
       system: [
         "You are deciding whether an analyst should perform external web research before finalizing a crypto trade vote.",
         "Return strict JSON only.",
@@ -445,9 +464,11 @@ async function decideWebResearchNeed(
         roleConfig,
         heuristicVote,
         memoryLabel,
+        tradingMode,
       ),
       temperature: 0,
       maxOutputTokens: 120,
+      format: "json",
       abortSignal: options?.abortSignal,
     });
 
@@ -488,6 +509,9 @@ export function createAgent(modelId: string, roleConfig: AgentRoleConfig) {
     options?: AgentRunOptions,
   ): Promise<AgentVote> {
     const startedAt = Date.now();
+    const tradingMode = resolveTradingMode(
+      options?.tradingMode ?? DEFAULT_TRADING_MODE,
+    );
     const heuristicVote = analyzeRole(roleConfig, ctx);
     throwIfAborted(options?.abortSignal, `Agent vote aborted for ${modelId}.`);
     const resolvedMemorySummary =
@@ -505,6 +529,7 @@ export function createAgent(modelId: string, roleConfig: AgentRoleConfig) {
         confidence: heuristicVote.confidence,
         reasoning: `${heuristicVote.reasoning} [Rate-limited: heuristic used]${memoryLabel ? ` ${memoryLabel}` : ""}`,
         startedAt,
+        tradingMode,
         researchTrace: {
           status: "skipped",
           searched: false,
@@ -530,6 +555,7 @@ export function createAgent(modelId: string, roleConfig: AgentRoleConfig) {
           ctx,
           heuristicVote,
           memoryLabel,
+          tradingMode,
           options,
         )
       : null;
@@ -601,16 +627,17 @@ export function createAgent(modelId: string, roleConfig: AgentRoleConfig) {
 
     if (isOllamaConfigured()) {
       try {
-        const { text } = await generateText({
-          model: getOllamaModel(modelId),
-          system: buildSystemPrompt(roleConfig),
+        const { text } = await chatWithOllama({
+          model: modelId,
+          system: buildSystemPrompt(roleConfig, tradingMode),
           prompt,
           temperature: roleConfig.isVetoLayer ? 0.05 : 0.2,
           maxOutputTokens: 220,
+          format: "json",
           abortSignal: options?.abortSignal,
         });
 
-        resolvedVote = parseModelVote(text, heuristicVote);
+        resolvedVote = parseModelVote(text, heuristicVote, tradingMode);
 
         if (
           roleConfig.isVetoLayer &&
@@ -653,9 +680,11 @@ export function createAgent(modelId: string, roleConfig: AgentRoleConfig) {
       signal: resolvedVote.signal,
       confidence: clampConfidence(
         resolvedVote.confidence + Math.min(prompt.length / 4000, 0.05),
+        tradingMode,
       ),
       reasoning: resolvedVote.reasoning,
       startedAt,
+      tradingMode,
       researchTrace,
     });
   };

@@ -64,6 +64,12 @@ const okxApiRegions = ["global", "us", "eu", "au"] as const;
 const okxDerivativeTradeModes = ["cross", "isolated"] as const;
 const okxPositionModes = ["net", "long_short"] as const;
 const autonomousSelectionModes = ["auto", "fixed"] as const;
+const tradingModes = [
+  "conservative",
+  "balanced",
+  "aggressive",
+  "scalp",
+] as const;
 const timeframes = [
   "1m",
   "3m",
@@ -107,6 +113,7 @@ export const env = createEnv({
     OLLAMA_BASE_URL: optionalUrl,
     OLLAMA_API_KEY: optionalString,
     APP_URL: optionalUrl,
+    TRADING_MODE: z.enum(tradingModes).optional(),
     AUTO_EXECUTE_ENABLED: optionalBooleanString,
     AUTONOMOUS_TRADING_ENABLED: optionalBooleanString,
     AUTONOMOUS_SYMBOL_SELECTION: z.enum(autonomousSelectionModes).optional(),
@@ -179,6 +186,7 @@ export const env = createEnv({
     OLLAMA_BASE_URL: process.env.OLLAMA_BASE_URL,
     OLLAMA_API_KEY: process.env.OLLAMA_API_KEY,
     APP_URL: process.env.APP_URL,
+    TRADING_MODE: process.env.TRADING_MODE,
     AUTO_EXECUTE_ENABLED: process.env.AUTO_EXECUTE_ENABLED,
     AUTONOMOUS_TRADING_ENABLED: process.env.AUTONOMOUS_TRADING_ENABLED,
     AUTONOMOUS_SYMBOL_SELECTION: process.env.AUTONOMOUS_SYMBOL_SELECTION,

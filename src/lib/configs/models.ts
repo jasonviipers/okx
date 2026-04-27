@@ -25,11 +25,11 @@ export const AI_MODELS = [
   "glm-5.1:cloud",
   "gemma4:31b-cloud",
   "qwen3.5:cloud",
-  "kimi-k2.5:cloud",
   "kimi-k2.6:cloud",
-  "deepseek-v3.2:cloud",
+  "deepseek-v4-flash:cloud",
+  "deepseek-v4-pro:cloud",
   "ministral-3:cloud",
-  "gpt-oss:cloud",
+  "gpt-oss:120b-cloud",
 ] as const;
 
 export type AIModel = (typeof AI_MODELS)[number];
@@ -41,11 +41,11 @@ export const aiModelSchema = z.enum(AI_MODELS);
 // permission checks throughout the swarm.
 // ---------------------------------------------------------------------------
 export const MODEL_ROLES: Record<AIModel, ModelRole> = {
-  "deepseek-v3.2:cloud": "strategy",
-  "gpt-oss:cloud": "orchestrator",
+  "deepseek-v4-flash:cloud": "strategy",
+  "deepseek-v4-pro:cloud": "strategy",
+  "gpt-oss:120b-cloud": "orchestrator",
   "qwen3.5:cloud": "execution", // Order routing ONLY — never participates in reasoning
   "gemma4:31b-cloud": "signal_worker",
-  "kimi-k2.5:cloud": "signal_worker",
   "kimi-k2.6:cloud": "signal_worker",
   "glm-5.1:cloud": "validator",
   "ministral-3:cloud": "risk",
@@ -143,9 +143,9 @@ export function modelIsVetoLayer(modelId: AIModel): boolean {
 // Execution (qwen3.5) and orchestrator (gpt-oss) are excluded from voting.
 // ---------------------------------------------------------------------------
 export const ACTIVE_SWARM_MODELS = [
-  "deepseek-v3.2:cloud", // strategy
+  "deepseek-v4-flash:cloud", // strategy
+  "deepseek-v4-pro:cloud", // strategy
   "gemma4:31b-cloud", // signal_worker
-  "kimi-k2.5:cloud", // signal_worker
   "kimi-k2.6:cloud", // signal_worker
   "glm-5.1:cloud", // validator (veto)
   "ministral-3:cloud", // risk (veto)

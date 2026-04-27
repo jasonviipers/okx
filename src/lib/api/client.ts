@@ -93,13 +93,21 @@ export function getAccount(symbol: string) {
   );
 }
 
-export function getConsensus(symbol: string, timeframe: string, mode?: string) {
+export function getConsensus(
+  symbol: string,
+  timeframe: string,
+  mode?: string,
+  tradingMode?: string,
+) {
   const params = new URLSearchParams({
     symbol,
     timeframe,
   });
   if (mode) {
     params.set("mode", mode);
+  }
+  if (tradingMode) {
+    params.set("tradingMode", tradingMode);
   }
 
   return fetchJson<

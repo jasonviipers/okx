@@ -180,6 +180,7 @@ Two example files are provided:
 |---|---|---|---|
 | `OLLAMA_BASE_URL` | URL | `http://localhost:11434` | Ollama API base URL. Use a local Ollama instance or a cloud endpoint. |
 | `OLLAMA_API_KEY` | string | — | API key for cloud-hosted Ollama (required for web search/fetch features). Leave empty for local Ollama. |
+| `TRADING_MODE` | enum: `conservative`, `balanced`, `aggressive`, `scalp` | `balanced` | Default execution posture used by the deterministic engine and diagnostic overlays. |
 
 > The LLM layer is **optional** — the primary decision engine is deterministic. Ollama is only used as a secondary overlay when configured.
 
