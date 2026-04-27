@@ -182,7 +182,7 @@ GF_SERVER_HTTP_PORT=3001
 ## Migration Strategy
 
 ### Phase 1 — Additive (no breaking changes)
-1. Deploy new `docker-compose.full.yml` alongside existing compose
+1. Deploy the base `docker-compose.yml` stack alongside any existing app-only deployment
 2. MinIO starts accepting new uploads (old files remain on disk)
 3. OTel instrumentation added to app (zero-overhead until collector runs)
 4. sqlite-vss extension loaded; vector table created alongside existing tables
@@ -198,7 +198,7 @@ GF_SERVER_HTTP_PORT=3001
 3. Decommission old cron container (new BullMQ scheduler takes over)
 
 ### Rollback
-- All SQLite data is in a named volume; rollback = `docker compose down && docker compose -f docker-compose.yml up -d`
+- All SQLite data is in a persistent volume or mounted `.data` directory; rollback = `docker compose down && docker compose -f docker-compose.yml up -d`
 - MinIO data is independent; old disk path remains untouched during migration
 
 ---
