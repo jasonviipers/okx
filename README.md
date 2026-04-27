@@ -156,8 +156,10 @@ Two example files are provided:
 | `OKX_PASSPHRASE` | string | — | Your OKX API passphrase. Required for trading. |
 | `OKX_API_REGION` | enum: `global`, `us`, `eu`, `au` | `global` | OKX API region. Select the region matching your OKX account. |
 | `OKX_BASE_URL` | URL | `https://www.okx.com` | OKX REST API base URL. |
-| `OKX_WS_URL` | URL | `wss://ws.okx.com:8443/ws/v5/public` | OKX WebSocket endpoint for public market data. |
+| `OKX_WS_URL` | URL | `wss://wspap.okx.com:8443/ws/v5/public` | OKX WebSocket endpoint for public market data. |
 | `OKX_ACCOUNT_MODE` | enum: `live`, `demo`, `paper` | `paper` | Trading account mode. **`paper`** sends `x-simulated-trading: 1` (safe for testing). **`demo`** uses the OKX demo trading environment. **`live`** uses real funds. |
+| `OKX_DERIVATIVES_TD_MODE` | enum: `cross`, `isolated` | `cross` | Margin mode used for derivatives orders. Ignored for spot trading. |
+| `OKX_POSITION_MODE` | enum: `net`, `long_short` | `net` | Position mode used for derivatives orders. Ignored for spot trading. |
 
 > **Important:** Never set `OKX_ACCOUNT_MODE=live` until you have fully tested with `paper` or `demo` mode. Live mode trades with real funds.
 
@@ -212,6 +214,7 @@ These variables control the autonomous trading loop behavior.
 | `AUTONOMOUS_SYMBOL_SELECTION` | enum: `auto`, `fixed` | `auto` | Symbol selection mode. **`auto`** dynamically resolves instruments from OKX and account balances. **`fixed`** uses `AUTONOMOUS_SYMBOL` or `AUTONOMOUS_SYMBOLS`. |
 | `AUTONOMOUS_SYMBOL` | string | `BTC-USDT` | Single trading instrument when selection mode is `fixed`. |
 | `AUTONOMOUS_SYMBOLS` | string | `BTC-USDT,ETH-USDT,SOL-USDT,BNB-USDT,XRP-USDT,ADA-USDT,DOGE-USDT,LINK-USDT` | Comma-separated list of instruments for `fixed` mode. |
+| `AUTONOMOUS_MARKET_TYPES` | string | `spot` | Comma-separated market types to allow during autonomous symbol discovery. Keep this at `spot` for the current spot-first product. |
 | `AUTONOMOUS_QUOTE_CURRENCIES` | string | `USDT,EUR,USDC` | Allowed quote currencies for dynamic symbol resolution. |
 | `AUTONOMOUS_SYMBOL_LIMIT` | integer | `8` | Maximum number of symbols to track in `auto` mode. |
 | `AUTONOMOUS_QUOTE_CURRENCY` | string | `USDT` | Primary quote currency. |
