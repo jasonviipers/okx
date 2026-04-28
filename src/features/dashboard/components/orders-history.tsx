@@ -11,7 +11,12 @@ import { cn } from "@/lib/utils";
 import type {
   StoredExecutionIntent,
   StoredTradeExecution,
+  TradePerformanceSnapshot,
 } from "@/types/history";
+
+function formatSignedUsd(value: number): string {
+  return `${value >= 0 ? "+" : "-"}$${Math.abs(value).toFixed(2)}`;
+}
 
 export function OrdersAndHistory() {
   const tradeHistory = useTradeHistory(50);
@@ -21,6 +26,8 @@ export function OrdersAndHistory() {
   );
 
   const fills: StoredTradeExecution[] = tradeHistory.data?.entries ?? [];
+  const performance: TradePerformanceSnapshot | undefined =
+    tradeHistory.data?.performance;
   const intents: StoredExecutionIntent[] = executionIntents.data?.entries ?? [];
   const filledFills = fills.filter(
     (fill: StoredTradeExecution) =>
@@ -63,6 +70,47 @@ export function OrdersAndHistory() {
         </CardTitle>
       </CardHeader>
       <CardContent className="flex-1 overflow-auto p-0">
+        {performance && (
+          <div className="grid grid-cols-4 gap-px border-b border-border bg-border text-[0.5625rem] font-mono">
+            <div className="bg-card px-2 py-1.5">
+              <div className="text-terminal-dim uppercase">Open P&L</div>
+              <div
+                className={
+                  performance.unrealizedPnlUsd >= 0
+                    ? "text-terminal-green"
+                    : "text-terminal-red"
+                }
+              >
+                {formatSignedUsd(performance.unrealizedPnlUsd)}
+              </div>
+            </div>
+            <div className="bg-card px-2 py-1.5">
+              <div className="text-terminal-dim uppercase">Realized 24h</div>
+              <div
+                className={
+                  performance.realizedPnl24hUsd >= 0
+                    ? "text-terminal-green"
+                    : "text-terminal-red"
+                }
+              >
+                {formatSignedUsd(performance.realizedPnl24hUsd)}
+              </div>
+            </div>
+            <div className="bg-card px-2 py-1.5">
+              <div className="text-terminal-dim uppercase">Open Positions</div>
+              <div>{performance.openPositionCount}</div>
+            </div>
+            <div className="bg-card px-2 py-1.5">
+              <div className="text-terminal-dim uppercase">Win Rate</div>
+              <div>
+                {performance.winRateAllTime !== null
+                  ? `${performance.winRateAllTime.toFixed(2)}%`
+                  : "—"}
+              </div>
+            </div>
+          </div>
+        )}
+
         <div className="grid grid-cols-7 text-[0.5rem] uppercase tracking-wider text-terminal-dim px-2 py-0.5 border-b border-border bg-secondary sticky top-0">
           <span>Time</span>
           <span>Symbol</span>

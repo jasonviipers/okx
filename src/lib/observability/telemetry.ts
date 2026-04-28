@@ -308,6 +308,7 @@ function emitLog(
   const sanitizedAttributes = sanitizeAttributes(attributes);
   const timestamp = new Date().toISOString();
   const logAttributes = {
+    "log.level": level,
     source,
     ...sanitizedAttributes,
     ...(spanContext

@@ -29,6 +29,7 @@ import type {
   StoredExecutionIntent,
   StoredSwarmRun,
   StoredTradeExecution,
+  TradePerformanceSnapshot,
 } from "@/types/history";
 import type { MarketFeedStatus, OKXTicker } from "@/types/market";
 import type { MemoryRecord, MemorySummary } from "@/types/memory";
@@ -586,11 +587,11 @@ export function useSwarmHistory(limit = 25) {
 
 export function useTradeHistory(limit = 25) {
   const fetcher = useCallback(() => getTradeHistory(limit), [limit]);
-  return useSwr<{ entries: StoredTradeExecution[]; count: number }>(
-    `trade-history:${limit}`,
-    fetcher,
-    15_000,
-  );
+  return useSwr<{
+    entries: StoredTradeExecution[];
+    count: number;
+    performance: TradePerformanceSnapshot;
+  }>(`trade-history:${limit}`, fetcher, 15_000);
 }
 
 export function useExecutionIntents(limit = 25) {

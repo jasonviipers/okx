@@ -2,7 +2,11 @@
 
 import { useMemo, useTransition } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { useAccount, usePositions } from "@/hooks/use-terminal-data";
+import {
+  useAccount,
+  usePositions,
+  useTradeHistory,
+} from "@/hooks/use-terminal-data";
 import { cn } from "@/lib/utils";
 import type { AccountOverview, Position } from "@/types/trade";
 
@@ -24,10 +28,12 @@ function formatPnl(n: number): { text: string; className: string } {
 export function PositionsPanel() {
   const positionsData = usePositions();
   const accountData = useAccount();
+  const tradeHistory = useTradeHistory(50);
   const [_isPending, _startTransition] = useTransition();
 
   const positions: Position[] = positionsData.data?.positions ?? [];
   const overview: AccountOverview | undefined = accountData.data?.overview;
+  const managedPerformance = tradeHistory.data?.performance;
   const spotHoldings = (overview?.tradingBalances ?? []).filter(
     (balance) => balance.availableBalance > 0,
   );
@@ -67,16 +73,35 @@ export function PositionsPanel() {
               </div>
             </div>
             <div className="bg-card px-2 py-1.5">
-              <div className="text-terminal-dim uppercase">Day P&L</div>
+              <div className="text-terminal-dim uppercase">
+                {managedPerformance ? "Managed Open P&L" : "Day P&L"}
+              </div>
               <div
                 className={cn(
                   "font-mono tabular-nums",
-                  formatPnl(totalPnl).className,
+                  formatPnl(managedPerformance?.unrealizedPnlUsd ?? totalPnl)
+                    .className,
                 )}
               >
-                {formatPnl(totalPnl).text}
+                {
+                  formatPnl(managedPerformance?.unrealizedPnlUsd ?? totalPnl)
+                    .text
+                }
               </div>
             </div>
+            {managedPerformance && (
+              <div className="bg-card px-2 py-1.5">
+                <div className="text-terminal-dim uppercase">Realized 24h</div>
+                <div
+                  className={cn(
+                    "font-mono tabular-nums",
+                    formatPnl(managedPerformance.realizedPnl24hUsd).className,
+                  )}
+                >
+                  {formatPnl(managedPerformance.realizedPnl24hUsd).text}
+                </div>
+              </div>
+            )}
             {overview.unrealizedPnl !== undefined && (
               <div className="bg-card px-2 py-1.5">
                 <div className="text-terminal-dim uppercase">

@@ -3,6 +3,7 @@ import type {
   StoredExecutionIntent,
   StoredSwarmRun,
   StoredTradeExecution,
+  TradePerformanceSnapshot,
 } from "@/types/history";
 import type {
   Candle,
@@ -162,7 +163,11 @@ export function getSwarmHistory(limit = 25) {
 
 export function getTradeHistory(limit = 25) {
   return fetchJson<
-    ApiEnvelope<{ entries: StoredTradeExecution[]; count: number }>
+    ApiEnvelope<{
+      entries: StoredTradeExecution[];
+      count: number;
+      performance: TradePerformanceSnapshot;
+    }>
   >(`/api/ai/trade/history?limit=${limit}`);
 }
 

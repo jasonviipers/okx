@@ -1,6 +1,6 @@
 import "server-only";
 
-import { desc, eq, inArray } from "drizzle-orm";
+import { desc } from "drizzle-orm";
 import { getDb } from "@/db";
 import {
   outcomeWindows as outcomeWindowsTable,
@@ -10,12 +10,15 @@ import {
 import { average } from "@/lib/math-utils";
 import { getTicker } from "@/lib/okx/market";
 import { getTradeUpdates, type OkxTradeUpdateRow } from "@/lib/okx/orders";
+import { getOpenPositions } from "@/lib/store/open-positions";
 import { normalizeConsensusResult } from "@/lib/swarm/normalize-consensus";
 import type {
+  OpenTradePerformance,
   OutcomeWindow,
   StoredHistoryEntry,
   StoredTradeExecution,
   StrategyPerformanceSummary,
+  TradePerformanceSnapshot,
 } from "@/types/history";
 import type { SwarmRunResult } from "@/types/swarm";
 import type {
@@ -356,6 +359,16 @@ function makeId(prefix: string): string {
 
 function round(value: number, digits = 4): number {
   return Number(value.toFixed(digits));
+}
+
+function calculatePositionPnl(
+  direction: "BUY" | "SELL",
+  entryPrice: number,
+  markPrice: number,
+  size: number,
+): number {
+  const directionalMultiplier = direction === "BUY" ? 1 : -1;
+  return round((markPrice - entryPrice) * size * directionalMultiplier, 8);
 }
 
 function buildOutcomeWindows(anchorTime: string): TradeOutcomeWindow[] {
@@ -934,6 +947,145 @@ export async function refreshTradeExecutionOutcomes(
   }
 
   return nextTrades.slice(0, limit);
+}
+
+export async function buildTradePerformanceSnapshot(): Promise<TradePerformanceSnapshot> {
+  const [openPositions, outcomeWindows, history] = await Promise.all([
+    getOpenPositions(),
+    getOutcomeWindows(1_000),
+    getHistory(1_000),
+  ]);
+
+  const uniqueSymbols = [
+    ...new Set(openPositions.map((position) => position.instId)),
+  ];
+  const tickerResults = await Promise.allSettled(
+    uniqueSymbols.map(
+      async (symbol) => [symbol, await getTicker(symbol)] as const,
+    ),
+  );
+  const tickerMap = new Map<string, number>();
+
+  for (const result of tickerResults) {
+    if (result.status === "fulfilled") {
+      tickerMap.set(result.value[0], result.value[1].last);
+    }
+  }
+
+  const openPositionSummaries: OpenTradePerformance[] = openPositions
+    .map((position) => {
+      const markPrice = tickerMap.get(position.instId) ?? null;
+      const entryNotionalUsd = position.entryPrice * position.remainingSize;
+      const unrealizedPnlUsd =
+        markPrice !== null && markPrice > 0
+          ? calculatePositionPnl(
+              position.direction,
+              position.entryPrice,
+              markPrice,
+              position.remainingSize,
+            )
+          : null;
+      const unrealizedPnlPct =
+        unrealizedPnlUsd !== null && entryNotionalUsd > 0
+          ? round((unrealizedPnlUsd / entryNotionalUsd) * 100, 4)
+          : null;
+
+      return {
+        orderId: position.orderId,
+        symbol: position.instId,
+        direction: position.direction,
+        remainingSize: round(position.remainingSize, 8),
+        entryPrice: round(position.entryPrice, 8),
+        markPrice: markPrice !== null ? round(markPrice, 8) : null,
+        unrealizedPnlUsd,
+        unrealizedPnlPct,
+        updatedAt: new Date(position.updatedAt).toISOString(),
+      };
+    })
+    .sort(
+      (left, right) =>
+        Math.abs(right.unrealizedPnlUsd ?? 0) -
+        Math.abs(left.unrealizedPnlUsd ?? 0),
+    );
+
+  const openExposureUsd = round(
+    openPositions.reduce((sum, position) => {
+      const markPrice = tickerMap.get(position.instId);
+      const referencePrice =
+        markPrice && markPrice > 0 ? markPrice : position.entryPrice;
+      return sum + referencePrice * position.remainingSize;
+    }, 0),
+  );
+  const unrealizedPnlUsd = round(
+    openPositionSummaries.reduce(
+      (sum, position) => sum + (position.unrealizedPnlUsd ?? 0),
+      0,
+    ),
+  );
+  const unrealizedPnlPct =
+    openExposureUsd > 0
+      ? round((unrealizedPnlUsd / openExposureUsd) * 100, 4)
+      : null;
+  const since = Date.now() - 24 * 60 * 60 * 1000;
+  const realizedOutcomes = outcomeWindows.filter(
+    (window) => window.realizedPnl !== null,
+  );
+  const realizedOutcomes24h = realizedOutcomes.filter((window) => {
+    if (!window.exitTime) {
+      return false;
+    }
+
+    return new Date(window.exitTime).getTime() >= since;
+  });
+  const realizedPnlAllTimeUsd = round(
+    realizedOutcomes.reduce(
+      (sum, window) => sum + (window.realizedPnl ?? 0),
+      0,
+    ),
+  );
+  const realizedPnl24hUsd = round(
+    realizedOutcomes24h.reduce(
+      (sum, window) => sum + (window.realizedPnl ?? 0),
+      0,
+    ),
+  );
+  const winRateAllTime =
+    realizedOutcomes.length > 0
+      ? round(
+          (realizedOutcomes.filter((window) => (window.realizedPnl ?? 0) > 0)
+            .length /
+            realizedOutcomes.length) *
+            100,
+          2,
+        )
+      : null;
+  const executedNotional24hUsd = round(
+    history.reduce((sum, entry) => {
+      if (
+        entry.type !== "trade_execution" ||
+        new Date(entry.timestamp).getTime() < since
+      ) {
+        return sum;
+      }
+
+      return sum + (entry.order.notionalUsd ?? 0);
+    }, 0),
+  );
+
+  return {
+    openPositionCount: openPositionSummaries.length,
+    openExposureUsd,
+    unrealizedPnlUsd,
+    unrealizedPnlPct,
+    realizedPnl24hUsd,
+    realizedPnlAllTimeUsd,
+    realizedTradeCount24h: realizedOutcomes24h.length,
+    realizedTradeCountAllTime: realizedOutcomes.length,
+    winRateAllTime,
+    executedNotional24hUsd,
+    openPositions: openPositionSummaries,
+    updatedAt: new Date().toISOString(),
+  };
 }
 
 export async function buildStrategyPerformanceSummary(

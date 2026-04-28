@@ -82,4 +82,31 @@ export type StrategyPerformanceSummary = {
   generatedAt: string;
 };
 
+export type OpenTradePerformance = {
+  orderId: string;
+  symbol: string;
+  direction: "BUY" | "SELL";
+  remainingSize: number;
+  entryPrice: number;
+  markPrice: number | null;
+  unrealizedPnlUsd: number | null;
+  unrealizedPnlPct: number | null;
+  updatedAt: string;
+};
+
+export type TradePerformanceSnapshot = {
+  openPositionCount: number;
+  openExposureUsd: number;
+  unrealizedPnlUsd: number;
+  unrealizedPnlPct: number | null;
+  realizedPnl24hUsd: number;
+  realizedPnlAllTimeUsd: number;
+  realizedTradeCount24h: number;
+  realizedTradeCountAllTime: number;
+  winRateAllTime: number | null;
+  executedNotional24hUsd: number;
+  openPositions: OpenTradePerformance[];
+  updatedAt: string;
+};
+
 export type StoredHistoryEntry = StoredSwarmRun | StoredTradeExecution;

@@ -12,6 +12,14 @@ processors:
       - action: upsert
         key: service.name
         value: ai-trading-swarm
+  attributes/loki:
+    actions:
+      - action: insert
+        key: loki.resource.labels
+        value: service.name
+      - action: insert
+        key: loki.attribute.labels
+        value: source,log.level
   batch:
     timeout: 5s
 
@@ -39,5 +47,5 @@ service:
       exporters: [prometheus]
     logs:
       receivers: [otlp]
-      processors: [resource, batch]
+      processors: [resource, attributes/loki, batch]
       exporters: [loki]

@@ -105,7 +105,7 @@
       },
       "targets": [
         {
-          "expr": "{}",
+          "expr": "{service_name=\"ai-trading-swarm\"}",
           "queryType": "range",
           "refId": "A"
         }
