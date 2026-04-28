@@ -5,6 +5,14 @@ import { env } from "@/env";
 import { getOkxAccountModeLabel } from "@/lib/configs/okx";
 import { getMarketSnapshot } from "@/lib/market-data/service";
 import { clamp } from "@/lib/math-utils";
+import {
+  incrementCounter,
+  observeHistogram,
+  error as telemetryError,
+  info as telemetryInfo,
+  warn as telemetryWarn,
+  withTelemetrySpan,
+} from "@/lib/observability/telemetry";
 import { getAccountOverview } from "@/lib/okx/account";
 import { getInstrumentRules, normalizeOrderSize } from "@/lib/okx/instruments";
 import { getTicker } from "@/lib/okx/market";
@@ -23,14 +31,7 @@ import {
 } from "@/lib/store/open-positions";
 import { SWARM_THRESHOLDS } from "@/lib/swarm/thresholds";
 import { getTrailingStopDistancePct } from "@/lib/swarm/trailing-stop";
-import {
-  incrementCounter,
-  observeHistogram,
-  error as telemetryError,
-  info as telemetryInfo,
-  warn as telemetryWarn,
-  withTelemetrySpan,
-} from "@/lib/observability/telemetry";
+import { executeTradeRequest } from "@/lib/trade/execute";
 import type {
   DecisionResult,
   ExecutionResult,
@@ -437,7 +438,6 @@ async function deriveExecutableSize(input: {
 
   if (currentPositionOpposesDecision && marketType !== "spot") {
     const size = Number(currentPosition.size.toFixed(8));
-    const notional = Math.max(currentPosition.notionalUsd ?? 0, 0);
     return {
       size,
       marketType,
@@ -978,7 +978,6 @@ function mapExecutionGuardReason(
 
 export async function autoExecuteConsensus(
   consensus: DecisionResult,
-  baseUrl: string,
 ): Promise<ExecutionResult> {
   return withTelemetrySpan(
     {
@@ -1400,7 +1399,6 @@ export async function autoExecuteConsensus(
           return finalizeResult(result);
         }
 
-        const url = `${baseUrl}/api/ai/trade/execute`;
         await updateExecutionIntent(executionIntent.id, {
           status: "submitted",
           normalizedSize,
@@ -1409,96 +1407,32 @@ export async function autoExecuteConsensus(
             instrumentRules,
           },
         });
-        const response = await fetch(url, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          cache: "no-store",
-          body: JSON.stringify({
-            signal: decision,
-            action: decision,
-            symbol: consensus.symbol,
+        const execution = await executeTradeRequest({
+          signal: decision,
+          symbol: consensus.symbol,
+          marketType: executionPlan.marketType,
+          size: Number(normalizedSize.toFixed(8)),
+          mode: "ai_only",
+          confirmed: true,
+          decisionSnapshot: buildTradeDecisionSnapshot(consensus),
+          executionContext: {
             marketType: executionPlan.marketType,
-            size: Number(normalizedSize.toFixed(8)),
-            mode: "ai_only",
-            confirmed: true,
-            source: "swarm_auto",
-            decisionSnapshot: buildTradeDecisionSnapshot(consensus),
-            executionContext: {
-              marketType: executionPlan.marketType,
-              referencePrice: executionReferencePrice,
-              targetNotionalUsd: Number(targetNotionalUsd.toFixed(8)),
-              normalizedSize: Number(normalizedSize.toFixed(8)),
-              expectedNetEdgeBps: consensus.expectedNetEdgeBps,
-              marketQualityScore: consensus.marketQualityScore,
-              tdMode: executionPlan.tdMode,
-              posSide: executionPlan.posSide,
-              reduceOnly: executionPlan.reduceOnly,
-              stopLoss: exitPlan.stopLoss,
-              takeProfitLevels: exitPlan.takeProfitLevels,
-              trailingStopDistancePct: getTrailingStopDistancePct(),
-            },
-          }),
+            referencePrice: executionReferencePrice,
+            targetNotionalUsd: Number(targetNotionalUsd.toFixed(8)),
+            normalizedSize: Number(normalizedSize.toFixed(8)),
+            expectedNetEdgeBps: consensus.expectedNetEdgeBps,
+            marketQualityScore: consensus.marketQualityScore,
+            tdMode: executionPlan.tdMode,
+            posSide: executionPlan.posSide,
+            reduceOnly: executionPlan.reduceOnly,
+            stopLoss: exitPlan.stopLoss,
+            takeProfitLevels: exitPlan.takeProfitLevels,
+            trailingStopDistancePct: getTrailingStopDistancePct(),
+          },
         });
-
-        const payload = (await response.json().catch(() => null)) as {
-          data?: {
-            order?: ExecutionResult["order"];
-            simulated?: boolean;
-            accountMode?: ExecutionResult["accountMode"];
-          };
-          error?: string;
-        } | null;
-
-        if (!response.ok) {
-          await recordExecutionError(consensus.symbol, Date.now());
-          const result = buildErrorResult({
-            timestamp,
-            symbol: consensus.symbol,
-            decision,
-            size: Number(normalizedSize.toFixed(8)),
-            error:
-              payload?.error ?? `Execution request failed: ${response.status}`,
-            response: {
-              ...executionPlan.response,
-              instrumentRules,
-              normalizedSize,
-              payload,
-            },
-            circuitOpen: await isExecutionCircuitOpen(consensus.symbol),
-            rejectionReasons: mergeRejectionReasons(
-              consensus.rejectionReasons,
-              [
-                {
-                  layer: "execution",
-                  code: "execution_request_failed",
-                  summary: "Execution request failed.",
-                  detail:
-                    payload?.error ??
-                    `Execution request failed: ${response.status}`,
-                  metrics: {
-                    status: response.status,
-                    normalizedSize: Number(normalizedSize.toFixed(8)),
-                  },
-                },
-              ],
-            ),
-          });
-          console.error(
-            `[${timestamp}] [AutoExec] execution error for ${decision} ${consensus.symbol}: ${JSON.stringify(payload)}`,
-          );
-          await finalizeExecutionIntent(executionIntent.id, result, {
-            normalizedSize,
-            response: {
-              ...executionPlan.response,
-              instrumentRules,
-              normalizedSize,
-              payload,
-            },
-          });
-          return finalizeResult(result);
-        }
+        const payload = {
+          data: execution,
+        };
 
         const result: ExecutionResult = {
           status: "success",
@@ -1506,9 +1440,9 @@ export async function autoExecuteConsensus(
           symbol: consensus.symbol,
           decision,
           size: Number(normalizedSize.toFixed(8)),
-          order: payload?.data?.order,
-          simulated: payload?.data?.simulated,
-          accountMode: payload?.data?.accountMode,
+          order: payload.data.order,
+          simulated: payload.data.simulated,
+          accountMode: payload.data.accountMode,
           response: {
             ...executionPlan.response,
             instrumentRules,
@@ -1523,7 +1457,7 @@ export async function autoExecuteConsensus(
           reduceOnly: executionPlan.reduceOnly,
           payload,
         });
-        if (payload?.data?.order) {
+        if (payload.data.order) {
           const entryPrice =
             payload.data.order.filledPrice ??
             payload.data.order.referencePrice ??

@@ -453,6 +453,20 @@ export function AgentDashboard() {
             Autonomy error: {autonomyStatus.data.lastError}
           </div>
         )}
+        {autonomyStatus.data?.lastReason && !autonomyStatus.data?.lastError && (
+          <div className="px-2 py-1 text-[0.5625rem] text-terminal-amber border-t border-border bg-terminal-amber/5">
+            Last autonomy reason: {autonomyStatus.data.lastReason}
+          </div>
+        )}
+        {autonomyStatus.data?.lastRejectedReasons &&
+          autonomyStatus.data.lastRejectedReasons.length > 0 && (
+            <div className="border-t border-border bg-secondary/30 px-2 py-1 text-[0.5rem] font-mono text-terminal-dim">
+              {autonomyStatus.data.lastRejectedReasons
+                .slice(0, 2)
+                .map((reason) => reason.summary)
+                .join(" | ")}
+            </div>
+          )}
       </CardContent>
     </Card>
   );

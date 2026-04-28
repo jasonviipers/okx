@@ -34,12 +34,12 @@
       "id": 1,
       "targets": [
         {
-          "expr": "nodejs_heap_used_bytes",
+          "expr": "app_runtime_heap_used_bytes",
           "legendFormat": "heap used",
           "refId": "A"
         },
         {
-          "expr": "nodejs_rss_bytes",
+          "expr": "app_runtime_rss_bytes",
           "legendFormat": "rss",
           "refId": "B"
         }
@@ -69,17 +69,17 @@
       "id": 2,
       "targets": [
         {
-          "expr": "nodejs_eventloop_lag_seconds",
-          "legendFormat": "mean lag",
+          "expr": "app_runtime_heap_total_bytes",
+          "legendFormat": "heap total",
           "refId": "A"
         },
         {
-          "expr": "nodejs_eventloop_lag_max_seconds",
-          "legendFormat": "max lag",
+          "expr": "app_runtime_external_bytes",
+          "legendFormat": "external",
           "refId": "B"
         }
       ],
-      "title": "Event Loop Lag",
+      "title": "Memory Detail",
       "type": "timeseries"
     },
     {

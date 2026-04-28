@@ -1,14 +1,16 @@
 import { ensureAutonomyBootState } from "@/lib/autonomy/service";
 import {
-  error as telemetryError,
   info,
   registerOpenTelemetry,
+  startRuntimeMetricsCollection,
+  error as telemetryError,
 } from "@/lib/observability/telemetry";
 import { ensurePositionMonitorBootState } from "@/lib/swarm/position-monitor";
 
 export async function registerNodeInstrumentation() {
   try {
     await registerOpenTelemetry();
+    startRuntimeMetricsCollection();
     info("instrumentation", "Node instrumentation bootstrapped");
   } catch (caughtError) {
     telemetryError("instrumentation", "telemetry init failed", {

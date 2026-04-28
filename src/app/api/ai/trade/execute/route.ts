@@ -1,20 +1,18 @@
 import { performance } from "node:perf_hooks";
 import { type NextRequest, NextResponse } from "next/server";
 import { AI_MODE_CONFIGS } from "@/lib/configs/models";
-import {
-  getOkxAccountModeLabel,
-  hasOkxTradingCredentials,
-} from "@/lib/configs/okx";
 import { makeSourceHealth } from "@/lib/observability/source-health";
-import { OkxRequestError } from "@/lib/okx/client";
-import { placeOrder } from "@/lib/okx/orders";
-import { recordTradeExecution } from "@/lib/persistence/history";
-import { tradeExecutionRequestSchema } from "@/lib/schemas/trade";
 import {
   incrementCounter,
   observeHistogram,
   withTelemetrySpan,
 } from "@/lib/observability/telemetry";
+import { OkxRequestError } from "@/lib/okx/client";
+import { tradeExecutionRequestSchema } from "@/lib/schemas/trade";
+import {
+  executeTradeRequest,
+  TradeExecutionServiceError,
+} from "@/lib/trade/execute";
 
 export const dynamic = "force-dynamic";
 
@@ -127,18 +125,14 @@ export async function POST(req: NextRequest) {
           );
         }
 
-        const order = await placeOrder({
+        const execution = await executeTradeRequest({
+          signal,
           symbol,
           marketType,
-          side: signal === "BUY" ? "buy" : "sell",
-          type: price ? "limit" : "market",
           size,
           price,
-          tdMode: executionContext?.tdMode,
-          posSide: executionContext?.posSide,
-          reduceOnly: executionContext?.reduceOnly,
-        });
-        await recordTradeExecution(order, {
+          mode,
+          confirmed,
           decisionSnapshot,
           executionContext,
         });
@@ -151,8 +145,8 @@ export async function POST(req: NextRequest) {
           {
             labels: {
               signal,
-              simulated: !hasOkxTradingCredentials(),
-              accountMode: getOkxAccountModeLabel(),
+              simulated: execution.simulated,
+              accountMode: execution.accountMode,
             },
           },
         );
@@ -161,10 +155,10 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({
           data: {
             success: true,
-            order,
+            order: execution.order,
             executedAt: new Date().toISOString(),
-            simulated: !hasOkxTradingCredentials(),
-            accountMode: getOkxAccountModeLabel(),
+            simulated: execution.simulated,
+            accountMode: execution.accountMode,
           },
           sourceHealth: {
             execution: makeSourceHealth("okx_private"),
@@ -174,9 +168,24 @@ export async function POST(req: NextRequest) {
       } catch (error) {
         console.error("[API] /api/trade/execute error:", error);
         recordRequestOutcome(
-          error instanceof OkxRequestError ? 502 : 500,
+          error instanceof OkxRequestError
+            ? 502
+            : error instanceof TradeExecutionServiceError
+              ? error.status
+              : 500,
           "error",
         );
+
+        if (error instanceof TradeExecutionServiceError) {
+          return NextResponse.json(
+            {
+              success: false,
+              error: error.message,
+              executedAt: new Date().toISOString(),
+            },
+            { status: error.status },
+          );
+        }
 
         if (error instanceof OkxRequestError) {
           return NextResponse.json(

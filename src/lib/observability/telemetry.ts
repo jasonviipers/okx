@@ -2,7 +2,7 @@ import "server-only";
 
 import { randomUUID } from "node:crypto";
 import { context, metrics, SpanStatusCode, trace } from "@opentelemetry/api";
-import { logs, SeverityNumber, type Logger } from "@opentelemetry/api-logs";
+import { type Logger, logs, SeverityNumber } from "@opentelemetry/api-logs";
 import { getNodeAutoInstrumentations } from "@opentelemetry/auto-instrumentations-node";
 import { OTLPLogExporter } from "@opentelemetry/exporter-logs-otlp-grpc";
 import { OTLPMetricExporter } from "@opentelemetry/exporter-metrics-otlp-grpc";
@@ -45,6 +45,7 @@ let sdkStartPromise: Promise<void> | null = null;
 let cachedLogger: Logger | null = null;
 let archiveFlushTimer: ReturnType<typeof setTimeout> | null = null;
 let archiveFlushPromise: Promise<void> | null = null;
+let runtimeMetricsTimer: ReturnType<typeof setInterval> | null = null;
 
 const pendingArchiveLines: string[] = [];
 
@@ -365,6 +366,54 @@ export async function registerOpenTelemetry() {
 
   sdkStartPromise = Promise.resolve(sdk.start()).then(() => undefined);
   return sdkStartPromise;
+}
+
+function recordRuntimeMetrics() {
+  const memoryUsage = process.memoryUsage();
+
+  setGauge(
+    "app_runtime_heap_used_bytes",
+    "Node.js heap used in bytes.",
+    memoryUsage.heapUsed,
+  );
+  setGauge(
+    "app_runtime_heap_total_bytes",
+    "Node.js heap total in bytes.",
+    memoryUsage.heapTotal,
+  );
+  setGauge(
+    "app_runtime_rss_bytes",
+    "Node.js RSS memory in bytes.",
+    memoryUsage.rss,
+  );
+  setGauge(
+    "app_runtime_external_bytes",
+    "Node.js external memory in bytes.",
+    memoryUsage.external,
+  );
+  setGauge(
+    "app_runtime_array_buffers_bytes",
+    "Node.js array buffer memory in bytes.",
+    memoryUsage.arrayBuffers,
+  );
+  setGauge(
+    "app_runtime_uptime_seconds",
+    "Node.js process uptime in seconds.",
+    process.uptime(),
+  );
+}
+
+export function startRuntimeMetricsCollection(intervalMs = 15_000) {
+  recordRuntimeMetrics();
+
+  if (runtimeMetricsTimer) {
+    return;
+  }
+
+  runtimeMetricsTimer = setInterval(() => {
+    recordRuntimeMetrics();
+  }, intervalMs);
+  runtimeMetricsTimer.unref?.();
 }
 
 export function debug(

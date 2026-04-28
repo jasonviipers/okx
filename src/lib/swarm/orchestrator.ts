@@ -130,9 +130,21 @@ export async function runSwarm(
       }
 
       const memorySummary = await getMemorySummary(ctx);
+      const { votes, errors } = await collectDiagnosticVotes(ctx, {
+        memorySummary,
+        tradingMode,
+      });
+      if (errors.length > 0) {
+        warn("swarm.orchestrator", "Diagnostic vote collection had failures", {
+          symbol: ctx.symbol,
+          timeframe: ctx.timeframe,
+          tradingMode,
+          errors,
+        });
+      }
       const { consensus } = await buildSwarmDecision(
         ctx,
-        [],
+        votes,
         memorySummary,
         options?.budgetRemainingUsd,
         tradingMode,
@@ -177,6 +189,7 @@ export async function runSwarm(
         blocked: consensus.blocked,
         executionEligible: consensus.executionEligible,
         rejectionCount: consensus.rejectionReasons.length,
+        voteCount: votes.length,
       });
       if (consensus.blocked || !consensus.executionEligible) {
         warn("swarm.orchestrator", "Swarm result is not executable", {

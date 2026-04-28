@@ -9,6 +9,15 @@ import {
   isLiveQualitySnapshot,
 } from "@/lib/market-data/service";
 import { clamp01 } from "@/lib/math-utils";
+import {
+  incrementCounter,
+  info,
+  observeHistogram,
+  setGauge,
+  error as telemetryError,
+  warn,
+  withTelemetrySpan,
+} from "@/lib/observability/telemetry";
 import { getAccountOverview } from "@/lib/okx/account";
 import { OkxRequestError } from "@/lib/okx/client";
 import {
@@ -16,11 +25,11 @@ import {
   getConfiguredAutonomousQuoteCurrencies,
   getQuoteCurrenciesFromBalances,
 } from "@/lib/okx/instruments";
-import { getPositions } from "@/lib/okx/orders";
 import {
   getConfiguredAutonomousMarketTypes,
   resolveMarketType,
 } from "@/lib/okx/market-types";
+import { getPositions } from "@/lib/okx/orders";
 import type {
   AutonomySelectionMode,
   StoredAutonomyState,
@@ -36,15 +45,6 @@ import { parseNumber } from "@/lib/runtime-utils";
 import { autoExecuteConsensus } from "@/lib/swarm/autoExecute";
 import { runSwarm } from "@/lib/swarm/orchestrator";
 import { SWARM_THRESHOLDS } from "@/lib/swarm/thresholds";
-import {
-  incrementCounter,
-  info,
-  observeHistogram,
-  setGauge,
-  error as telemetryError,
-  warn,
-  withTelemetrySpan,
-} from "@/lib/observability/telemetry";
 import { approximateAvailableUsd } from "@/lib/trade-utils";
 import type {
   AutonomyCandidateScore,
@@ -307,16 +307,6 @@ async function getTodayExecutedNotionalUsd() {
 
     return sum + (entry.order.notionalUsd ?? 0);
   }, 0);
-}
-
-function resolveInternalBaseUrl(): string {
-  const configured = env.NEXT_PUBLIC_APP_URL ?? env.APP_URL;
-  if (configured) {
-    return configured.replace(/\/$/, "");
-  }
-
-  // Fallback for local development
-  return "http://localhost:3000";
 }
 
 function toAutonomyStatus(
@@ -1785,7 +1775,6 @@ export async function dispatchAutonomyWorker(options?: {
       );
 
       const startedAt = new Date().toISOString();
-      const baseUrl = resolveInternalBaseUrl();
       let execution: ExecutionResult | undefined;
 
       try {
@@ -1937,10 +1926,7 @@ export async function dispatchAutonomyWorker(options?: {
           };
         } else {
           await heartbeatAutonomyLease(leaseId);
-          execution = await autoExecuteConsensus(
-            best.result.consensus,
-            baseUrl,
-          );
+          execution = await autoExecuteConsensus(best.result.consensus);
         }
         await heartbeatAutonomyLease(leaseId);
 
