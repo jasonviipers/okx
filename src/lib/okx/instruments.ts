@@ -2,6 +2,7 @@ import "server-only";
 
 import { env } from "@/env";
 import { OKX_ENDPOINTS } from "@/lib/configs/okx";
+import { okxPublicGet } from "@/lib/okx/client";
 import {
   fromOkxInstType,
   getConfiguredAutonomousMarketTypes,
@@ -9,7 +10,6 @@ import {
   resolveMarketType,
   toOkxInstType,
 } from "@/lib/okx/market-types";
-import { okxPublicGet } from "@/lib/okx/client";
 import { getCachedJson, setCachedJson } from "@/lib/redis/swarm-cache";
 import { parseNumber } from "@/lib/runtime-utils";
 import type { AccountAssetBalance, MarketType } from "@/types/trade";
@@ -275,12 +275,14 @@ function getHeldBaseAssetsFromBalances(
   quoteCurrencies: string[],
 ): string[] {
   const quotes = new Set(quoteCurrencies.map((quote) => quote.toUpperCase()));
+  const minUsdValue = parseNumber(env.MIN_TRADE_NOTIONAL, 5);
 
   return uniqueUppercase(
     balances
       .filter(
         (balance) =>
           balance.availableBalance > 0 &&
+          balance.usdValue >= minUsdValue &&
           !quotes.has(balance.currency.trim().toUpperCase()),
       )
       .sort((left, right) => {
@@ -318,14 +320,6 @@ function estimateQuoteVolume(row: OkxTickerRow): number {
   const last = parseNumber(row.last, 0);
   const vol24h = parseNumber(row.vol24h, 0);
   return last * vol24h;
-}
-
-function getPreferredQuoteCurrency(row: OkxInstrumentRow): string {
-  return (
-    row.quoteCcy?.trim().toUpperCase() ??
-    row.settleCcy?.trim().toUpperCase() ??
-    extractQuoteAsset(row.instId)
-  );
 }
 
 function matchesConfiguredQuote(
@@ -435,9 +429,9 @@ export async function getAutonomousSymbolUniverse(options?: {
     limit,
   );
   const baseAssets = uniqueUppercase([
-    ...heldBaseAssets,
-    ...dynamicBaseAssets,
     ...manualBaseAssets,
+    ...dynamicBaseAssets,
+    ...heldBaseAssets,
   ]);
   const tickerVolumeMap = new Map(
     tickers.map((row) => [
