@@ -167,7 +167,7 @@ services:
       test:
         [
           "CMD-SHELL",
-          "wget -qO- http://localhost:3000/api/ai/system/status >/dev/null 2>&1 || exit 1",
+          "wget -qO- http://localhost:3000/api/health >/dev/null 2>&1 || exit 1",
         ]
       interval: 15s
       timeout: 5s
