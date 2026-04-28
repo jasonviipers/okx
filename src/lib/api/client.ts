@@ -134,6 +134,10 @@ export function getAutonomyStatus() {
 export function controlAutonomy(input: {
   action: "start" | "stop";
   symbol?: string;
+  selectionMode?: "fixed" | "auto";
+  candidateSymbols?: string[];
+  timeframeSelectionMode?: "fixed" | "auto";
+  candidateTimeframes?: string[];
   timeframe?: string;
   intervalMs?: number;
 }) {

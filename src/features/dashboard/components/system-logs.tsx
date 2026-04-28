@@ -254,8 +254,11 @@ export function ConnectionStatus() {
                 {systemStatus.data.autonomy.running ? "RUNNING" : "IDLE"}
               </span>
               <span className="text-terminal-dim">
-                {systemStatus.data.autonomy.symbol} /{" "}
-                {systemStatus.data.autonomy.timeframe}
+                {systemStatus.data.autonomy.lastSelectedCandidate?.symbol ??
+                  systemStatus.data.autonomy.symbol}{" "}
+                /{" "}
+                {systemStatus.data.autonomy.lastSelectedCandidate?.timeframe ??
+                  systemStatus.data.autonomy.timeframe}
               </span>
               {systemStatus.data.autonomy.iterationCount > 0 && (
                 <span className="text-terminal-dim">

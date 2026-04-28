@@ -32,6 +32,7 @@ import {
 import { getPositions } from "@/lib/okx/orders";
 import type {
   AutonomySelectionMode,
+  AutonomyTimeframeSelectionMode,
   StoredAutonomyState,
   StoredAutonomySuppressedSymbol,
 } from "@/lib/persistence/autonomy-state";
@@ -83,6 +84,16 @@ function autoStartEnabledByEnv(): boolean {
 
 function toAutonomySymbolKey(symbol: string) {
   return symbol.trim().toUpperCase();
+}
+
+function getAutonomyCandidateKey(symbol: string, timeframe: Timeframe) {
+  return `${toAutonomySymbolKey(symbol)}::${timeframe}`;
+}
+
+function uniqueAutonomyTimeframes(
+  timeframes: Iterable<Timeframe>,
+): Timeframe[] {
+  return [...new Set(timeframes)];
 }
 
 function getDegradedSnapshotSuppressionThreshold(): number {
@@ -165,8 +176,8 @@ function normalizeDegradedSnapshotCounts(
   });
 
   return Object.fromEntries(
-    entries.map(([symbol, value]) => [
-      toAutonomySymbolKey(symbol),
+    entries.map(([candidateKey, value]) => [
+      candidateKey.trim(),
       Math.trunc(value),
     ]),
   );
@@ -177,8 +188,8 @@ function normalizeSuppressedSymbols(
 ): Record<string, StoredAutonomySuppressedSymbol> {
   const now = Date.now();
   const entries = Object.entries(suppressed ?? {}).filter((entry) => {
-    const [symbol, value] = entry;
-    if (!symbol || !value?.until) {
+    const [candidateKey, value] = entry;
+    if (!candidateKey || !value?.until || !value?.symbol || !value?.timeframe) {
       return false;
     }
 
@@ -187,9 +198,11 @@ function normalizeSuppressedSymbols(
   });
 
   return Object.fromEntries(
-    entries.map(([symbol, value]) => [
-      toAutonomySymbolKey(symbol),
+    entries.map(([, value]) => [
+      getAutonomyCandidateKey(value.symbol, value.timeframe),
       {
+        symbol: toAutonomySymbolKey(value.symbol),
+        timeframe: value.timeframe,
         until: value.until,
         reason: value.reason,
         consecutiveDegradedSnapshots: Math.max(
@@ -228,6 +241,8 @@ function areSuppressedRecordsEqual(
     const other = right?.[key];
     return (
       other?.until === value.until &&
+      other?.symbol === value.symbol &&
+      other?.timeframe === value.timeframe &&
       other?.reason === value.reason &&
       other?.consecutiveDegradedSnapshots === value.consecutiveDegradedSnapshots
     );
@@ -267,8 +282,9 @@ function toSuppressedSymbols(
   state: StoredAutonomyState,
 ): AutonomySuppressedSymbol[] {
   return Object.entries(state.suppressedSymbols ?? {})
-    .map(([symbol, value]) => ({
-      symbol,
+    .map(([, value]) => ({
+      symbol: value.symbol,
+      timeframe: value.timeframe,
       until: value.until,
       reason: value.reason,
       consecutiveDegradedSnapshots: value.consecutiveDegradedSnapshots,
@@ -279,12 +295,14 @@ function toSuppressedSymbols(
     );
 }
 
-function isSymbolSuppressed(
+function isCandidateSuppressed(
   state: StoredAutonomyState,
   symbol: string,
+  timeframe: Timeframe,
 ): boolean {
-  const symbolKey = toAutonomySymbolKey(symbol);
-  const suppressedUntil = state.suppressedSymbols?.[symbolKey]?.until;
+  const suppressedUntil =
+    state.suppressedSymbols?.[getAutonomyCandidateKey(symbol, timeframe)]
+      ?.until;
   if (!suppressedUntil) {
     return false;
   }
@@ -318,19 +336,25 @@ function toAutonomyStatus(
     state.selectionMode === "auto"
       ? "symbol selection is automatic."
       : "symbol is fixed.";
+  const timeframeModeLabel =
+    state.timeframeSelectionMode === "auto"
+      ? "timeframe selection is adaptive."
+      : "timeframe is fixed.";
 
   return {
     enabled: true,
     configured: autoStartEnabledByEnv(),
     running: state.running,
     detail: state.running
-      ? `Autonomous worker is armed and awaiting schedule triggers; ${selectionModeLabel}`
+      ? `Autonomous worker is armed and awaiting schedule triggers; ${selectionModeLabel} ${timeframeModeLabel}`
       : autoStartEnabledByEnv()
         ? "Autonomy is configured for durable startup but currently stopped."
         : "Autonomy is available and requires an explicit start.",
     symbol: state.symbol,
     selectionMode: state.selectionMode,
     candidateSymbols: state.candidateSymbols,
+    timeframeSelectionMode: state.timeframeSelectionMode,
+    candidateTimeframes: state.candidateTimeframes,
     timeframe: state.timeframe,
     intervalMs: state.intervalMs,
     cooldownMs: state.cooldownMs,
@@ -465,6 +489,8 @@ export async function startAutonomyLoop(config?: {
   symbol?: string;
   selectionMode?: AutonomySelectionMode;
   candidateSymbols?: string[];
+  timeframeSelectionMode?: AutonomyTimeframeSelectionMode;
+  candidateTimeframes?: Timeframe[];
   timeframe?: Timeframe;
   intervalMs?: number;
 }) {
@@ -479,6 +505,16 @@ export async function startAutonomyLoop(config?: {
         ? config.candidateSymbols
         : state.candidateSymbols,
     symbol: config?.symbol || state.symbol,
+    timeframeSelectionMode:
+      config?.timeframeSelectionMode ??
+      (config?.timeframe ? "fixed" : state.timeframeSelectionMode),
+    candidateTimeframes:
+      config?.candidateTimeframes && config.candidateTimeframes.length > 0
+        ? uniqueAutonomyTimeframes([
+            ...(config.timeframe ? [config.timeframe] : []),
+            ...config.candidateTimeframes,
+          ])
+        : state.candidateTimeframes,
     timeframe: config?.timeframe || state.timeframe,
     intervalMs: config?.intervalMs || state.intervalMs,
     nextRunAt: new Date().toISOString(),
@@ -492,6 +528,7 @@ export async function startAutonomyLoop(config?: {
   info("autonomy", "Autonomy loop started", {
     symbol: config?.symbol,
     timeframe: config?.timeframe,
+    timeframeSelectionMode: config?.timeframeSelectionMode,
     selectionMode: config?.selectionMode,
   });
 
@@ -532,6 +569,7 @@ type SymbolExecutionContext = {
 
 type AutonomySymbolEvaluation = {
   symbol: string;
+  timeframe: Timeframe;
   snapshot: MarketSnapshot;
   result: SwarmRunResult;
   score: number;
@@ -800,6 +838,7 @@ function toAutonomyCandidateScore(
 ): AutonomyCandidateScore {
   const {
     symbol,
+    timeframe,
     snapshot,
     result,
     score,
@@ -811,6 +850,7 @@ function toAutonomyCandidateScore(
 
   return {
     symbol,
+    timeframe,
     marketType: consensus.marketType ?? symbolExecutionContext.marketType,
     score,
     tradeable: snapshot.status.tradeable,
@@ -900,7 +940,7 @@ async function resolveAutonomySymbols(
   accountOverview: AccountOverview,
 ): Promise<string[]> {
   if (state.selectionMode === "fixed") {
-    return isSymbolSuppressed(state, state.symbol) ? [] : [state.symbol];
+    return [state.symbol];
   }
   const balanceQuotes = getQuoteCurrenciesFromBalances(
     accountOverview.tradingBalances,
@@ -916,7 +956,18 @@ async function resolveAutonomySymbols(
     marketTypes: getConfiguredAutonomousMarketTypes(),
   });
 
-  return symbols.filter((symbol) => !isSymbolSuppressed(state, symbol));
+  return symbols;
+}
+
+function resolveAutonomyTimeframes(state: StoredAutonomyState): Timeframe[] {
+  if (state.timeframeSelectionMode === "fixed") {
+    return [state.timeframe];
+  }
+
+  return uniqueAutonomyTimeframes([
+    state.timeframe,
+    ...((state.candidateTimeframes ?? []) as Timeframe[]),
+  ]);
 }
 
 function buildMarketDataRejectedRun(
@@ -1076,6 +1127,7 @@ async function evaluateAutonomyCandidate(
 
         return {
           symbol,
+          timeframe,
           snapshot,
           result,
           score: 0,
@@ -1091,6 +1143,7 @@ async function evaluateAutonomyCandidate(
       });
       const { score, portfolioFitScore } = scoreAutonomyCandidate({
         symbol,
+        timeframe,
         snapshot,
         result,
         portfolioState,
@@ -1116,6 +1169,7 @@ async function evaluateAutonomyCandidate(
 
       return {
         symbol,
+        timeframe,
         snapshot,
         result,
         score,
@@ -1307,8 +1361,10 @@ function applyPortfolioConstraints(
 function getSymbolThrottleUntil(
   state: StoredAutonomyState,
   symbol: string,
+  timeframe: Timeframe,
 ): number | null {
-  const iso = state.symbolThrottleUntil?.[symbol];
+  const iso =
+    state.symbolThrottleUntil?.[getAutonomyCandidateKey(symbol, timeframe)];
   if (!iso) {
     return null;
   }
@@ -1337,21 +1393,23 @@ function createMarketHealthState(state: StoredAutonomyState) {
 function recordHealthySymbolSnapshot(
   marketHealthState: ReturnType<typeof createMarketHealthState>,
   symbol: string,
+  timeframe: Timeframe,
 ) {
-  const symbolKey = toAutonomySymbolKey(symbol);
-  delete marketHealthState.degradedSnapshotCounts[symbolKey];
-  delete marketHealthState.suppressedSymbols[symbolKey];
+  const candidateKey = getAutonomyCandidateKey(symbol, timeframe);
+  delete marketHealthState.degradedSnapshotCounts[candidateKey];
+  delete marketHealthState.suppressedSymbols[candidateKey];
 }
 
 function recordDegradedSymbolSnapshot(
   marketHealthState: ReturnType<typeof createMarketHealthState>,
   symbol: string,
+  timeframe: Timeframe,
   reason: string,
 ) {
-  const symbolKey = toAutonomySymbolKey(symbol);
+  const candidateKey = getAutonomyCandidateKey(symbol, timeframe);
   const nextCount =
-    (marketHealthState.degradedSnapshotCounts[symbolKey] ?? 0) + 1;
-  marketHealthState.degradedSnapshotCounts[symbolKey] = nextCount;
+    (marketHealthState.degradedSnapshotCounts[candidateKey] ?? 0) + 1;
+  marketHealthState.degradedSnapshotCounts[candidateKey] = nextCount;
 
   if (nextCount < getDegradedSnapshotSuppressionThreshold()) {
     return;
@@ -1360,8 +1418,10 @@ function recordDegradedSymbolSnapshot(
   const until = new Date(
     Date.now() + getDegradedSnapshotSuppressionWindowMs(),
   ).toISOString();
-  const previousSuppression = marketHealthState.suppressedSymbols[symbolKey];
-  marketHealthState.suppressedSymbols[symbolKey] = {
+  const previousSuppression = marketHealthState.suppressedSymbols[candidateKey];
+  marketHealthState.suppressedSymbols[candidateKey] = {
+    symbol: toAutonomySymbolKey(symbol),
+    timeframe,
     until,
     reason,
     consecutiveDegradedSnapshots: nextCount,
@@ -1372,6 +1432,7 @@ function recordDegradedSymbolSnapshot(
       "Suppressing symbol after consecutive degraded snapshots",
       {
         symbol,
+        timeframe,
         until,
         consecutiveDegradedSnapshots: nextCount,
         reason,
@@ -1401,8 +1462,8 @@ function summarizeAutonomyCandidateBlockers(
         .map((reason) => reason.summary)
         .join(" | ");
       return rejectionSummary
-        ? `${candidate.symbol} (${candidate.decision}, score=${candidate.score.toFixed(3)}): ${rejectionSummary}`
-        : `${candidate.symbol} (${candidate.decision}, score=${candidate.score.toFixed(3)})`;
+        ? `${candidate.symbol} ${candidate.timeframe} (${candidate.decision}, score=${candidate.score.toFixed(3)}): ${rejectionSummary}`
+        : `${candidate.symbol} ${candidate.timeframe} (${candidate.decision}, score=${candidate.score.toFixed(3)})`;
     })
     .join("; ");
 
@@ -1438,18 +1499,31 @@ async function selectAutonomyRun(
       attributes: {
         timeframe: state.timeframe,
         selectionMode: state.selectionMode,
+        timeframeSelectionMode: state.timeframeSelectionMode,
       },
     },
     async (span) => {
       const accountOverview = await getAccountOverview();
       const symbols = await resolveAutonomySymbols(state, accountOverview);
+      const timeframes = resolveAutonomyTimeframes(state);
       const marketHealthState = createMarketHealthState(state);
+      const candidates = symbols.flatMap((symbol) =>
+        timeframes.map((timeframe) => ({ symbol, timeframe })),
+      );
+      const availableCandidates = candidates.filter(
+        (candidate) =>
+          !isCandidateSuppressed(state, candidate.symbol, candidate.timeframe),
+      );
 
-      if (symbols.length === 0) {
+      if (symbols.length === 0 || availableCandidates.length === 0) {
         const reason =
-          state.selectionMode === "auto"
-            ? "All automatically selected symbols are temporarily suppressed due to degraded market data."
-            : "Autonomy has no symbol available to evaluate.";
+          symbols.length === 0
+            ? state.selectionMode === "auto"
+              ? "All automatically selected symbols are temporarily unavailable."
+              : "Autonomy has no symbol available to evaluate."
+            : state.timeframeSelectionMode === "auto"
+              ? "All symbol and timeframe candidates are temporarily suppressed due to degraded market data."
+              : "The configured symbol and timeframe are temporarily suppressed due to degraded market data.";
         span.addAttributes({
           candidateCount: 0,
           errors: 0,
@@ -1458,6 +1532,7 @@ async function selectAutonomyRun(
         warn("autonomy", "Autonomy skipped candidate selection", {
           timeframe: state.timeframe,
           selectionMode: state.selectionMode,
+          timeframeSelectionMode: state.timeframeSelectionMode,
           reason,
           suppressedSymbols: toSuppressedSymbols(state),
         });
@@ -1483,20 +1558,20 @@ async function selectAutonomyRun(
       const evaluations: AutonomySymbolEvaluation[] = [];
       const errors: string[] = [];
       const settled = await Promise.allSettled(
-        symbols.map((symbol) =>
+        availableCandidates.map((candidate) =>
           evaluateAutonomyCandidate(
-            symbol,
-            state.timeframe,
+            candidate.symbol,
+            candidate.timeframe,
             budgetRemainingUsd,
             portfolioState,
-            livePositionMap.get(symbol),
+            livePositionMap.get(candidate.symbol),
           ),
         ),
       );
 
       for (const [index, settledResult] of settled.entries()) {
-        const symbol = symbols[index];
-        if (!symbol) {
+        const candidate = availableCandidates[index];
+        if (!candidate) {
           continue;
         }
 
@@ -1507,21 +1582,30 @@ async function selectAutonomyRun(
             (!liveExecutionRequiresRealtime() ||
               isLiveQualitySnapshot(evaluation.snapshot))
           ) {
-            recordHealthySymbolSnapshot(marketHealthState, symbol);
+            recordHealthySymbolSnapshot(
+              marketHealthState,
+              candidate.symbol,
+              candidate.timeframe,
+            );
           } else {
             recordDegradedSymbolSnapshot(
               marketHealthState,
-              symbol,
+              candidate.symbol,
+              candidate.timeframe,
               getDegradedSnapshotReason(evaluation),
             );
           }
-          const throttleUntil = getSymbolThrottleUntil(state, symbol);
+          const throttleUntil = getSymbolThrottleUntil(
+            state,
+            candidate.symbol,
+            candidate.timeframe,
+          );
           if (throttleUntil && throttleUntil > Date.now()) {
             evaluation = appendAutonomyRejection(evaluation, {
               code: "symbol_throttle_active",
-              summary: "Symbol-specific decision throttle is active.",
+              summary: "Symbol and timeframe decision throttle is active.",
               detail:
-                "This symbol was recently selected and remains inside its throttle window.",
+                "This symbol and timeframe pair was recently selected and remains inside its throttle window.",
               metrics: {
                 throttleUntil: new Date(throttleUntil).toISOString(),
               },
@@ -1531,7 +1615,7 @@ async function selectAutonomyRun(
           if (evaluation.result.consensus.rejectionReasons.length > 0) {
             recordAutonomyRejectionReasons(
               evaluation.symbol,
-              state.timeframe,
+              evaluation.timeframe,
               evaluation.result.consensus.rejectionReasons,
             );
           }
@@ -1543,12 +1627,13 @@ async function selectAutonomyRun(
         if (isMarketDataEvaluationError(settledResult.reason)) {
           recordDegradedSymbolSnapshot(
             marketHealthState,
-            symbol,
+            candidate.symbol,
+            candidate.timeframe,
             settledResult.reason.message,
           );
         }
         errors.push(
-          `${symbol}: ${
+          `${candidate.symbol} ${candidate.timeframe}: ${
             settledResult.reason instanceof Error
               ? settledResult.reason.message
               : String(settledResult.reason)
@@ -1559,8 +1644,8 @@ async function selectAutonomyRun(
       if (evaluations.length === 0) {
         const reason =
           errors.length > 0
-            ? `Autonomy could not evaluate any symbols. ${errors.join("; ")}`
-            : "Autonomy could not evaluate any symbols.";
+            ? `Autonomy could not evaluate any symbol and timeframe candidates. ${errors.join("; ")}`
+            : "Autonomy could not evaluate any symbol and timeframe candidates.";
         span.addAttributes({
           candidateCount: 0,
           errors: errors.length,
@@ -1809,6 +1894,8 @@ export async function dispatchAutonomyWorker(options?: {
           ? (result.consensus.decision ?? result.consensus.signal)
           : "HOLD";
         const selectedSymbol = result?.consensus.symbol ?? leased.symbol;
+        const selectedTimeframe =
+          result?.consensus.timeframe ?? leased.timeframe;
         const positionAwareCooldownActive =
           best !== null &&
           leased.lastTradeAt !== undefined &&
@@ -1820,6 +1907,7 @@ export async function dispatchAutonomyWorker(options?: {
         span.addAttributes({
           budgetRemainingUsd,
           selectedSymbol,
+          selectedTimeframe,
           selectedDecision: decision,
           candidateCount: candidateScores.length,
         });
@@ -1836,8 +1924,9 @@ export async function dispatchAutonomyWorker(options?: {
               "Autonomy did not find a candidate to execute.",
             response: {
               suppressedSymbols: Object.entries(suppressedSymbols).map(
-                ([symbol, value]) => ({
-                  symbol,
+                ([, value]) => ({
+                  symbol: value.symbol,
+                  timeframe: value.timeframe,
                   until: value.until,
                   consecutiveDegradedSnapshots:
                     value.consecutiveDegradedSnapshots,
@@ -1936,14 +2025,18 @@ export async function dispatchAutonomyWorker(options?: {
             result && selectedSymbol
               ? {
                   ...(current.symbolThrottleUntil ?? {}),
-                  [selectedSymbol]:
+                  [getAutonomyCandidateKey(selectedSymbol, selectedTimeframe)]:
                     result.consensus.symbolThrottleMs &&
                     result.consensus.symbolThrottleMs > 0
                       ? new Date(
                           Date.now() + result.consensus.symbolThrottleMs,
                         ).toISOString()
-                      : (current.symbolThrottleUntil?.[selectedSymbol] ??
-                        new Date().toISOString()),
+                      : (current.symbolThrottleUntil?.[
+                          getAutonomyCandidateKey(
+                            selectedSymbol,
+                            selectedTimeframe,
+                          )
+                        ] ?? new Date().toISOString()),
                 }
               : current.symbolThrottleUntil,
           degradedSnapshotCounts,
@@ -1952,6 +2045,7 @@ export async function dispatchAutonomyWorker(options?: {
           leaseId: undefined,
           leaseAcquiredAt: undefined,
           symbol: result ? selectedSymbol : current.symbol,
+          timeframe: result ? selectedTimeframe : current.timeframe,
           candidateSymbols:
             leased.selectionMode === "auto"
               ? symbols

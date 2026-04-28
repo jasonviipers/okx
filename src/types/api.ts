@@ -49,6 +49,7 @@ export interface MarketDataStatus {
 
 export interface AutonomyCandidateScore {
   symbol: string;
+  timeframe: string;
   marketType?: MarketType;
   score: number;
   tradeable: boolean;
@@ -73,6 +74,7 @@ export interface AutonomyCandidateScore {
 
 export interface AutonomySuppressedSymbol {
   symbol: string;
+  timeframe: string;
   until: string;
   reason: string;
   consecutiveDegradedSnapshots: number;
@@ -86,6 +88,8 @@ export interface AutonomyStatus {
   symbol: string;
   selectionMode?: "fixed" | "auto";
   candidateSymbols?: string[];
+  timeframeSelectionMode?: "fixed" | "auto";
+  candidateTimeframes?: string[];
   timeframe: string;
   intervalMs: number;
   cooldownMs: number;

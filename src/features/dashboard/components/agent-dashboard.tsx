@@ -145,11 +145,11 @@ function VoteBadge({ vote }: { vote: AgentVote }) {
 
 export function AgentDashboard() {
   const autonomyStatus = useAutonomyStatus();
+  const selectedCandidate = autonomyStatus.data?.lastSelectedCandidate;
   const swarmSymbol =
-    autonomyStatus.data?.lastSelectedCandidate?.symbol ??
-    autonomyStatus.data?.symbol ??
-    "BTC-USDT";
-  const swarmTimeframe = autonomyStatus.data?.timeframe ?? "1H";
+    selectedCandidate?.symbol ?? autonomyStatus.data?.symbol ?? "BTC-USDT";
+  const swarmTimeframe =
+    selectedCandidate?.timeframe ?? autonomyStatus.data?.timeframe ?? "1H";
   const swarmStream = useSwarmStream(swarmSymbol, swarmTimeframe);
   const swarmHistory = useSwarmHistory(25);
   const [activeTab, setActiveTab] = useState<"feed" | "status" | "decisions">(

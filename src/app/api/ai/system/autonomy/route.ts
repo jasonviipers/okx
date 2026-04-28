@@ -7,7 +7,10 @@ import {
   startAutonomyLoop,
   stopAutonomyLoop,
 } from "@/lib/autonomy/service";
-import type { AutonomySelectionMode } from "@/lib/persistence/autonomy-state";
+import type {
+  AutonomySelectionMode,
+  AutonomyTimeframeSelectionMode,
+} from "@/lib/persistence/autonomy-state";
 import type { Timeframe } from "@/types/market";
 
 export const dynamic = "force-dynamic";
@@ -32,6 +35,8 @@ export async function POST(req: NextRequest) {
     symbol?: string;
     selectionMode?: AutonomySelectionMode;
     candidateSymbols?: string[];
+    timeframeSelectionMode?: AutonomyTimeframeSelectionMode;
+    candidateTimeframes?: Timeframe[];
     timeframe?: Timeframe;
     intervalMs?: number;
   };
@@ -43,6 +48,8 @@ export async function POST(req: NextRequest) {
       symbol: body.symbol,
       selectionMode: body.selectionMode,
       candidateSymbols: body.candidateSymbols,
+      timeframeSelectionMode: body.timeframeSelectionMode,
+      candidateTimeframes: body.candidateTimeframes,
       timeframe: body.timeframe,
       intervalMs: body.intervalMs,
     });
