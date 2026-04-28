@@ -16,8 +16,10 @@ processors:
     timeout: 5s
 
 exporters:
-  prometheusremotewrite:
-    endpoint: http://prometheus:9090/api/v1/write
+  prometheus:
+    endpoint: 0.0.0.0:9464
+    resource_to_telemetry_conversion:
+      enabled: true
   loki:
     endpoint: http://loki:3100/loki/api/v1/push
   otlp/jaeger:
@@ -34,7 +36,7 @@ service:
     metrics:
       receivers: [otlp]
       processors: [resource, batch]
-      exporters: [prometheusremotewrite]
+      exporters: [prometheus]
     logs:
       receivers: [otlp]
       processors: [resource, batch]
