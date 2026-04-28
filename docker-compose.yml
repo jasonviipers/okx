@@ -163,6 +163,16 @@ services:
       NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL:-http://localhost:8080}
     expose:
       - "3000"
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "wget -qO- http://localhost:3000/api/ai/system/status >/dev/null 2>&1 || exit 1",
+        ]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 45s
     networks:
       - app-network
     restart: unless-stopped
@@ -171,7 +181,7 @@ services:
     image: nginx:alpine
     depends_on:
       app:
-        condition: service_started
+        condition: service_healthy
       grafana:
         condition: service_started
       jaeger:
@@ -191,7 +201,7 @@ services:
       dockerfile: Dockerfile.cron
     depends_on:
       app:
-        condition: service_started
+        condition: service_healthy
       redis:
         condition: service_healthy
     environment:
