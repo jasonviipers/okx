@@ -30,14 +30,6 @@ export function OrdersAndHistory() {
   const intentsBusy = executionIntents.loading || executionIntents.refreshing;
   const priceHeader = activeTab === "attempts" ? "Edge" : "Price";
   const infoHeader = activeTab === "attempts" ? "Reason" : "Info";
-  const showAggregateEmptyState =
-    !tradeHistory.error &&
-    !executionIntents.error &&
-    !historyBusy &&
-    !intentsBusy &&
-    filledFills.length === 0 &&
-    fills.length === 0 &&
-    intents.length === 0;
 
   return (
     <Card size="sm" className="h-full flex flex-col overflow-hidden">
@@ -71,13 +63,6 @@ export function OrdersAndHistory() {
         </CardTitle>
       </CardHeader>
       <CardContent className="flex-1 overflow-auto p-0">
-        {showAggregateEmptyState && (
-          <div className="border-b border-border bg-card px-2 py-2 text-[0.625rem] text-terminal-dim">
-            <div className="text-center">No filled orders</div>
-            <div className="text-center">No trade history</div>
-            <div className="text-center">No execution attempts yet</div>
-          </div>
-        )}
         <div className="grid grid-cols-7 text-[0.5rem] uppercase tracking-wider text-terminal-dim px-2 py-0.5 border-b border-border bg-secondary sticky top-0">
           <span>Time</span>
           <span>Symbol</span>
