@@ -45,6 +45,14 @@ type DiagnosticOverlay = {
   vetoBlockReason?: RejectionReason;
 };
 
+type ExecutionThresholds = {
+  minDirectionalEdge: number;
+  minConfidence: number;
+  minMarketQuality: number;
+  minNetEdgeBps: number;
+  microAccountEdgeRelaxed: boolean;
+};
+
 function clampSigned(value: number): number {
   return clamp(value, -1, 1);
 }
@@ -473,16 +481,14 @@ function buildDiagnosticOverlay(
   };
 }
 
-function buildRejectionReasons(input: {
+function getExecutionThresholds(input: {
   features: DecisionFeatureVector;
   directionalSignal: TradeSignal;
-  directionalEdgeAbs: number;
-  confidence: number;
   marketQualityScore: number;
   expectedNetEdgeBps: number;
-  riskFlags: string[];
+  rewardRiskRatio: number;
   tradingMode: TradingMode;
-}): RejectionReason[] {
+}): ExecutionThresholds {
   const minDirectionalEdge = parseNumber(
     env.MIN_DIRECTIONAL_EDGE_SCORE,
     SWARM_THRESHOLDS.DEFAULT_MIN_DIRECTIONAL_EDGE,
@@ -498,10 +504,44 @@ function buildRejectionReasons(input: {
     env.MIN_MARKET_QUALITY_SCORE,
     SWARM_THRESHOLDS.DEFAULT_MIN_MARKET_QUALITY,
   );
-  const minNetEdgeBps = parseNumber(
+  const configuredMinNetEdgeBps = parseNumber(
     env.MIN_NET_EDGE_BPS,
     SWARM_THRESHOLDS.DEFAULT_MIN_NET_EDGE_BPS,
   );
+  const microAccountEdgeRelaxed =
+    input.directionalSignal === "BUY" &&
+    input.features.marketType === "spot" &&
+    input.features.budgetRemainingUsd > 0 &&
+    input.features.budgetRemainingUsd <= 50 &&
+    input.features.maxExecutableBuyUsd >=
+      input.features.minimumTradeNotionalUsd &&
+    input.marketQualityScore >= 0.94 &&
+    input.expectedNetEdgeBps > 0 &&
+    input.rewardRiskRatio >= 1.05;
+
+  return {
+    minDirectionalEdge,
+    minConfidence,
+    minMarketQuality,
+    minNetEdgeBps: microAccountEdgeRelaxed
+      ? Math.min(configuredMinNetEdgeBps, 1)
+      : configuredMinNetEdgeBps,
+    microAccountEdgeRelaxed,
+  };
+}
+
+function buildRejectionReasons(input: {
+  features: DecisionFeatureVector;
+  directionalSignal: TradeSignal;
+  directionalEdgeAbs: number;
+  confidence: number;
+  marketQualityScore: number;
+  expectedNetEdgeBps: number;
+  rewardRiskRatio: number;
+  riskFlags: string[];
+  tradingMode: TradingMode;
+}): RejectionReason[] {
+  const thresholds = getExecutionThresholds(input);
   const rejections: RejectionReason[] = [];
   const diagnosticDirectionalThreshold = 0.06;
 
@@ -588,55 +628,59 @@ function buildRejectionReasons(input: {
 
   if (
     input.directionalSignal !== "HOLD" &&
-    input.directionalEdgeAbs < minDirectionalEdge
+    input.directionalEdgeAbs < thresholds.minDirectionalEdge
   ) {
     rejections.push({
       layer: "expected_value",
       code: "directional_edge_below_threshold",
       summary: "Directional edge is below the minimum executable threshold.",
-      detail: `Directional edge ${input.directionalEdgeAbs.toFixed(3)} is below ${minDirectionalEdge.toFixed(3)}.`,
+      detail: `Directional edge ${input.directionalEdgeAbs.toFixed(3)} is below ${thresholds.minDirectionalEdge.toFixed(3)}.`,
       metrics: {
         directionalEdge: Number(input.directionalEdgeAbs.toFixed(4)),
-        minDirectionalEdge: Number(minDirectionalEdge.toFixed(4)),
+        minDirectionalEdge: Number(thresholds.minDirectionalEdge.toFixed(4)),
       },
     });
   }
 
-  if (input.confidence < minConfidence) {
+  if (input.confidence < thresholds.minConfidence) {
     rejections.push({
       layer: "validator",
       code: "deterministic_confidence_below_min",
       summary: "Deterministic confidence is below the minimum threshold.",
-      detail: `Confidence ${(input.confidence * 100).toFixed(2)}% is below ${(minConfidence * 100).toFixed(2)}%.`,
+      detail: `Confidence ${(input.confidence * 100).toFixed(2)}% is below ${(thresholds.minConfidence * 100).toFixed(2)}%.`,
       metrics: {
         confidence: Number((input.confidence * 100).toFixed(4)),
-        minConfidence: Number((minConfidence * 100).toFixed(4)),
+        minConfidence: Number((thresholds.minConfidence * 100).toFixed(4)),
       },
     });
   }
 
-  if (input.marketQualityScore < minMarketQuality) {
+  if (input.marketQualityScore < thresholds.minMarketQuality) {
     rejections.push({
       layer: "market_data",
       code: "market_quality_below_threshold",
       summary: "Market quality is below the minimum threshold.",
-      detail: `Market quality ${(input.marketQualityScore * 100).toFixed(2)}% is below ${(minMarketQuality * 100).toFixed(2)}%.`,
+      detail: `Market quality ${(input.marketQualityScore * 100).toFixed(2)}% is below ${(thresholds.minMarketQuality * 100).toFixed(2)}%.`,
       metrics: {
         marketQualityScore: Number((input.marketQualityScore * 100).toFixed(4)),
-        minMarketQuality: Number((minMarketQuality * 100).toFixed(4)),
+        minMarketQuality: Number(
+          (thresholds.minMarketQuality * 100).toFixed(4),
+        ),
       },
     });
   }
 
-  if (input.expectedNetEdgeBps < minNetEdgeBps) {
+  if (input.expectedNetEdgeBps < thresholds.minNetEdgeBps) {
     rejections.push({
       layer: "expected_value",
       code: "expected_net_edge_below_threshold",
       summary: "Expected net edge does not clear the minimum threshold.",
-      detail: `Expected net edge ${input.expectedNetEdgeBps.toFixed(2)} bps is below ${minNetEdgeBps.toFixed(2)} bps.`,
+      detail: `Expected net edge ${input.expectedNetEdgeBps.toFixed(2)} bps is below ${thresholds.minNetEdgeBps.toFixed(2)} bps.`,
       metrics: {
         expectedNetEdgeBps: Number(input.expectedNetEdgeBps.toFixed(4)),
-        minNetEdgeBps: Number(minNetEdgeBps.toFixed(4)),
+        minNetEdgeBps: Number(thresholds.minNetEdgeBps.toFixed(4)),
+        rewardRiskRatio: Number(input.rewardRiskRatio.toFixed(4)),
+        microAccountEdgeRelaxed: thresholds.microAccountEdgeRelaxed,
       },
     });
   }
@@ -743,6 +787,11 @@ export function buildDeterministicConsensus(input: {
   const expectedNetEdgeBps = Number(
     (expectedGrossEdgeBps - expectedFeeBps - slippageBps).toFixed(2),
   );
+  const rewardRiskRatio = Number(
+    (
+      expectedGrossEdgeBps / Math.max(expectedFeeBps + slippageBps, 0.0001)
+    ).toFixed(2),
+  );
   const diagnosticOverlay = buildDiagnosticOverlay(
     input.votes ?? [],
     directionalSignal,
@@ -782,6 +831,7 @@ export function buildDeterministicConsensus(input: {
     confidence: directionalConfidence,
     marketQualityScore,
     expectedNetEdgeBps,
+    rewardRiskRatio,
     riskFlags,
     tradingMode,
   });
@@ -834,11 +884,7 @@ export function buildDeterministicConsensus(input: {
     estimatedFeeBps: Number(expectedFeeBps.toFixed(2)),
     estimatedSlippageBps: Number(slippageBps.toFixed(2)),
     netEdgeBps: expectedNetEdgeBps,
-    rewardRiskRatio: Number(
-      (
-        expectedGrossEdgeBps / Math.max(expectedFeeBps + slippageBps, 0.0001)
-      ).toFixed(2),
-    ),
+    rewardRiskRatio,
     tradeAllowed: rejectionReasons.length === 0 && directionalSignal !== "HOLD",
     notes: [
       `Execution quality ${(executionQualityScore * 100).toFixed(1)}%.`,

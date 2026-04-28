@@ -81,9 +81,14 @@ export function getDefaultAutonomyState(): StoredAutonomyState {
 function normalizeAutonomyState(
   state?: Partial<StoredAutonomyState> | null,
 ): StoredAutonomyState {
+  const defaults = getDefaultAutonomyState();
+
   return {
-    ...getDefaultAutonomyState(),
+    ...defaults,
     ...(state ?? {}),
+    // Budget is env-driven operational config, so reconcile it on every read
+    // instead of letting an old persisted state silently pin live trading.
+    budgetUsd: defaults.budgetUsd,
   };
 }
 

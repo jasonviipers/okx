@@ -248,7 +248,7 @@ export function getConfiguredAutonomousQuoteCurrencies(): string[] {
     ...parseSymbolList(env.AUTONOMOUS_QUOTE_CURRENCY),
   ]);
 
-  return uniqueUppercase([...configured, ...DEFAULT_AUTONOMOUS_QUOTES]);
+  return configured.length > 0 ? configured : [...DEFAULT_AUTONOMOUS_QUOTES];
 }
 
 export function getQuoteCurrenciesFromBalances(
@@ -338,6 +338,30 @@ function matchesConfiguredQuote(
     (quoteCurrency ? quotes.has(quoteCurrency) : false) ||
     (settleCurrency ? quotes.has(settleCurrency) : false)
   );
+}
+
+function getQuotePreferenceIndex(
+  row: OkxInstrumentRow,
+  quoteCurrencies: string[],
+): number {
+  if (quoteCurrencies.length === 0) {
+    return 0;
+  }
+
+  const normalizedQuotes = quoteCurrencies.map((quote) => quote.toUpperCase());
+  const quoteCurrency = row.quoteCcy?.trim().toUpperCase();
+  const settleCurrency = row.settleCcy?.trim().toUpperCase();
+  const quoteIndex = quoteCurrency
+    ? normalizedQuotes.indexOf(quoteCurrency)
+    : -1;
+  const settleIndex = settleCurrency
+    ? normalizedQuotes.indexOf(settleCurrency)
+    : -1;
+  const candidates = [quoteIndex, settleIndex].filter((value) => value >= 0);
+
+  return candidates.length > 0
+    ? Math.min(...candidates)
+    : normalizedQuotes.length;
 }
 
 function getDynamicBaseAssetsFromMarket(
@@ -439,18 +463,63 @@ export async function getAutonomousSymbolUniverse(options?: {
       estimateQuoteVolume(row),
     ]),
   );
+  const rankedRows = rows.filter((row) => {
+    const base =
+      row.baseCcy?.trim().toUpperCase() ?? extractBaseAsset(row.instId);
+    return (
+      row.instId &&
+      (row.state ?? "live") === "live" &&
+      baseAssets.includes(base) &&
+      matchesConfiguredQuote(row, quoteCurrencies)
+    );
+  });
+  const preferredRowsByBase = baseAssets
+    .map((baseAsset) => {
+      const candidates = rankedRows
+        .filter((row) => {
+          const base =
+            row.baseCcy?.trim().toUpperCase() ?? extractBaseAsset(row.instId);
+          return base === baseAsset;
+        })
+        .sort((left, right) => {
+          const leftQuoteIndex = getQuotePreferenceIndex(left, quoteCurrencies);
+          const rightQuoteIndex = getQuotePreferenceIndex(
+            right,
+            quoteCurrencies,
+          );
+          if (leftQuoteIndex !== rightQuoteIndex) {
+            return leftQuoteIndex - rightQuoteIndex;
+          }
 
-  const rankedSymbols = rows
-    .filter((row) => {
-      const base =
-        row.baseCcy?.trim().toUpperCase() ?? extractBaseAsset(row.instId);
-      return (
-        row.instId &&
-        (row.state ?? "live") === "live" &&
-        baseAssets.includes(base) &&
-        matchesConfiguredQuote(row, quoteCurrencies)
-      );
+          const leftMarketIndex = marketTypes.indexOf(
+            fromOkxInstType(left.instType) ?? resolveMarketType(left.instId),
+          );
+          const rightMarketIndex = marketTypes.indexOf(
+            fromOkxInstType(right.instType) ?? resolveMarketType(right.instId),
+          );
+          if (leftMarketIndex !== rightMarketIndex) {
+            return leftMarketIndex - rightMarketIndex;
+          }
+
+          return (
+            (tickerVolumeMap.get(right.instId.trim().toUpperCase()) ?? 0) -
+            (tickerVolumeMap.get(left.instId.trim().toUpperCase()) ?? 0)
+          );
+        });
+
+      return candidates[0];
     })
+    .filter((row): row is OkxInstrumentRow => row !== undefined);
+
+  const secondaryRows = rankedRows
+    .filter(
+      (row) =>
+        !preferredRowsByBase.some(
+          (preferred) =>
+            preferred.instId.trim().toUpperCase() ===
+            row.instId.trim().toUpperCase(),
+        ),
+    )
     .sort((left, right) => {
       const leftBaseIndex = baseAssets.indexOf(
         left.baseCcy?.trim().toUpperCase() ?? extractBaseAsset(left.instId),
@@ -460,6 +529,12 @@ export async function getAutonomousSymbolUniverse(options?: {
       );
       if (leftBaseIndex !== rightBaseIndex) {
         return leftBaseIndex - rightBaseIndex;
+      }
+
+      const leftQuoteIndex = getQuotePreferenceIndex(left, quoteCurrencies);
+      const rightQuoteIndex = getQuotePreferenceIndex(right, quoteCurrencies);
+      if (leftQuoteIndex !== rightQuoteIndex) {
+        return leftQuoteIndex - rightQuoteIndex;
       }
 
       const leftMarketIndex = marketTypes.indexOf(
@@ -476,9 +551,11 @@ export async function getAutonomousSymbolUniverse(options?: {
         (tickerVolumeMap.get(right.instId.trim().toUpperCase()) ?? 0) -
         (tickerVolumeMap.get(left.instId.trim().toUpperCase()) ?? 0)
       );
-    })
-    .map((row) => row.instId);
-
+    });
+  const rankedSymbols = [
+    ...preferredRowsByBase.map((row) => row.instId),
+    ...secondaryRows.map((row) => row.instId),
+  ];
   const uniqueSymbols = [...new Set(rankedSymbols)];
   if (uniqueSymbols.length > 0) {
     return uniqueSymbols.slice(0, limit);
