@@ -60,7 +60,8 @@ services:
   minio-init:
     image: minio/mc:latest
     depends_on:
-      - minio
+      minio:
+        condition: service_started
     entrypoint: ["/bin/sh", "/init/minio-init.sh"]
     environment:
       MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
@@ -80,9 +81,12 @@ services:
     image: otel/opentelemetry-collector-contrib:latest
     command: ["--config=/etc/otelcol-contrib/config.yaml"]
     depends_on:
-      - loki
-      - prometheus
-      - jaeger
+      loki:
+        condition: service_started
+      prometheus:
+        condition: service_started
+      jaeger:
+        condition: service_started
     expose:
       - "4317"
       - "4318"
@@ -140,10 +144,14 @@ services:
       context: .
       dockerfile: Dockerfile
     depends_on:
-      - postgres
-      - redis
-      - minio-init
-      - otel-collector
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio-init:
+        condition: service_completed_successfully
+      otel-collector:
+        condition: service_started
     env_file:
       - .env
     environment:
@@ -172,9 +180,12 @@ services:
   nginx:
     image: nginx:alpine
     depends_on:
-      - app
-      - grafana
-      - jaeger
+      app:
+        condition: service_healthy
+      grafana:
+        condition: service_started
+      jaeger:
+        condition: service_started
     networks:
       - app-network
     ports:
@@ -189,8 +200,10 @@ services:
       context: .
       dockerfile: Dockerfile.cron
     depends_on:
-      - app
-      - redis
+      app:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     environment:
       CRON_SECRET: ${CRON_SECRET}
       WORKER_URL: http://app:3000/api/ai/system/autonomy/worker
@@ -201,9 +214,12 @@ services:
   grafana:
     image: grafana/grafana-oss:latest
     depends_on:
-      - prometheus
-      - loki
-      - jaeger
+      prometheus:
+        condition: service_started
+      loki:
+        condition: service_started
+      jaeger:
+        condition: service_started
     environment:
       GF_SECURITY_ADMIN_PASSWORD: ${GF_SECURITY_ADMIN_PASSWORD:-change-me-grafana-password}
       GF_AUTH_ANONYMOUS_ENABLED: "false"
