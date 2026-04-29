@@ -1,10 +1,10 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { env } from "@/env";
 import {
-  dispatchAutonomyWorker,
   ensureAutonomyBootState,
   getAutonomyStatus,
 } from "@/lib/autonomy/service";
+import { ensureAutonomyWorkflowRun } from "@/lib/autonomy/workflow-manager";
 
 export const dynamic = "force-dynamic";
 
@@ -15,7 +15,7 @@ export async function GET(req: NextRequest) {
   }
 
   await ensureAutonomyBootState();
-  const result = await dispatchAutonomyWorker({ trigger: "scheduler" });
+  const result = await ensureAutonomyWorkflowRun("scheduler");
 
   return NextResponse.json({
     data: {

@@ -1,12 +1,11 @@
-import { after, type NextRequest, NextResponse } from "next/server";
+import { type NextRequest, NextResponse } from "next/server";
 import {
-  dispatchAutonomyWorker,
   ensureAutonomyBootState,
   getAutonomyStatus,
-  maybeDispatchDueAutonomyRun,
   startAutonomyLoop,
   stopAutonomyLoop,
 } from "@/lib/autonomy/service";
+import { ensureAutonomyWorkflowRun } from "@/lib/autonomy/workflow-manager";
 import type {
   AutonomySelectionMode,
   AutonomyTimeframeSelectionMode,
@@ -17,9 +16,7 @@ export const dynamic = "force-dynamic";
 
 export async function GET() {
   await ensureAutonomyBootState();
-  after(async () => {
-    await maybeDispatchDueAutonomyRun();
-  });
+  await ensureAutonomyWorkflowRun("status_poll");
 
   return NextResponse.json({
     data: {
@@ -53,9 +50,7 @@ export async function POST(req: NextRequest) {
       timeframe: body.timeframe,
       intervalMs: body.intervalMs,
     });
-    after(async () => {
-      await dispatchAutonomyWorker({ force: true, trigger: "manual_start" });
-    });
+    await ensureAutonomyWorkflowRun("manual_start");
   }
 
   return NextResponse.json({

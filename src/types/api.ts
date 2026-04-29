@@ -85,6 +85,9 @@ export interface AutonomyStatus {
   configured: boolean;
   running: boolean;
   detail: string;
+  workflowSessionId?: string;
+  workflowRunId?: string;
+  workflowStatus?: string;
   symbol: string;
   selectionMode?: "fixed" | "auto";
   candidateSymbols?: string[];

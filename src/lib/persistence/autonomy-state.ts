@@ -38,6 +38,8 @@ export interface StoredAutonomySuppressedSymbol {
 
 export interface StoredAutonomyState {
   running: boolean;
+  workflowSessionId?: string;
+  workflowRunId?: string;
   symbol: string;
   selectionMode: AutonomySelectionMode;
   candidateSymbols?: string[];
@@ -125,6 +127,8 @@ export function getDefaultAutonomyState(): StoredAutonomyState {
 
   return {
     running: true,
+    workflowSessionId: undefined,
+    workflowRunId: undefined,
     symbol: env.AUTONOMOUS_SYMBOL || "BTC-USDT",
     selectionMode: parseSelectionMode(env.AUTONOMOUS_SYMBOL_SELECTION),
     candidateSymbols: parseSymbolList(env.AUTONOMOUS_SYMBOLS),

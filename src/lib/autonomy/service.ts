@@ -1,5 +1,6 @@
 import "server-only";
 
+import { getRun } from "workflow/api";
 import { env } from "@/env";
 import { buildPortfolioState } from "@/lib/autonomy/portfolio";
 import { getOkxAccountModeLabel } from "@/lib/configs/okx";
@@ -67,15 +68,10 @@ import type {
 } from "@/types/trade";
 
 const WORKER_LEASE_TIMEOUT_MS = 5 * 60_000;
-const AUTONOMY_SCHEDULER_TICK_MS = 5_000;
 const DEFAULT_PORTFOLIO_BUFFER_PCT =
   SWARM_THRESHOLDS.DEFAULT_MAX_BALANCE_USAGE_PCT;
 const DEFAULT_DEGRADED_SNAPSHOT_SUPPRESSION_THRESHOLD = 10;
 const DEFAULT_DEGRADED_SNAPSHOT_SUPPRESSION_WINDOW_MS = 30 * 60_000;
-
-declare global {
-  var __okxAutonomyScheduler: NodeJS.Timeout | undefined;
-}
 
 function autoStartEnabledByEnv(): boolean {
   const val = env.AUTONOMOUS_TRADING_ENABLED?.toLowerCase();
@@ -331,6 +327,7 @@ function toAutonomyStatus(
   state: StoredAutonomyState,
   budgetRemainingUsd: number,
   portfolioState?: PortfolioState,
+  workflowStatus?: string,
 ): AutonomyStatus {
   const selectionModeLabel =
     state.selectionMode === "auto"
@@ -350,6 +347,9 @@ function toAutonomyStatus(
       : autoStartEnabledByEnv()
         ? "Autonomy is configured for durable startup but currently stopped."
         : "Autonomy is available and requires an explicit start.",
+    workflowSessionId: state.workflowSessionId,
+    workflowRunId: state.workflowRunId,
+    workflowStatus,
     symbol: state.symbol,
     selectionMode: state.selectionMode,
     candidateSymbols: state.candidateSymbols,
@@ -383,42 +383,26 @@ function shouldRunNow(state: StoredAutonomyState) {
   );
 }
 
-function ensureAutonomyScheduler() {
-  if (globalThis.__okxAutonomyScheduler) {
-    return;
+async function getAutonomyWorkflowStatus(
+  runId?: string,
+): Promise<string | undefined> {
+  if (!runId) {
+    return undefined;
   }
 
-  info("autonomy", "Starting autonomy scheduler", {
-    tickMs: AUTONOMY_SCHEDULER_TICK_MS,
-  });
-  setGauge(
-    "autonomy_scheduler_active",
-    "Whether the autonomy scheduler loop is active.",
-    1,
-  );
-  const timer = setInterval(() => {
-    void maybeDispatchDueAutonomyRun("scheduler").catch((error) => {
-      incrementCounter(
-        "autonomy_scheduler_errors_total",
-        "Total autonomy scheduler dispatch errors.",
-      );
-      telemetryError("autonomy", "Failed to dispatch due autonomy run", {
-        error,
-      });
-      console.error(
-        "[AutonomyScheduler] Failed to dispatch due autonomy run:",
-        error,
-      );
-    });
-  }, AUTONOMY_SCHEDULER_TICK_MS);
+  try {
+    const run = getRun(runId);
+    if (!(await run.exists)) {
+      return "missing";
+    }
 
-  timer.unref?.();
-  globalThis.__okxAutonomyScheduler = timer;
+    return String(await run.status);
+  } catch {
+    return "missing";
+  }
 }
 
 export async function ensureAutonomyBootState() {
-  ensureAutonomyScheduler();
-
   if (!autoStartEnabledByEnv()) {
     info("autonomy", "Autonomy boot skipped because env disables auto-start");
     return;
@@ -456,8 +440,6 @@ export async function ensureAutonomyBootState() {
 }
 
 export async function getAutonomyStatus(): Promise<AutonomyStatus> {
-  ensureAutonomyScheduler();
-
   const [rawState, usedBudgetUsd] = await Promise.all([
     readAutonomyState(),
     getTodayExecutedNotionalUsd(),
@@ -477,12 +459,18 @@ export async function getAutonomyStatus(): Promise<AutonomyStatus> {
     portfolioSymbols,
     budgetRemainingUsd,
   ).catch(() => undefined);
+  const workflowStatus = await getAutonomyWorkflowStatus(state.workflowRunId);
 
   return toAutonomyStatus(
     state,
     Number(budgetRemainingUsd.toFixed(2)),
     portfolioState,
+    workflowStatus,
   );
+}
+
+function makeWorkflowSessionId() {
+  return `autonomy_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 }
 
 export async function startAutonomyLoop(config?: {
@@ -494,11 +482,11 @@ export async function startAutonomyLoop(config?: {
   timeframe?: Timeframe;
   intervalMs?: number;
 }) {
-  ensureAutonomyScheduler();
-
   await updateAutonomyState((state) => ({
     ...state,
     running: true,
+    workflowSessionId: makeWorkflowSessionId(),
+    workflowRunId: undefined,
     selectionMode: config?.selectionMode ?? state.selectionMode,
     candidateSymbols:
       config?.candidateSymbols && config.candidateSymbols.length > 0
@@ -1718,11 +1706,11 @@ async function selectAutonomyRun(
 }
 
 export async function stopAutonomyLoop() {
-  ensureAutonomyScheduler();
-
   await updateAutonomyState((state) => ({
     ...state,
     running: false,
+    workflowSessionId: undefined,
+    workflowRunId: undefined,
     nextRunAt: undefined,
     inFlight: false,
     leaseId: undefined,
@@ -1747,8 +1735,6 @@ export async function dispatchAutonomyWorker(options?: {
   force?: boolean;
   trigger?: "manual_start" | "status_poll" | "scheduler" | "manual";
 }) {
-  ensureAutonomyScheduler();
-
   return withTelemetrySpan(
     {
       name: "autonomy.dispatch_worker",
@@ -2168,31 +2154,4 @@ export async function dispatchAutonomyWorker(options?: {
       }
     },
   );
-}
-
-export async function maybeDispatchDueAutonomyRun(
-  trigger: "status_poll" | "scheduler" = "status_poll",
-) {
-  const rawState = await readAutonomyState();
-  const state = normalizeAutonomyState(rawState);
-  if (state !== rawState) {
-    await writeAutonomyState(state);
-  }
-  const due = shouldRunNow(state);
-  info("autonomy", "Autonomy scheduler heartbeat", {
-    trigger,
-    running: state.running,
-    due,
-    intervalMs: state.intervalMs,
-    nextRunAt: state.nextRunAt,
-    lastRunAt: state.lastRunAt,
-    inFlight: state.inFlight,
-    leaseId: state.leaseId,
-  });
-  if (!due) {
-    return false;
-  }
-
-  await dispatchAutonomyWorker({ trigger });
-  return true;
 }

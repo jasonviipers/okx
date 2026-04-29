@@ -1,4 +1,5 @@
 import { ensureAutonomyBootState } from "@/lib/autonomy/service";
+import { ensureAutonomyWorkflowRun } from "@/lib/autonomy/workflow-manager";
 import {
   info,
   registerOpenTelemetry,
@@ -19,5 +20,6 @@ export async function registerNodeInstrumentation() {
   }
 
   await ensureAutonomyBootState();
+  await ensureAutonomyWorkflowRun("scheduler");
   ensurePositionMonitorBootState();
 }
